@@ -1,0 +1,40 @@
+.editor {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 20rem;
+  grid-template-rows: auto minmax(32rem, 1fr);
+  min-height: 38rem;
+  border: 1px solid var(--ant-color-border-secondary);
+  border-radius: var(--ant-border-radius-lg);
+  overflow: hidden;
+}
+
+.toolbar {
+  grid-column: 1 / -1;
+  padding: var(--rh-space-3);
+  border-bottom: 1px solid var(--ant-color-border-secondary);
+  background: var(--ant-color-bg-container);
+}
+
+.canvas {
+  min-width: 0;
+  background: var(--ant-color-bg-layout);
+}
+
+.inspector {
+  padding: var(--rh-space-4);
+  overflow: auto;
+  border-left: 1px solid var(--ant-color-border-secondary);
+  background: var(--ant-color-bg-container);
+}
+
+@media (max-width: 960px) {
+  .editor {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 28rem auto;
+  }
+
+  .inspector {
+    border-top: 1px solid var(--ant-color-border-secondary);
+    border-left: 0;
+  }
+}

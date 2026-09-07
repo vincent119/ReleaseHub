@@ -1,0 +1,9 @@
+repos:
+  - repo: local
+    hooks:
+      - id: git-diff-check
+        name: 檢查 staged diff 格式
+        entry: git diff --check --cached
+        language: system
+        pass_filenames: false
+

@@ -1,0 +1,2 @@
+DROP TRIGGER IF EXISTS deployment_execution_commands_immutable ON deployment_execution_commands;
+DROP TABLE IF EXISTS deployment_execution_commands;

@@ -1,0 +1,1 @@
+DROP TABLE application_image_digest_snapshots;

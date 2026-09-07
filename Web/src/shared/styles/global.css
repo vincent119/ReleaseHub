@@ -1,0 +1,28 @@
+@import './tokens.css';
+
+:root {
+  font-family: Inter, 'Noto Sans TC', system-ui, sans-serif;
+  color: var(--rh-color-text);
+  background: var(--rh-color-page);
+}
+
+html[data-theme='dark'] {
+  color-scheme: dark;
+}
+
+html[data-theme='light'] {
+  color-scheme: light;
+}
+
+body {
+  min-width: 20rem;
+  min-height: 100vh;
+  margin: 0;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}

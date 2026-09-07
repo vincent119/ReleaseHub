@@ -1,0 +1,6 @@
+ALTER TABLE deployment_notifications
+DROP CONSTRAINT deployment_notifications_event_id_key;
+
+CREATE UNIQUE INDEX deployment_notifications_recipient_event_idx
+ON deployment_notifications (recipient_id, event_id);
+

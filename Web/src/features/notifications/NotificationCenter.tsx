@@ -1,0 +1,172 @@
+import { BellOutlined } from '@ant-design/icons'
+import {
+  Badge,
+  Button,
+  Drawer,
+  Empty,
+  List,
+  Space,
+  Tag,
+  Typography,
+  message,
+} from 'antd'
+import { useState } from 'react'
+import { Link } from 'react-router'
+import { useTranslation } from 'react-i18next'
+
+import {
+  markAllNotificationsRead,
+  markNotificationRead,
+  useListNotifications,
+} from '@/generated/api'
+import type { Notification } from '@/generated/model'
+
+import { useNotificationEvents } from './useNotificationEvents'
+
+export function NotificationCenter() {
+  const { t } = useTranslation()
+  const [open, setOpen] = useState(false)
+  const notifications = useListNotifications({ limit: 100 })
+  const values =
+    notifications.data?.status === 200 ? notifications.data.data.data : []
+  const unread = values.filter((value) => !value.read).length
+  useNotificationEvents(true)
+  const markRead = async (notification: Notification) => {
+    if (notification.read) return
+    const response = await markNotificationRead(
+      notification.id,
+      mutationOptions(),
+    )
+    if (response.status !== 204)
+      return void message.error(t('notifications.mutation.error'))
+    await notifications.refetch()
+  }
+  const markAll = async () => {
+    const response = await markAllNotificationsRead(mutationOptions())
+    if (response.status !== 204)
+      return void message.error(t('notifications.mutation.error'))
+    await notifications.refetch()
+  }
+  return (
+    <>
+      <Badge count={unread} size="small">
+        <Button
+          type="text"
+          icon={<BellOutlined />}
+          aria-label={t('notifications.open')}
+          onClick={() => setOpen(true)}
+        />
+      </Badge>
+      <Drawer
+        open={open}
+        width={440}
+        title={t('notifications.title')}
+        onClose={() => setOpen(false)}
+        extra={
+          <Button
+            disabled={!unread}
+            loading={notifications.isFetching}
+            onClick={() => void markAll()}
+          >
+            {t('notifications.markAll')}
+          </Button>
+        }
+      >
+        {notifications.isError ||
+        (notifications.data && notifications.data.status !== 200) ? (
+          <Typography.Text type="danger">
+            {t('notifications.unavailable')}
+          </Typography.Text>
+        ) : values.length ? (
+          <List
+            loading={notifications.isPending}
+            dataSource={values}
+            renderItem={(notification) => (
+              <List.Item
+                actions={[
+                  <Button
+                    key="read"
+                    type="link"
+                    disabled={notification.read}
+                    onClick={() => void markRead(notification)}
+                  >
+                    {notification.read
+                      ? t('notifications.read')
+                      : t('notifications.markRead')}
+                  </Button>,
+                ]}
+              >
+                <List.Item.Meta
+                  title={
+                    <Space>
+                      <Badge
+                        status={notification.read ? 'default' : 'processing'}
+                      />
+                      <span>
+                        {t(`notifications.events.${notification.eventType}`, {
+                          defaultValue: notification.eventType,
+                        })}
+                      </span>
+                      {notification.restricted && (
+                        <Tag>{t('notifications.restricted')}</Tag>
+                      )}
+                    </Space>
+                  }
+                  description={
+                    <Space orientation="vertical" size={0}>
+                      <span>
+                        {new Date(notification.occurredAt).toLocaleString()}
+                      </span>
+                      <NotificationLink
+                        value={notification}
+                        onNavigate={() => setOpen(false)}
+                      />
+                    </Space>
+                  }
+                />
+              </List.Item>
+            )}
+          />
+        ) : (
+          <Empty description={t('notifications.empty')} />
+        )}
+      </Drawer>
+    </>
+  )
+}
+
+function NotificationLink({
+  value,
+  onNavigate,
+}: {
+  value: Notification
+  onNavigate: () => void
+}) {
+  const { t } = useTranslation()
+  const target = notificationTarget(value)
+  if (!target || value.restricted) return null
+  return (
+    <Link to={target} onClick={onNavigate}>
+      {t('notifications.openResource')}
+    </Link>
+  )
+}
+
+function notificationTarget(value: Notification) {
+  if (value.resourceType === 'deployment_request')
+    return `/requests/${value.resourceId}`
+  if (value.resourceType === 'application_onboarding')
+    return `/applications/${value.resourceId}`
+  return undefined
+}
+
+function mutationOptions() {
+  return { headers: { 'X-CSRF-Token': browserCookie('releasehub_csrf') ?? '' } }
+}
+
+function browserCookie(name: string): string | undefined {
+  return document.cookie
+    .split('; ')
+    .find((value) => value.startsWith(`${name}=`))
+    ?.slice(name.length + 1)
+}

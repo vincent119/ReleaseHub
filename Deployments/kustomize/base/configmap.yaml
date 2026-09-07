@@ -1,0 +1,84 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: releasehub-config
+data:
+  config.yaml: |
+    runtime:
+      shutdown_timeout: 30s
+    api:
+      address: ":7580"
+      read_timeout: 15s
+      write_timeout: 30s
+      idle_timeout: 60s
+    worker:
+      reconcile_interval: 30s
+    database:
+      server: postgres.example.internal
+      port: 5432
+      user: releasehub
+      database: releasehub
+      ssl_mode: require
+      timezone: UTC
+      pools:
+        api:
+          max_open_connections: 20
+          max_idle_connections: 5
+          connection_lifetime: 30m
+        worker:
+          max_open_connections: 20
+          max_idle_connections: 5
+          connection_lifetime: 30m
+        migrate:
+          max_open_connections: 5
+          max_idle_connections: 2
+          connection_lifetime: 30m
+    redis:
+      address: redis.example.internal:6379
+      username: ""
+      database: 0
+      pool_size: 20
+      min_idle_connections: 2
+    log:
+      level: info
+      format: json
+      outputs:
+        - console
+      add_caller: true
+      add_stacktrace: false
+      development: false
+      color_enabled: false
+    observability:
+      metrics_path: /metrics
+      tracing:
+        enabled: false
+        otlp_endpoint: ""
+        insecure: false
+        sample_ratio: 0.1
+    oidc:
+      issuer: https://identity.example.com/realms/releasehub
+      client_id: releasehub
+      redirect_url: https://releasehub.example.com/api/v1/auth/callback
+      web_redirect_url: https://releasehub.example.com/
+      logout_url: ""
+      post_logout_redirect_url: https://releasehub.example.com/
+      access_token_max_ttl: 5m
+    argocd:
+      address: argocd-server.argocd.svc:443
+      insecure: false
+      request_timeout: 10s
+      application_namespace: argocd
+    aws:
+      account_id: "000000000000"
+      region: ap-northeast-1
+      ecr_repositories: []
+    session:
+      idle_timeout: 30m
+      absolute_ttl: 12h
+      login_state_ttl: 5m
+      cookie_secure: true
+    identity:
+      sync_interval: 5m
+    tenancy:
+      mode: single
+      default_organization_id: 00000000-0000-0000-0000-000000000001

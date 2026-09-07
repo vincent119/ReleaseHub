@@ -1,0 +1,11 @@
+.git
+.gitignore
+.editorconfig
+.env
+*.log
+node_modules/
+dist/
+coverage/
+playwright-report/
+test-results/
+

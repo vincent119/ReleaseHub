@@ -1,0 +1,41 @@
+.page {
+  display: flex;
+  width: 100%;
+}
+
+.summaryGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: var(--rh-space-4);
+}
+
+.wideCard {
+  overflow: hidden;
+}
+
+.code {
+  display: block;
+  max-height: 24rem;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.digest {
+  max-width: 32rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--rh-space-3);
+}
+
+@media (max-width: 48rem) {
+  .summaryGrid {
+    grid-template-columns: 1fr;
+  }
+}
