@@ -1,0 +1,30 @@
+# === 作業系統 ===
+.DS_Store
+Thumbs.db
+
+# === 編輯器 ===
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# === 本機設定與暫存 ===
+.env
+.env.*
+!.env.example
+*.log
+*.tmp
+.cache/
+
+# === Go ===
+Server/bin/
+Server/coverage.out
+Server/coverage/
+
+# === Node.js ===
+.pnpm-store/
+Web/node_modules/
+Web/dist/
+Web/coverage/
+Web/playwright-report/
+Web/test-results/

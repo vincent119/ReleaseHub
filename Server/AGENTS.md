@@ -1,4 +1,4 @@
-# Go Server Agent Contribution Guide
+# ReleaseHub Go Server Rules
 
 ## Scope and Precedence
 
@@ -16,6 +16,7 @@
 
 ## Code Style
 
+- Go source comments, godoc comments, error messages, log messages, and command-line help text use English. User-facing documentation and UI copy follow the repository language rules.
 - Use the project's formatter and static-analysis commands, such as `make fmt` and `make lint`.
 - Comments explain why, not what. Record only constraints, historical context, policy references, compatibility, or exceptions. Use complete sentences.
 - Keep assertion messages short and make test names provide the primary context.

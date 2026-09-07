@@ -1,0 +1,21 @@
+.page,
+.detail {
+  width: 100%;
+}
+
+.workspace {
+  display: grid;
+  grid-template-columns: minmax(16rem, 22rem) minmax(0, 1fr);
+  gap: var(--rh-space-4);
+}
+
+.selected {
+  background: var(--ant-color-primary-bg);
+  cursor: pointer;
+}
+
+@media (max-width: 960px) {
+  .workspace {
+    grid-template-columns: 1fr;
+  }
+}

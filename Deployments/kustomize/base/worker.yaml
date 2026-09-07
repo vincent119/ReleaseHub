@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: releasehub-worker
+  labels:
+    app.kubernetes.io/name: releasehub
+    app.kubernetes.io/component: worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: releasehub
+      app.kubernetes.io/component: worker
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: releasehub
+        app.kubernetes.io/component: worker
+    spec:
+      serviceAccountName: releasehub
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: worker
+          image: releasehub-server:latest
+          imagePullPolicy: IfNotPresent
+          args:
+            - worker
+            - --config
+            - /app/configs/config.yaml
+          envFrom:
+            - secretRef:
+                name: releasehub-secrets
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: config
+              mountPath: /app/configs
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: releasehub-config

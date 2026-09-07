@@ -1,0 +1,17 @@
+.page {
+  display: flex;
+  width: 100%;
+}
+
+.filters {
+  width: min(100%, 44rem);
+}
+
+.titleCell {
+  min-width: 14rem;
+}
+
+.subtle {
+  color: var(--ant-color-text-secondary);
+  font-size: 0.75rem;
+}

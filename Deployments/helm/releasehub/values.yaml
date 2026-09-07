@@ -1,0 +1,71 @@
+nameOverride: ""
+fullnameOverride: releasehub
+
+imagePullSecrets: []
+images:
+  server:
+    repository: releasehub-server
+    tag: latest
+    pullPolicy: IfNotPresent
+  web:
+    repository: releasehub-web
+    tag: latest
+    pullPolicy: IfNotPresent
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+existingSecret: releasehub-secrets
+
+api:
+  replicas: 2
+  resources: {}
+worker:
+  replicas: 1
+  resources: {}
+web:
+  replicas: 2
+  resources: {}
+
+configuration:
+  database:
+    server: postgres.example.internal
+    port: 5432
+    user: releasehub
+    database: releasehub
+    sslMode: require
+  redis:
+    address: redis.example.internal:6379
+    username: ""
+    database: 0
+  oidc:
+    issuer: https://identity.example.com/realms/releasehub
+    clientId: releasehub
+    redirectUrl: https://releasehub.example.com/api/v1/auth/callback
+    webRedirectUrl: https://releasehub.example.com/
+    logoutUrl: ""
+    postLogoutRedirectUrl: https://releasehub.example.com/
+  argocd:
+    address: argocd-server.argocd.svc:443
+    insecure: false
+    applicationNamespace: argocd
+  aws:
+    accountId: "000000000000"
+    region: ap-northeast-1
+    ecrRepositories: []
+  tenancy:
+    mode: single
+    defaultOrganizationId: 00000000-0000-0000-0000-000000000001
+  observability:
+    tracingEnabled: false
+    otlpEndpoint: ""
+    tracingInsecure: false
+    sampleRatio: 0.1
+
+podAnnotations: {}
+podLabels: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}

@@ -1,0 +1,49 @@
+.centered {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  padding: var(--rh-space-6);
+  background: var(--rh-color-page);
+}
+
+.layout {
+  min-height: 100vh;
+}
+
+.sider {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+}
+
+.brand {
+  height: 4rem;
+  display: flex;
+  align-items: center;
+  padding: 0 var(--rh-space-5);
+  color: #ffffff;
+  font-size: 1.125rem;
+  font-weight: 650;
+}
+
+.header {
+  display: flex;
+  min-height: 4rem;
+  height: auto;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--rh-space-3) var(--rh-space-6);
+  background: var(--ant-color-bg-container);
+  border-bottom: 1px solid var(--ant-color-border-secondary);
+}
+
+.content {
+  min-height: calc(100vh - 4rem);
+  padding: var(--rh-space-6);
+  background: var(--rh-color-page);
+}
+
+.pageSection {
+  display: block;
+  max-width: 70rem;
+}
