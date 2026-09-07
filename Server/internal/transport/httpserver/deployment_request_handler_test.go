@@ -30,6 +30,13 @@ func TestDeploymentRequestRoutesUseInjectedService(t *testing.T) {
 	if response.Code != http.StatusOK || service.listCalls != 1 || !strings.Contains(response.Body.String(), `"title":"Release API"`) {
 		t.Fatalf("list requests = %d %s", response.Code, response.Body.String())
 	}
+	detailRequest := httptest.NewRequest(http.MethodGet, "/api/v1/deployment-requests/"+value.ID.String(), nil)
+	detailRequest.AddCookie(&http.Cookie{Name: "releasehub_session", Value: "session-token"})
+	detailResponse := httptest.NewRecorder()
+	router.ServeHTTP(detailResponse, detailRequest)
+	if detailResponse.Code != http.StatusOK || !strings.Contains(detailResponse.Body.String(), `"capabilities":["deployment_request.review"]`) {
+		t.Fatalf("request presentation = %d %s", detailResponse.Code, detailResponse.Body.String())
+	}
 
 	metadata := httptest.NewRequest(http.MethodPatch, "/api/v1/deployment-requests/"+value.ID.String()+"/versions/"+service.detail.Version.ID.String(), strings.NewReader(`{"expectedVersion":1,"changeDescription":"release note"}`))
 	metadata.AddCookie(&http.Cookie{Name: "releasehub_session", Value: "session-token"})
@@ -72,7 +79,8 @@ func deploymentRequestDetailFixture() deploydomain.DeploymentRequestDetail {
 	}, Version: deploydomain.DeploymentRequestVersionSummary{
 		ID: versionID, RequestID: requestID, VersionNumber: 1, Status: deploydomain.DeploymentRequestCandidate,
 		Fingerprint: strings.Repeat("a", 64), WorkflowVersionID: uuid.New(), PlanVersionID: uuid.New(), Title: "Release API", LockVersion: 1, CreatedAt: now,
-	}, Reviews: []deploydomain.DeploymentRequestReviewSnapshot{{
+	}, WorkflowStateKey: "review", ExecutionID: uuid.New(), ExecutionStatus: deploydomain.ExecutionStatus("Running"),
+		Capabilities: []string{"deployment_request.review"}, Reviews: []deploydomain.DeploymentRequestReviewSnapshot{{
 		ID: uuid.New(), StateKey: "review", StageNumber: 1, PolicyType: deploydomain.ReviewPolicyAny,
 		RequiredApprovals: 1, Status: deploydomain.ReviewTaskPending,
 	}}}
