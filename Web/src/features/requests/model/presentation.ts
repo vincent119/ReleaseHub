@@ -7,6 +7,10 @@ export function requestStatusColor(status: string) {
   return 'blue'
 }
 
+export function requestStatusLabel(status: string) {
+  return status === 'PartialFailed' ? 'Partial Failed' : status
+}
+
 export function nodeStatusColor(status: string) {
   if (status === 'Succeeded') return 'success'
   if (status === 'Failed') return 'error'

@@ -30,6 +30,7 @@ make lint-openapi
 - [Argo CD Integration](Docs/en/argocd.md)
 - [Amazon ECR Integration](Docs/en/ecr.md)
 - [Deployment](Docs/en/deployment.md)
+- [Operations Runbook](Docs/en/operations-runbook.md)
 
 Run the full repository integration checks with:
 

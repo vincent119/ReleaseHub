@@ -13,6 +13,14 @@ data:
       idle_timeout: 60s
     worker:
       reconcile_interval: 30s
+      deployment_poll_interval: 1s
+      job_lease_duration: 30s
+      job_retry_delay: 5s
+      application_lock_duration: 30s
+      max_parallel_deployments: 10
+    notifications:
+      retention: 168h
+      projection_interval: 1s
     database:
       server: postgres.example.internal
       port: 5432

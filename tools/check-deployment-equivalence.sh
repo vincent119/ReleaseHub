@@ -36,11 +36,25 @@ project_services() {
   ' "$1"
 }
 
+project_runtime_configuration() {
+  yq eval-all -o=json '
+    select(.kind == "ConfigMap" and .metadata.name == "releasehub-config") |
+      .data."config.yaml" |
+      from_yaml |
+      {
+        "worker": .worker,
+        "notifications": .notifications
+      }
+  ' "$1"
+}
+
 project_workloads "$work_directory/helm.yaml" >"$work_directory/helm-workloads.json"
 project_workloads "$work_directory/kustomize.yaml" >"$work_directory/kustomize-workloads.json"
 project_services "$work_directory/helm.yaml" >"$work_directory/helm-services.json"
 project_services "$work_directory/kustomize.yaml" >"$work_directory/kustomize-services.json"
+project_runtime_configuration "$work_directory/helm.yaml" >"$work_directory/helm-runtime.json"
+project_runtime_configuration "$work_directory/kustomize.yaml" >"$work_directory/kustomize-runtime.json"
 
 diff -u "$work_directory/helm-workloads.json" "$work_directory/kustomize-workloads.json"
 diff -u "$work_directory/helm-services.json" "$work_directory/kustomize-services.json"
-
+diff -u "$work_directory/helm-runtime.json" "$work_directory/kustomize-runtime.json"

@@ -17,7 +17,7 @@ import { ExecutionPanel } from './components/ExecutionPanel'
 import { RequestOverview } from './components/RequestOverview'
 import { TransitionPanel } from './components/TransitionPanel'
 import { WorkflowPlanProgress } from './components/WorkflowPlanProgress'
-import { requestStatusColor } from './model/presentation'
+import { requestStatusColor, requestStatusLabel } from './model/presentation'
 import styles from './RequestDetailPage.module.css'
 
 const emptyID = '00000000-0000-0000-0000-000000000000'
@@ -68,7 +68,9 @@ export function RequestDetailPage() {
         <Typography.Title level={2} style={{ margin: 0 }}>
           {request.title}
         </Typography.Title>
-        <Tag color={requestStatusColor(request.status)}>{request.status}</Tag>
+        <Tag color={requestStatusColor(request.status)}>
+          {requestStatusLabel(request.status)}
+        </Tag>
         {request.classification === 'ForwardRollback' && (
           <Tag color="purple">Forward Rollback</Tag>
         )}

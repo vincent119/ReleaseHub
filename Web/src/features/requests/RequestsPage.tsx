@@ -14,7 +14,7 @@ import {
   RequestScopeSelector,
   type RequestScope,
 } from './components/RequestScopeSelector'
-import { requestStatusColor } from './model/presentation'
+import { requestStatusColor, requestStatusLabel } from './model/presentation'
 import styles from './RequestsPage.module.css'
 
 const emptyID = '00000000-0000-0000-0000-000000000000'
@@ -93,7 +93,9 @@ function requestColumns(
       title: t('requests.columns.status'),
       dataIndex: 'status',
       render: (status: string) => (
-        <Tag color={requestStatusColor(status)}>{status}</Tag>
+        <Tag color={requestStatusColor(status)}>
+          {requestStatusLabel(status)}
+        </Tag>
       ),
     },
     {
