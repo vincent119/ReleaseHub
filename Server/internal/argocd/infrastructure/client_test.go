@@ -200,6 +200,22 @@ func TestPredeployRefreshIsReadOnly(t *testing.T) {
 	}
 }
 
+func TestPredeployRefreshTimeoutFailsBeforeMutation(t *testing.T) {
+	manager := &applicationManagerStub{getError: func(ctx context.Context) error {
+		<-ctx.Done()
+		return ctx.Err()
+	}}
+	client, _ := newManagementClientForTest(io.NopCloser(nilReader{}), manager, &permissionCheckerStub{}, "token", time.Millisecond, "argocd")
+	identity := argodomain.ApplicationIdentity{Namespace: "argocd", Name: "payment-production"}
+	_, err := client.HardRefreshApplication(context.Background(), identity, "payment")
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("HardRefreshApplication() error = %v", err)
+	}
+	if manager.syncRequest != nil || manager.patchRequest != nil {
+		t.Fatal("timed out refresh must not perform Sync or Patch")
+	}
+}
+
 func TestDeploymentSyncsPinnedRevision(t *testing.T) {
 	manager := &applicationManagerStub{response: applicationResponse("56", "commit-a")}
 	client, _ := newManagementClientForTest(io.NopCloser(nilReader{}), manager, &permissionCheckerStub{}, "token", time.Second, "argocd")
@@ -320,6 +336,7 @@ type applicationManagerStub struct {
 	watchQuery        *applicationpkg.ApplicationQuery
 	watch             applicationpkg.ApplicationService_WatchClient
 	terminateRequest  *applicationpkg.OperationTerminateRequest
+	getError          func(context.Context) error
 }
 
 func (s *applicationManagerStub) Sync(_ context.Context, request *applicationpkg.ApplicationSyncRequest, _ ...grpc.CallOption) (*argov1alpha1.Application, error) {
@@ -332,8 +349,11 @@ func (s *applicationManagerStub) Watch(_ context.Context, query *applicationpkg.
 	return s.watch, nil
 }
 
-func (s *applicationManagerStub) Get(_ context.Context, query *applicationpkg.ApplicationQuery, _ ...grpc.CallOption) (*argov1alpha1.Application, error) {
+func (s *applicationManagerStub) Get(ctx context.Context, query *applicationpkg.ApplicationQuery, _ ...grpc.CallOption) (*argov1alpha1.Application, error) {
 	s.getQuery = query
+	if s.getError != nil {
+		return nil, s.getError(ctx)
+	}
 	return s.response, nil
 }
 

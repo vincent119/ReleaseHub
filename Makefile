@@ -3,7 +3,7 @@
 export GOCACHE := $(CURDIR)/.cache/go-build
 export GOSUMDB := sum.golang.org
 
-.PHONY: help generate generate-server generate-web generate-check lint-openapi lint-go-structure fmt test lint build verify-docs verify-deployments verify
+.PHONY: help generate generate-server generate-web generate-check lint-openapi lint-go-structure fmt test lint build verify-docs verify-deployments verify-deployment-security verify
 
 help: ## 顯示可用命令
 	@awk 'BEGIN {FS = ":.*##"; printf "ReleaseHub commands:\n"} /^[a-zA-Z_-]+:.*?##/ {printf "  %-20s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -55,4 +55,7 @@ verify-deployments: ## 驗證 Helm 與 Kustomize 可 render
 	kustomize build Deployments/kustomize/base >/dev/null
 	sh tools/check-deployment-equivalence.sh
 
-verify: generate-check lint test build verify-docs verify-deployments ## 執行 repository 整合驗證
+verify-deployment-security: ## 驗證 Kubernetes schema 與部署安全設定
+	sh tools/check-deployment-security.sh
+
+verify: generate-check lint test build verify-docs verify-deployments verify-deployment-security ## 執行 repository 整合驗證

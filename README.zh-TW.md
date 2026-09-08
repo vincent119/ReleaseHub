@@ -30,6 +30,7 @@ make lint-openapi
 - [Argo CD 整合](Docs/zh-TW/argocd.md)
 - [Amazon ECR 整合](Docs/zh-TW/ecr.md)
 - [部署](Docs/zh-TW/deployment.md)
+- [操作 Runbook](Docs/zh-TW/operations-runbook.md)
 
 完整整合驗證可執行：
 

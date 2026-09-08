@@ -23,6 +23,7 @@ api:
   replicas: 2
   resources: {}
 worker:
+  # 第一階段固定為單一 Worker；Application 並行由下方全域上限控制。
   replicas: 1
   resources: {}
 web:
@@ -63,6 +64,16 @@ configuration:
     otlpEndpoint: ""
     tracingInsecure: false
     sampleRatio: 0.1
+  worker:
+    reconcileInterval: 30s
+    deploymentPollInterval: 1s
+    jobLeaseDuration: 30s
+    jobRetryDelay: 5s
+    applicationLockDuration: 30s
+    maxParallelDeployments: 10
+  notifications:
+    retention: 168h
+    projectionInterval: 1s
 
 podAnnotations: {}
 podLabels: {}

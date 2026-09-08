@@ -14,3 +14,17 @@ Secrets must not be stored in values, the Kustomize base, container images, or G
 
 `log.format` accepts `json` or `console`. API and Worker logs include their component category. Health, readiness, metrics, and tracing endpoints do not emit access logs.
 
+## Worker and Notifications
+
+| YAML field | Default | Purpose |
+| --- | --- | --- |
+| `worker.reconcile_interval` | `30s` | Reload Argo CD Applications and detect candidates or configuration drift |
+| `worker.deployment_poll_interval` | `1s` | Poll for claimable deployment jobs |
+| `worker.job_lease_duration` | `30s` | Lifetime of job leases and fencing ownership |
+| `worker.job_retry_delay` | `5s` | Delay before an infrastructure failure is requeued |
+| `worker.application_lock_duration` | `30s` | Lifetime of Application operation locks |
+| `worker.max_parallel_deployments` | `10` | Maximum Applications executed by one Worker; a Plan may set a lower limit |
+| `notifications.retention` | `168h` | Retention for in-app notifications; Audit is unaffected |
+| `notifications.projection_interval` | `1s` | Interval for Outbox projection and availability of SSE events |
+
+Phase one must run exactly one Worker replica. Multiple Worker replicas would each apply `max_parallel_deployments`, so the platform-wide limit could not be guaranteed. Web Nginx proxies the exact SSE path `/api/v1/notifications/events` with buffering and caching disabled. After reconnecting with `Last-Event-ID`, the client fetches data again under the user's current permissions.

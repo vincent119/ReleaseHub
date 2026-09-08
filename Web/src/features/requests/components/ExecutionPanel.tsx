@@ -27,7 +27,11 @@ import type {
   DeploymentRequestVersion,
 } from '@/generated/model'
 
-import { nodeStatusColor, requestStatusColor } from '../model/presentation'
+import {
+  nodeStatusColor,
+  requestStatusColor,
+  requestStatusLabel,
+} from '../model/presentation'
 
 interface Props {
   request: DeploymentRequestVersion
@@ -88,7 +92,7 @@ export function ExecutionPanel({
       title={t('requestDetail.execution.title')}
       extra={
         <Tag color={requestStatusColor(execution.status)}>
-          {execution.status}
+          {requestStatusLabel(execution.status)}
         </Tag>
       }
     >

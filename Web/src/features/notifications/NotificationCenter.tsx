@@ -59,7 +59,7 @@ export function NotificationCenter() {
       </Badge>
       <Drawer
         open={open}
-        width={440}
+        size="large"
         title={t('notifications.title')}
         onClose={() => setOpen(false)}
         extra={

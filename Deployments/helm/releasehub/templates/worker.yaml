@@ -1,3 +1,6 @@
+{{- if ne (int .Values.worker.replicas) 1 }}
+{{- fail "phase one requires worker.replicas to equal 1 so max_parallel_deployments remains platform-wide" }}
+{{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:

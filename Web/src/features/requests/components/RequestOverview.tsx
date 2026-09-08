@@ -14,7 +14,7 @@ import { useTranslation } from 'react-i18next'
 import { updateDeploymentRequestVersionMetadata } from '@/generated/api'
 import type { DeploymentRequestVersion } from '@/generated/model'
 
-import { requestStatusColor } from '../model/presentation'
+import { requestStatusColor, requestStatusLabel } from '../model/presentation'
 
 interface Props {
   request: DeploymentRequestVersion
@@ -76,7 +76,9 @@ export function RequestOverview({ request, onUpdated }: Props) {
     >
       <Descriptions column={{ xs: 1, sm: 2, lg: 3 }}>
         <Descriptions.Item label={t('requestDetail.fields.status')}>
-          <Tag color={requestStatusColor(request.status)}>{request.status}</Tag>
+          <Tag color={requestStatusColor(request.status)}>
+            {requestStatusLabel(request.status)}
+          </Tag>
         </Descriptions.Item>
         <Descriptions.Item label={t('requestDetail.fields.classification')}>
           {request.classification}
