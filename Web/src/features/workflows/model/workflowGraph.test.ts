@@ -45,7 +45,21 @@ describe('workflow graph mapping', () => {
       ],
     }
 
-    expect(graphToDocument(documentToGraph(document))).toEqual(document)
+    const graph = documentToGraph(document)
+
+    expect(graphToDocument(graph)).toEqual(document)
+    expect(graph.nodes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'workflowState',
+          data: expect.objectContaining({ label: 'Production Review\nReview' }),
+        }),
+        expect.objectContaining({
+          type: 'workflowState',
+          data: expect.objectContaining({ label: 'Deploy\nDeployment' }),
+        }),
+      ]),
+    )
   })
 
   it('routes production deployment results by execution status', () => {

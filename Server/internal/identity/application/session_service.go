@@ -65,6 +65,15 @@ func (s *SessionService) Create(ctx context.Context, userID uuid.UUID, refreshTo
 	if len(refreshTokenCiphertext) == 0 {
 		return "", "", fmt.Errorf("encrypted provider refresh token is required")
 	}
+	return s.create(ctx, userID, refreshTokenCiphertext, "oidc")
+}
+
+// CreateLocal issues a session that does not depend on an OIDC refresh credential.
+func (s *SessionService) CreateLocal(ctx context.Context, userID uuid.UUID) (sessionToken, csrfToken string, err error) {
+	return s.create(ctx, userID, nil, "local")
+}
+
+func (s *SessionService) create(ctx context.Context, userID uuid.UUID, refreshTokenCiphertext []byte, method string) (sessionToken, csrfToken string, err error) {
 	sessionToken, err = newOpaqueToken()
 	if err != nil {
 		return "", "", err
@@ -74,7 +83,7 @@ func (s *SessionService) Create(ctx context.Context, userID uuid.UUID, refreshTo
 		return "", "", err
 	}
 	now := s.clock.Now().UTC()
-	session := identity.Session{ID: uuid.New(), UserID: userID, TokenHash: hash(sessionToken), CSRFTokenHash: hash(csrfToken), RefreshTokenCiphertext: append([]byte(nil), refreshTokenCiphertext...), IdentityVerifiedAt: now, CreatedAt: now, LastSeenAt: now, IdleExpiresAt: now.Add(s.idleTimeout), AbsoluteExpiresAt: now.Add(s.absoluteTTL)}
+	session := identity.Session{ID: uuid.New(), UserID: userID, TokenHash: hash(sessionToken), CSRFTokenHash: hash(csrfToken), RefreshTokenCiphertext: append([]byte(nil), refreshTokenCiphertext...), IdentityVerifiedAt: now, CreatedAt: now, LastSeenAt: now, IdleExpiresAt: now.Add(s.idleTimeout), AbsoluteExpiresAt: now.Add(s.absoluteTTL), AuthenticationMethod: method}
 	if err := s.repository.CreateSession(ctx, session); err != nil {
 		return "", "", fmt.Errorf("create session: %w", err)
 	}

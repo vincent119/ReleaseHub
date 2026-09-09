@@ -1,5 +1,6 @@
 import {
   Alert,
+  App,
   Button,
   Card,
   Checkbox,
@@ -13,10 +14,10 @@ import {
   Tabs,
   Tag,
   Typography,
-  message,
 } from 'antd'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useSearchParams } from 'react-router'
 
 import {
   createAccessBinding,
@@ -24,24 +25,44 @@ import {
   createAccessGroup,
   createAccessMembership,
   createAccessRole,
+  createAccessUser,
   disableAccessGroup,
+  disableAccessRole,
   disableAccessUser,
-  useGetAccessManagementSnapshot,
+  revokeAccessBinding,
+  revokeAccessDeny,
+  revokeAccessMembership,
+  useGetAccessCapabilities,
+  useGetAccessScopeOptions,
   useGetCatalogResourceTree,
+  useListAccessBindings,
+  useListAccessDenies,
+  useListAccessGroups,
+  useListAccessMembershipCandidates,
+  useListAccessMemberships,
+  useListAccessRoles,
+  useListAccessUsers,
 } from '@/generated/api'
 import type {
   AccessBinding,
   AccessDeny,
   AccessGroup,
-  AccessManagementSnapshot,
+  AccessMembership,
+  AccessPermission,
   AccessRole,
   AccessUser,
   CatalogOrganizationNode,
 } from '@/generated/model'
 
-type Action = 'group' | 'role' | 'membership' | 'binding' | 'deny'
-type ScopeKind = 'project' | 'environment' | 'application'
+type TabKey =
+  'users' | 'groups' | 'roles' | 'memberships' | 'bindings' | 'denies'
+type Action = 'user' | 'group' | 'role' | 'membership' | 'binding' | 'deny'
+type ScopeKind = 'platform' | 'project' | 'environment' | 'application'
+
 interface Fields {
+  username?: string
+  password?: string
+  passwordConfirm?: string
   ownerKind?: 'platform' | 'organization' | 'project'
   ownerId?: string
   name?: string
@@ -49,23 +70,125 @@ interface Fields {
   permissions?: string[]
   groupId?: string
   userId?: string
+  userQuery?: string
   roleId?: string
   permission?: string
-  organizationId?: string
-  projectId?: string
   scopeKind?: ScopeKind
-  environmentId?: string
-  applicationId?: string
+  scopeId?: string
 }
+
+const tabs: TabKey[] = [
+  'users',
+  'groups',
+  'roles',
+  'memberships',
+  'bindings',
+  'denies',
+]
 
 export function AccessPage() {
   const { t } = useTranslation()
+  const { message } = App.useApp()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const requestedTab = searchParams.get('tab') as TabKey | null
+  const activeTab =
+    requestedTab && tabs.includes(requestedTab) ? requestedTab : 'users'
   const [form] = Form.useForm<Fields>()
   const [action, setAction] = useState<Action>()
   const [submitting, setSubmitting] = useState(false)
-  const access = useGetAccessManagementSnapshot()
+  const [search, setSearch] = useState('')
+  const [status, setStatus] = useState<'all' | 'active' | 'inactive'>('all')
+  const [cursors, setCursors] = useState<Partial<Record<TabKey, string>>>({})
+  const [cursorHistory, setCursorHistory] = useState<Record<TabKey, string[]>>({
+    users: [],
+    groups: [],
+    roles: [],
+    memberships: [],
+    bindings: [],
+    denies: [],
+  })
+
+  const capabilities = useGetAccessCapabilities()
+  const users = useListAccessUsers({
+    limit: 20,
+    status,
+    search,
+    cursor: cursors.users,
+  })
+  const groups = useListAccessGroups({
+    limit: 20,
+    status,
+    search,
+    cursor: cursors.groups,
+  })
+  const roles = useListAccessRoles({
+    limit: 20,
+    status,
+    search,
+    cursor: cursors.roles,
+  })
+  const memberships = useListAccessMemberships({
+    limit: 20,
+    status,
+    cursor: cursors.memberships,
+  })
+  const bindings = useListAccessBindings({
+    limit: 20,
+    status,
+    cursor: cursors.bindings,
+  })
+  const denies = useListAccessDenies({
+    limit: 20,
+    status,
+    cursor: cursors.denies,
+  })
   const resources = useGetCatalogResourceTree()
-  if (access.isError || (access.data && access.data.status !== 200))
+
+  const capabilityData =
+    capabilities.data?.status === 200
+      ? capabilities.data.data.data.collections
+      : []
+  const permissionData =
+    capabilities.data?.status === 200
+      ? capabilities.data.data.data.permissions
+      : []
+  const userData = users.data?.status === 200 ? users.data.data.data : []
+  const groupData = groups.data?.status === 200 ? groups.data.data.data : []
+  const roleData = roles.data?.status === 200 ? roles.data.data.data : []
+  const membershipData =
+    memberships.data?.status === 200 ? memberships.data.data.data : []
+  const bindingData =
+    bindings.data?.status === 200 ? bindings.data.data.data : []
+  const denyData = denies.data?.status === 200 ? denies.data.data.data : []
+  const pageMeta = {
+    users: users.data?.status === 200 ? users.data.data.meta : undefined,
+    groups: groups.data?.status === 200 ? groups.data.data.meta : undefined,
+    roles: roles.data?.status === 200 ? roles.data.data.meta : undefined,
+    memberships:
+      memberships.data?.status === 200 ? memberships.data.data.meta : undefined,
+    bindings:
+      bindings.data?.status === 200 ? bindings.data.data.meta : undefined,
+    denies: denies.data?.status === 200 ? denies.data.data.meta : undefined,
+  }[activeTab]
+  const organizationData =
+    resources.data?.status === 200 ? resources.data.data.data : []
+  const capability = new Map(capabilityData.map((item) => [item.key, item]))
+  const visibleTabs = tabs.filter(
+    (key) => capability.get(key)?.visible !== false,
+  )
+  const canManagePlatform = capability.get('users')?.canCreate === true
+  const activeQuery = { users, groups, roles, memberships, bindings, denies }[
+    activeTab
+  ]
+  const loading = activeQuery.isPending
+  const activeQueryFailed =
+    activeQuery.isError ||
+    (activeQuery.data !== undefined && activeQuery.data.status !== 200)
+
+  if (
+    capabilities.isError ||
+    (capabilities.data && capabilities.data.status !== 200)
+  ) {
     return (
       <Alert
         type="warning"
@@ -74,20 +197,20 @@ export function AccessPage() {
         description={t('access.unavailable.description')}
       />
     )
+  }
 
-  const value = access.data?.status === 200 ? access.data.data.data : undefined
-  const organizations =
-    resources.data?.status === 200 ? resources.data.data.data : []
-  const managedProjects = new Set(value?.managedProjectIds ?? [])
-  const groupNames = new Map(value?.groups.map((item) => [item.id, item.name]))
-  const roleNames = new Map(value?.roles.map((item) => [item.id, item.name]))
-  const canManageGroup = (group: AccessGroup) =>
-    Boolean(
-      value?.canManagePlatform ||
-      (group.ownerKind === 'project' &&
-        group.ownerId &&
-        managedProjects.has(group.ownerId)),
-    )
+  const refetch = async () => {
+    await Promise.all([
+      capabilities.refetch(),
+      users.refetch(),
+      groups.refetch(),
+      roles.refetch(),
+      memberships.refetch(),
+      bindings.refetch(),
+      denies.refetch(),
+      resources.refetch(),
+    ])
+  }
   const open = (next: Action, initial?: Fields) => {
     form.resetFields()
     form.setFieldsValue(initial ?? {})
@@ -101,15 +224,28 @@ export function AccessPage() {
     setSubmitting(true)
     try {
       const response = await work({ headers: { 'X-CSRF-Token': csrf } })
-      if (response.status !== 201 && response.status !== 204)
-        return void message.error(
-          response.status === 404
-            ? t('access.mutation.notAuthorized')
-            : t('access.mutation.conflict'),
-        )
+      if (response.status !== 201 && response.status !== 204) {
+        const code = mutationErrorCode(response)
+        if (response.status === 401)
+          return void message.error(t('access.mutation.unauthenticated'))
+        if (response.status === 400)
+          return void message.error(t('access.mutation.invalid'))
+        if (response.status === 404)
+          return void message.error(t('access.mutation.notAuthorized'))
+        if (code === 'ACCESS_SELF_DISABLE_FORBIDDEN')
+          return void message.error(t('access.mutation.selfDisable'))
+        if (code === 'ACCESS_LAST_PLATFORM_MANAGER')
+          return void message.error(t('access.mutation.lastManager'))
+        if (code === 'ACCESS_RESOURCE_PROTECTED')
+          return void message.error(t('access.mutation.protected'))
+        if (response.status === 409)
+          return void message.error(t('access.mutation.conflict'))
+        return void message.error(t('access.mutation.error'))
+      }
       setAction(undefined)
+      form.resetFields()
       message.success(t('access.mutation.success'))
-      await Promise.all([access.refetch(), resources.refetch()])
+      await refetch()
     } catch {
       message.error(t('access.mutation.error'))
     } finally {
@@ -117,6 +253,13 @@ export function AccessPage() {
     }
   }
   const submit = async (fields: Fields) => {
+    if (action === 'user')
+      await mutate((options) =>
+        createAccessUser(
+          { username: fields.username!, initialPassword: fields.password! },
+          options,
+        ),
+      )
     if (action === 'group')
       await mutate((options) =>
         createAccessGroup(
@@ -153,7 +296,7 @@ export function AccessPage() {
       await mutate((options) =>
         createAccessBinding(
           {
-            ...scopePayload(fields),
+            ...scopePayload(fields, organizationData),
             groupId: fields.groupId!,
             roleId: fields.roleId!,
           },
@@ -164,7 +307,7 @@ export function AccessPage() {
       await mutate((options) =>
         createAccessDeny(
           {
-            ...scopePayload(fields),
+            ...scopePayload(fields, organizationData),
             groupId: fields.groupId!,
             permission: fields.permission!,
           },
@@ -172,12 +315,44 @@ export function AccessPage() {
         ),
       )
   }
-  const disable = (kind: 'group' | 'user', id: string) =>
-    void mutate((options) =>
-      kind === 'group'
-        ? disableAccessGroup(id, options)
-        : disableAccessUser(id, options),
-    )
+  const destructive = (
+    kind: 'user' | 'group' | 'role' | 'membership' | 'binding' | 'deny',
+    id: string,
+  ) =>
+    void mutate((options) => {
+      if (kind === 'user') return disableAccessUser(id, options)
+      if (kind === 'group') return disableAccessGroup(id, options)
+      if (kind === 'role') return disableAccessRole(id, options)
+      if (kind === 'membership') return revokeAccessMembership(id, options)
+      if (kind === 'binding') return revokeAccessBinding(id, options)
+      return revokeAccessDeny(id, options)
+    })
+  const currentCapability = capability.get(activeTab)
+  const primaryAction = currentCapability?.canCreate
+    ? createActionForTab(activeTab)
+    : undefined
+  const resetCurrentPage = () => {
+    setCursors((value) => ({ ...value, [activeTab]: undefined }))
+    setCursorHistory((value) => ({ ...value, [activeTab]: [] }))
+  }
+  const nextPage = () => {
+    if (!pageMeta?.nextCursor) return
+    setCursorHistory((value) => ({
+      ...value,
+      [activeTab]: [...value[activeTab], cursors[activeTab] ?? ''],
+    }))
+    setCursors((value) => ({ ...value, [activeTab]: pageMeta.nextCursor }))
+  }
+  const previousPage = () => {
+    const history = cursorHistory[activeTab]
+    if (history.length === 0) return
+    const previous = history[history.length - 1]
+    setCursorHistory((value) => ({
+      ...value,
+      [activeTab]: history.slice(0, -1),
+    }))
+    setCursors((value) => ({ ...value, [activeTab]: previous || undefined }))
+  }
 
   return (
     <Space orientation="vertical" size="large" style={{ width: '100%' }}>
@@ -187,235 +362,118 @@ export function AccessPage() {
           {t('access.description')}
         </Typography.Paragraph>
       </div>
-      <Space wrap>
-        <Button type="primary" onClick={() => open('group')}>
-          {t('access.actions.createGroup')}
-        </Button>
-        <Button onClick={() => open('role')}>
-          {t('access.actions.createRole')}
-        </Button>
-        <Button onClick={() => open('binding')}>
-          {t('access.actions.createBinding')}
-        </Button>
-        <Button onClick={() => open('deny')}>
-          {t('access.actions.createDeny')}
-        </Button>
-      </Space>
       <Card>
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            gap: 16,
+            alignItems: 'center',
+            marginBottom: 16,
+          }}
+        >
+          <div>
+            <Typography.Title level={4} style={{ margin: 0 }}>
+              {t(`access.sections.${activeTab}.title`)}
+            </Typography.Title>
+            <Typography.Text type="secondary">
+              {t(`access.sections.${activeTab}.description`)}
+            </Typography.Text>
+          </div>
+          {primaryAction && (
+            <Button type="primary" onClick={() => open(primaryAction)}>
+              {t(
+                `access.actions.${primaryAction === 'user' ? 'createUser' : `create${capitalize(primaryAction)}`}`,
+              )}
+            </Button>
+          )}
+        </div>
+        <Space wrap style={{ marginBottom: 12 }}>
+          {(['users', 'groups', 'roles'] as TabKey[]).includes(activeTab) && (
+            <Input.Search
+              allowClear
+              value={search}
+              placeholder={t('access.filters.search')}
+              onChange={(event) => {
+                setSearch(event.target.value)
+                resetCurrentPage()
+              }}
+              style={{ width: 280 }}
+            />
+          )}
+          <Select
+            value={status}
+            onChange={(value) => {
+              setStatus(value)
+              resetCurrentPage()
+            }}
+            options={(['all', 'active', 'inactive'] as const).map((value) => ({
+              value,
+              label: t(`access.filters.${value}`),
+            }))}
+            style={{ width: 140 }}
+          />
+        </Space>
         <Tabs
-          items={[
-            {
-              key: 'users',
-              label: t('access.tabs.users'),
-              children: (
-                <Table<AccessUser>
-                  rowKey="id"
-                  loading={access.isPending}
-                  pagination={false}
-                  dataSource={value?.users ?? []}
-                  locale={{ emptyText: t('access.empty') }}
-                  columns={[
-                    {
-                      title: t('access.columns.username'),
-                      dataIndex: 'username',
-                    },
-                    {
-                      title: t('access.columns.status'),
-                      dataIndex: 'disabled',
-                      render: (disabled: boolean) => (
-                        <StatusTag active={!disabled} />
-                      ),
-                    },
-                    ...(value?.canManagePlatform
-                      ? [
-                          {
-                            title: t('access.columns.actions'),
-                            render: (_: unknown, user: AccessUser) =>
-                              user.disabled ? null : (
-                                <DisableConfirm
-                                  onConfirm={() => disable('user', user.id)}
-                                />
-                              ),
-                          },
-                        ]
-                      : []),
-                  ]}
+          activeKey={activeTab}
+          onChange={(key) => {
+            setSearch('')
+            setStatus('all')
+            setCursors((value) => ({ ...value, [key]: undefined }))
+            setCursorHistory((value) => ({ ...value, [key]: [] }))
+            setSearchParams({ tab: key })
+          }}
+          items={visibleTabs.map((key) => ({
+            key,
+            label: t(`access.tabs.${key}`),
+            children:
+              key === activeTab && activeQueryFailed ? (
+                <Alert
+                  type="error"
+                  showIcon
+                  message={t('access.listError.title')}
+                  description={t('access.listError.description')}
+                  action={
+                    <Button onClick={() => void activeQuery.refetch()}>
+                      {t('access.listError.retry')}
+                    </Button>
+                  }
                 />
+              ) : (
+                renderTable(key, {
+                  loading,
+                  users: userData,
+                  groups: groupData,
+                  roles: roleData,
+                  memberships: membershipData,
+                  bindings: bindingData,
+                  denies: denyData,
+                  t,
+                  open,
+                  destructive,
+                })
               ),
-            },
-            {
-              key: 'groups',
-              label: t('access.tabs.groups'),
-              children: (
-                <Table<AccessGroup>
-                  rowKey="id"
-                  loading={access.isPending}
-                  pagination={false}
-                  dataSource={value?.groups ?? []}
-                  locale={{ emptyText: t('access.empty') }}
-                  columns={[
-                    { title: t('access.columns.name'), dataIndex: 'name' },
-                    {
-                      title: t('access.columns.owner'),
-                      dataIndex: 'ownerKind',
-                    },
-                    {
-                      title: t('access.columns.oidc'),
-                      dataIndex: 'oidcViewerOnly',
-                      render: (enabled: boolean) =>
-                        enabled ? t('common.enabled') : t('common.disabled'),
-                    },
-                    {
-                      title: t('access.columns.status'),
-                      dataIndex: 'disabled',
-                      render: (disabled: boolean) => (
-                        <StatusTag active={!disabled} />
-                      ),
-                    },
-                    {
-                      title: t('access.columns.actions'),
-                      render: (_: unknown, group: AccessGroup) =>
-                        canManageGroup(group) && !group.disabled ? (
-                          <Space>
-                            <Button
-                              size="small"
-                              onClick={() =>
-                                open('membership', { groupId: group.id })
-                              }
-                            >
-                              {t('access.actions.addMember')}
-                            </Button>
-                            <DisableConfirm
-                              onConfirm={() => disable('group', group.id)}
-                            />
-                          </Space>
-                        ) : null,
-                    },
-                  ]}
-                />
-              ),
-            },
-            {
-              key: 'roles',
-              label: t('access.tabs.roles'),
-              children: (
-                <Table<AccessRole>
-                  rowKey="id"
-                  loading={access.isPending}
-                  pagination={false}
-                  dataSource={value?.roles ?? []}
-                  locale={{ emptyText: t('access.empty') }}
-                  columns={[
-                    { title: t('access.columns.name'), dataIndex: 'name' },
-                    {
-                      title: t('access.columns.owner'),
-                      dataIndex: 'ownerKind',
-                    },
-                    {
-                      title: t('access.columns.permissions'),
-                      dataIndex: 'permissions',
-                      render: (items: string[]) => (
-                        <Space wrap>
-                          {items.map((item) => (
-                            <Tag key={item}>{item}</Tag>
-                          ))}
-                        </Space>
-                      ),
-                    },
-                    {
-                      title: t('access.columns.status'),
-                      dataIndex: 'active',
-                      render: (active: boolean) => (
-                        <StatusTag active={active} />
-                      ),
-                    },
-                  ]}
-                />
-              ),
-            },
-            {
-              key: 'bindings',
-              label: t('access.tabs.bindings'),
-              children: (
-                <Table<AccessBinding>
-                  rowKey="id"
-                  loading={access.isPending}
-                  pagination={false}
-                  dataSource={value?.bindings ?? []}
-                  locale={{ emptyText: t('access.empty') }}
-                  columns={[
-                    {
-                      title: t('access.columns.group'),
-                      dataIndex: 'groupId',
-                      render: (id: string) => groupNames.get(id) ?? id,
-                    },
-                    {
-                      title: t('access.columns.role'),
-                      dataIndex: 'roleId',
-                      render: (id: string) => roleNames.get(id) ?? id,
-                    },
-                    {
-                      title: t('access.columns.scope'),
-                      render: (_: unknown, item: AccessBinding) =>
-                        formatScope(item, organizations),
-                    },
-                    {
-                      title: t('access.columns.status'),
-                      dataIndex: 'active',
-                      render: (active: boolean) => (
-                        <StatusTag active={active} />
-                      ),
-                    },
-                  ]}
-                />
-              ),
-            },
-            {
-              key: 'denies',
-              label: t('access.tabs.denies'),
-              children: (
-                <Table<AccessDeny>
-                  rowKey="id"
-                  loading={access.isPending}
-                  pagination={false}
-                  dataSource={value?.denies ?? []}
-                  locale={{ emptyText: t('access.empty') }}
-                  columns={[
-                    {
-                      title: t('access.columns.group'),
-                      dataIndex: 'groupId',
-                      render: (id: string) => groupNames.get(id) ?? id,
-                    },
-                    {
-                      title: t('access.columns.permission'),
-                      dataIndex: 'permission',
-                    },
-                    {
-                      title: t('access.columns.scope'),
-                      render: (_: unknown, item: AccessDeny) =>
-                        formatScope(item, organizations),
-                    },
-                    {
-                      title: t('access.columns.status'),
-                      dataIndex: 'active',
-                      render: (active: boolean) => (
-                        <StatusTag active={active} />
-                      ),
-                    },
-                  ]}
-                />
-              ),
-            },
-          ]}
+          }))}
         />
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+          <Button
+            disabled={cursorHistory[activeTab].length === 0}
+            onClick={previousPage}
+          >
+            {t('access.pagination.previous')}
+          </Button>
+          <Button disabled={!pageMeta?.hasMore} onClick={nextPage}>
+            {t('access.pagination.next')}
+          </Button>
+        </div>
       </Card>
       <AccessModal
         action={action}
         form={form}
         submitting={submitting}
-        value={value}
-        organizations={organizations}
-        managedProjects={managedProjects}
+        canManagePlatform={canManagePlatform}
+        permissions={permissionData}
+        organizations={organizationData}
         close={() => !submitting && setAction(undefined)}
         submit={submit}
       />
@@ -423,48 +481,274 @@ export function AccessPage() {
   )
 }
 
+type TableContext = {
+  loading: boolean
+  users: AccessUser[]
+  groups: AccessGroup[]
+  roles: AccessRole[]
+  memberships: AccessMembership[]
+  bindings: AccessBinding[]
+  denies: AccessDeny[]
+  t: ReturnType<typeof useTranslation>['t']
+  open: (action: Action, fields?: Fields) => void
+  destructive: (
+    kind: 'user' | 'group' | 'role' | 'membership' | 'binding' | 'deny',
+    id: string,
+  ) => void
+}
+
+function renderTable(key: TabKey, context: TableContext) {
+  const actionColumn = <T extends { id: string; allowedActions: string[] }>(
+    kind: 'user' | 'group' | 'role' | 'membership' | 'binding' | 'deny',
+    describe: (item: T) => string,
+  ) => ({
+    title: context.t('access.columns.actions'),
+    render: (_: unknown, item: T) => (
+      <Space>
+        {kind === 'group' && item.allowedActions.includes('addMember') && (
+          <Button
+            size="small"
+            onClick={() => context.open('membership', { groupId: item.id })}
+          >
+            {context.t('access.actions.addMember')}
+          </Button>
+        )}
+        {(item.allowedActions.includes('disable') ||
+          item.allowedActions.includes('revoke')) && (
+          <ActionConfirm
+            revoke={item.allowedActions.includes('revoke')}
+            record={describe(item)}
+            onConfirm={() => context.destructive(kind, item.id)}
+          />
+        )}
+      </Space>
+    ),
+  })
+  if (key === 'users')
+    return (
+      <Table
+        rowKey="id"
+        loading={context.loading}
+        dataSource={context.users}
+        pagination={false}
+        locale={{ emptyText: context.t('access.empty') }}
+        columns={[
+          {
+            title: context.t('access.columns.username'),
+            dataIndex: 'username',
+          },
+          {
+            title: context.t('access.columns.status'),
+            dataIndex: 'disabled',
+            render: (disabled: boolean) => <StatusTag active={!disabled} />,
+          },
+          actionColumn<AccessUser>('user', (item) => item.username),
+        ]}
+      />
+    )
+  if (key === 'groups')
+    return (
+      <Table
+        rowKey="id"
+        loading={context.loading}
+        dataSource={context.groups}
+        pagination={false}
+        locale={{ emptyText: context.t('access.empty') }}
+        columns={[
+          { title: context.t('access.columns.name'), dataIndex: 'name' },
+          { title: context.t('access.columns.owner'), dataIndex: 'ownerKind' },
+          {
+            title: context.t('access.columns.status'),
+            dataIndex: 'disabled',
+            render: (disabled: boolean) => <StatusTag active={!disabled} />,
+          },
+          actionColumn<AccessGroup>('group', (item) => item.name),
+        ]}
+      />
+    )
+  if (key === 'roles')
+    return (
+      <Table
+        rowKey="id"
+        loading={context.loading}
+        dataSource={context.roles}
+        pagination={false}
+        locale={{ emptyText: context.t('access.empty') }}
+        columns={[
+          { title: context.t('access.columns.name'), dataIndex: 'name' },
+          { title: context.t('access.columns.owner'), dataIndex: 'ownerKind' },
+          {
+            title: context.t('access.columns.permissions'),
+            dataIndex: 'permissions',
+            render: (items: string[]) => (
+              <Space wrap>
+                {items.map((item) => (
+                  <Tag key={item}>{item}</Tag>
+                ))}
+              </Space>
+            ),
+          },
+          {
+            title: context.t('access.columns.status'),
+            dataIndex: 'active',
+            render: (active: boolean) => <StatusTag active={active} />,
+          },
+          actionColumn<AccessRole>('role', (item) => item.name),
+        ]}
+      />
+    )
+  if (key === 'memberships')
+    return (
+      <Table
+        rowKey="id"
+        loading={context.loading}
+        dataSource={context.memberships}
+        pagination={false}
+        locale={{ emptyText: context.t('access.empty') }}
+        columns={[
+          {
+            title: context.t('access.columns.group'),
+            dataIndex: 'groupName',
+          },
+          {
+            title: context.t('access.columns.username'),
+            dataIndex: 'username',
+          },
+          { title: context.t('access.columns.source'), dataIndex: 'source' },
+          {
+            title: context.t('access.columns.status'),
+            dataIndex: 'active',
+            render: (active: boolean) => <StatusTag active={active} />,
+          },
+          actionColumn<AccessMembership>(
+            'membership',
+            (item) => `${item.username} → ${item.groupName}`,
+          ),
+        ]}
+      />
+    )
+  if (key === 'bindings')
+    return (
+      <Table
+        rowKey="id"
+        loading={context.loading}
+        dataSource={context.bindings}
+        pagination={false}
+        locale={{ emptyText: context.t('access.empty') }}
+        columns={[
+          {
+            title: context.t('access.columns.group'),
+            dataIndex: 'groupName',
+          },
+          {
+            title: context.t('access.columns.role'),
+            dataIndex: 'roleName',
+          },
+          { title: context.t('access.columns.scope'), dataIndex: 'scopeKind' },
+          {
+            title: context.t('access.columns.status'),
+            dataIndex: 'active',
+            render: (active: boolean) => <StatusTag active={active} />,
+          },
+          actionColumn<AccessBinding>(
+            'binding',
+            (item) =>
+              `${item.groupName} → ${item.roleName} (${item.scopeKind})`,
+          ),
+        ]}
+      />
+    )
+  return (
+    <Table
+      rowKey="id"
+      loading={context.loading}
+      dataSource={context.denies}
+      pagination={false}
+      locale={{ emptyText: context.t('access.empty') }}
+      columns={[
+        {
+          title: context.t('access.columns.group'),
+          dataIndex: 'groupName',
+        },
+        {
+          title: context.t('access.columns.permission'),
+          dataIndex: 'permission',
+        },
+        { title: context.t('access.columns.scope'), dataIndex: 'scopeKind' },
+        {
+          title: context.t('access.columns.status'),
+          dataIndex: 'active',
+          render: (active: boolean) => <StatusTag active={active} />,
+        },
+        actionColumn<AccessDeny>(
+          'deny',
+          (item) =>
+            `${item.groupName} · ${item.permission} (${item.scopeKind})`,
+        ),
+      ]}
+    />
+  )
+}
+
 function AccessModal({
   action,
   form,
   submitting,
-  value,
+  canManagePlatform,
+  permissions,
   organizations,
-  managedProjects,
   close,
   submit,
 }: {
   action?: Action
   form: ReturnType<typeof Form.useForm<Fields>>[0]
   submitting: boolean
-  value?: AccessManagementSnapshot
+  canManagePlatform: boolean
+  permissions: AccessPermission[]
   organizations: CatalogOrganizationNode[]
-  managedProjects: Set<string>
   close: () => void
   submit: (fields: Fields) => Promise<void>
 }) {
   const { t } = useTranslation()
   const ownerKind = Form.useWatch('ownerKind', form)
-  const organizationID = Form.useWatch('organizationId', form)
-  const projectID = Form.useWatch('projectId', form)
-  const scopeKind = Form.useWatch('scopeKind', form)
-  const environmentID = Form.useWatch('environmentId', form)
-  const organization = organizations.find((item) => item.id === organizationID)
-  const project = organization?.projects.find((item) => item.id === projectID)
-  const environment = project?.environments.find(
-    (item) => item.id === environmentID,
+  const groupID = Form.useWatch('groupId', form) ?? ''
+  const userQuery = Form.useWatch('userQuery', form) ?? ''
+  const scopeKind = Form.useWatch('scopeKind', form) ?? 'project'
+  const selectedScopeID = Form.useWatch('scopeId', form)
+  const scopeID =
+    scopeKind === 'platform' ? 'platform' : (selectedScopeID ?? '')
+  const candidates = useListAccessMembershipCandidates(
+    groupID,
+    { query: userQuery || ' ' },
+    {
+      query: {
+        enabled:
+          action === 'membership' && Boolean(groupID && userQuery.trim()),
+      },
+    },
   )
-  const projectOptions = organizations.flatMap((org) =>
-    org.projects
-      .filter(
-        (item) => value?.canManagePlatform || managedProjects.has(item.id),
-      )
-      .map((item) => ({ value: item.id, label: `${org.name} / ${item.name}` })),
+  const scopeOptions = useGetAccessScopeOptions(scopeKind, scopeID, {
+    query: {
+      enabled: (action === 'binding' || action === 'deny') && Boolean(scopeID),
+    },
+  })
+  const candidateData =
+    candidates.data?.status === 200 ? candidates.data.data.data : []
+  const options =
+    scopeOptions.data?.status === 200 ? scopeOptions.data.data.data : undefined
+  const projectOptions = organizations.flatMap((organization) =>
+    organization.projects.map((project) => ({
+      value: project.id,
+      label: `${organization.name} / ${project.name}`,
+    })),
   )
   const ownerOptions = (
-    value?.canManagePlatform
-      ? ['platform', 'organization', 'project']
-      : ['project']
+    canManagePlatform ? ['platform', 'organization', 'project'] : ['project']
   ).filter((kind) => action === 'group' || kind !== 'organization')
+  const scopeKinds =
+    action === 'deny' || !canManagePlatform
+      ? ['project', 'environment', 'application']
+      : ['platform', 'project', 'environment', 'application']
   return (
     <Modal
       open={Boolean(action)}
@@ -481,12 +765,50 @@ function AccessModal({
         layout="vertical"
         onFinish={(fields) => void submit(fields)}
       >
+        {action === 'user' && (
+          <>
+            <Form.Item
+              name="username"
+              label={t('access.fields.username')}
+              rules={[{ required: true, whitespace: true, max: 128 }]}
+            >
+              <Input autoComplete="off" />
+            </Form.Item>
+            <Form.Item
+              name="password"
+              label={t('access.fields.initialPassword')}
+              extra={t('access.fields.initialPasswordHint')}
+              rules={[{ required: true, min: 8, max: 72 }]}
+            >
+              <Input.Password autoComplete="new-password" />
+            </Form.Item>
+            <Form.Item
+              name="passwordConfirm"
+              label={t('access.fields.confirmInitialPassword')}
+              dependencies={['password']}
+              rules={[
+                { required: true },
+                ({ getFieldValue }) => ({
+                  validator(_, value) {
+                    if (!value || getFieldValue('password') === value)
+                      return Promise.resolve()
+                    return Promise.reject(
+                      new Error(t('access.fields.passwordMismatch')),
+                    )
+                  },
+                }),
+              ]}
+            >
+              <Input.Password autoComplete="new-password" />
+            </Form.Item>
+          </>
+        )}
         {(action === 'group' || action === 'role') && (
           <>
             <Form.Item
               name="ownerKind"
               label={t('access.fields.owner')}
-              initialValue={value?.canManagePlatform ? 'platform' : 'project'}
+              initialValue={canManagePlatform ? 'platform' : 'project'}
               rules={[{ required: true }]}
             >
               <Select
@@ -539,7 +861,7 @@ function AccessModal({
               >
                 <Select
                   mode="multiple"
-                  options={value?.permissions
+                  options={permissions
                     .filter(
                       (item) =>
                         ownerKind === 'platform' || item.projectRoleDelegable,
@@ -556,16 +878,23 @@ function AccessModal({
               <Input />
             </Form.Item>
             <Form.Item
+              name="userQuery"
+              label={t('access.fields.userSearch')}
+              rules={[{ required: true }]}
+            >
+              <Input autoComplete="off" />
+            </Form.Item>
+            <Form.Item
               name="userId"
               label={t('access.fields.user')}
               rules={[{ required: true }]}
             >
               <Select
-                showSearch
-                optionFilterProp="label"
-                options={value?.users
-                  .filter((item) => !item.disabled)
-                  .map((item) => ({ value: item.id, label: item.username }))}
+                loading={candidates.isFetching}
+                options={candidateData.map((item) => ({
+                  value: item.id,
+                  label: item.username,
+                }))}
               />
             </Form.Item>
           </>
@@ -573,12 +902,54 @@ function AccessModal({
         {(action === 'binding' || action === 'deny') && (
           <>
             <Form.Item
+              name="scopeKind"
+              label={t('access.columns.scope')}
+              initialValue="project"
+              rules={[{ required: true }]}
+            >
+              <Select
+                options={scopeKinds.map((kind) => ({
+                  value: kind,
+                  label: kind,
+                }))}
+                onChange={() =>
+                  form.setFieldsValue({
+                    scopeId: undefined,
+                    groupId: undefined,
+                    roleId: undefined,
+                    permission: undefined,
+                  })
+                }
+              />
+            </Form.Item>
+            {scopeKind !== 'platform' && (
+              <Form.Item
+                name="scopeId"
+                label={t('access.fields.scopeResource')}
+                rules={[{ required: true }]}
+              >
+                <Select
+                  showSearch
+                  optionFilterProp="label"
+                  options={scopeResourceOptions(scopeKind, organizations)}
+                  onChange={() =>
+                    form.setFieldsValue({
+                      groupId: undefined,
+                      roleId: undefined,
+                      permission: undefined,
+                    })
+                  }
+                />
+              </Form.Item>
+            )}
+            <Form.Item
               name="groupId"
               label={t('access.columns.group')}
               rules={[{ required: true }]}
             >
               <Select
-                options={value?.groups
+                loading={scopeOptions.isFetching}
+                options={(options?.groups ?? [])
                   .filter((item) => !item.disabled)
                   .map((item) => ({ value: item.id, label: item.name }))}
               />
@@ -590,7 +961,8 @@ function AccessModal({
                 rules={[{ required: true }]}
               >
                 <Select
-                  options={value?.roles
+                  loading={scopeOptions.isFetching}
+                  options={(options?.roles ?? [])
                     .filter((item) => item.active)
                     .map((item) => ({ value: item.id, label: item.name }))}
                 />
@@ -602,91 +974,10 @@ function AccessModal({
                 rules={[{ required: true }]}
               >
                 <Select
-                  options={value?.permissions.map((item) => ({
+                  loading={scopeOptions.isFetching}
+                  options={(options?.permissions ?? []).map((item) => ({
                     value: item.key,
                     label: item.key,
-                  }))}
-                />
-              </Form.Item>
-            )}
-            <Form.Item
-              name="organizationId"
-              label="Organization"
-              rules={[{ required: true }]}
-            >
-              <Select
-                options={organizations.map((item) => ({
-                  value: item.id,
-                  label: item.name,
-                }))}
-                onChange={() =>
-                  form.setFieldsValue({
-                    projectId: undefined,
-                    environmentId: undefined,
-                    applicationId: undefined,
-                  })
-                }
-              />
-            </Form.Item>
-            <Form.Item
-              name="projectId"
-              label="Project"
-              rules={[{ required: true }]}
-            >
-              <Select
-                options={organization?.projects
-                  .filter(
-                    (item) =>
-                      value?.canManagePlatform || managedProjects.has(item.id),
-                  )
-                  .map((item) => ({ value: item.id, label: item.name }))}
-                onChange={() =>
-                  form.setFieldsValue({
-                    environmentId: undefined,
-                    applicationId: undefined,
-                  })
-                }
-              />
-            </Form.Item>
-            <Form.Item
-              name="scopeKind"
-              label={t('access.columns.scope')}
-              initialValue="project"
-              rules={[{ required: true }]}
-            >
-              <Select
-                options={['project', 'environment', 'application'].map(
-                  (item) => ({ value: item, label: item }),
-                )}
-              />
-            </Form.Item>
-            {(scopeKind === 'environment' || scopeKind === 'application') && (
-              <Form.Item
-                name="environmentId"
-                label="Environment"
-                rules={[{ required: true }]}
-              >
-                <Select
-                  options={project?.environments.map((item) => ({
-                    value: item.id,
-                    label: item.name,
-                  }))}
-                  onChange={() =>
-                    form.setFieldsValue({ applicationId: undefined })
-                  }
-                />
-              </Form.Item>
-            )}
-            {scopeKind === 'application' && (
-              <Form.Item
-                name="applicationId"
-                label="Application"
-                rules={[{ required: true }]}
-              >
-                <Select
-                  options={environment?.applications.map((item) => ({
-                    value: item.id,
-                    label: item.name,
                   }))}
                 />
               </Form.Item>
@@ -698,43 +989,122 @@ function AccessModal({
   )
 }
 
-function scopePayload(fields: Fields) {
-  return {
-    organizationId: fields.organizationId!,
-    projectId: fields.projectId!,
-    scopeKind: fields.scopeKind!,
-    environmentId: fields.environmentId,
-    applicationId: fields.applicationId,
-  }
+function createActionForTab(tab: TabKey): Action | undefined {
+  return (
+    {
+      users: 'user',
+      groups: 'group',
+      roles: 'role',
+      bindings: 'binding',
+      denies: 'deny',
+    } as Partial<Record<TabKey, Action>>
+  )[tab]
 }
-function formatScope(
-  item: AccessBinding | AccessDeny,
+
+function capitalize(value: string) {
+  return value.charAt(0).toUpperCase() + value.slice(1)
+}
+
+function scopeResourceOptions(
+  kind: ScopeKind,
   organizations: CatalogOrganizationNode[],
 ) {
-  const org = organizations.find((value) => value.id === item.organizationId)
-  const project = org?.projects.find((value) => value.id === item.projectId)
-  const environment = project?.environments.find(
-    (value) => value.id === item.environmentId,
-  )
-  const application = environment?.applications.find(
-    (value) => value.id === item.applicationId,
-  )
-  return (
-    [org?.name, project?.name, environment?.name, application?.name]
-      .filter(Boolean)
-      .join(' / ') || item.scopeKind
-  )
+  if (kind === 'project')
+    return organizations.flatMap((organization) =>
+      organization.projects.map((project) => ({
+        value: project.id,
+        label: `${organization.name} / ${project.name}`,
+      })),
+    )
+  if (kind === 'environment')
+    return organizations.flatMap((organization) =>
+      organization.projects.flatMap((project) =>
+        project.environments.map((environment) => ({
+          value: environment.id,
+          label: `${organization.name} / ${project.name} / ${environment.name}`,
+        })),
+      ),
+    )
+  if (kind === 'application')
+    return organizations.flatMap((organization) =>
+      organization.projects.flatMap((project) =>
+        project.environments.flatMap((environment) =>
+          environment.applications.map((application) => ({
+            value: application.id,
+            label: `${organization.name} / ${project.name} / ${environment.name} / ${application.name}`,
+          })),
+        ),
+      ),
+    )
+  return []
 }
-function DisableConfirm({ onConfirm }: { onConfirm: () => void }) {
+
+function scopePayload(
+  fields: Fields,
+  organizations: CatalogOrganizationNode[],
+) {
+  if (fields.scopeKind === 'platform') return { scopeKind: 'platform' as const }
+  for (const organization of organizations)
+    for (const project of organization.projects) {
+      if (fields.scopeKind === 'project' && project.id === fields.scopeId)
+        return {
+          scopeKind: 'project' as const,
+          organizationId: organization.id,
+          projectId: project.id,
+        }
+      for (const environment of project.environments) {
+        if (
+          fields.scopeKind === 'environment' &&
+          environment.id === fields.scopeId
+        )
+          return {
+            scopeKind: 'environment' as const,
+            organizationId: organization.id,
+            projectId: project.id,
+            environmentId: environment.id,
+          }
+        const application = environment.applications.find(
+          (item) => item.id === fields.scopeId,
+        )
+        if (fields.scopeKind === 'application' && application)
+          return {
+            scopeKind: 'application' as const,
+            organizationId: organization.id,
+            projectId: project.id,
+            environmentId: environment.id,
+            applicationId: application.id,
+          }
+      }
+    }
+  return { scopeKind: fields.scopeKind ?? ('project' as const) }
+}
+
+function ActionConfirm({
+  revoke,
+  record,
+  onConfirm,
+}: {
+  revoke: boolean
+  record: string
+  onConfirm: () => void
+}) {
   const { t } = useTranslation()
   return (
-    <Popconfirm title={t('access.disable.confirm')} onConfirm={onConfirm}>
+    <Popconfirm
+      title={t(revoke ? 'access.revoke.confirm' : 'access.disable.confirm')}
+      description={t(
+        revoke ? 'access.revoke.impact' : 'access.disable.impact',
+        { record },
+      )}
+      onConfirm={onConfirm}
+    >
       <Button size="small" danger>
-        {t('access.actions.disable')}
+        {t(revoke ? 'access.actions.revoke' : 'access.actions.disable')}
       </Button>
     </Popconfirm>
   )
 }
+
 function StatusTag({ active }: { active: boolean }) {
   const { t } = useTranslation()
   return (
@@ -743,9 +1113,15 @@ function StatusTag({ active }: { active: boolean }) {
     </Tag>
   )
 }
+
 function browserCookie(name: string): string | undefined {
   return document.cookie
     .split('; ')
     .find((value) => value.startsWith(`${name}=`))
     ?.slice(name.length + 1)
+}
+
+function mutationErrorCode(response: { status: number }) {
+  const value = response as { data?: { error?: { code?: string } } }
+  return value.data?.error?.code
 }

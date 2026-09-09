@@ -11,8 +11,10 @@ import (
 )
 
 func TestLoadAppliesDefaultsYAMLEnvironmentAndCLIInOrder(t *testing.T) {
+	t.Setenv("RELEASEHUB_MANAGER_PASSWORD", "manager-secret")
 	t.Setenv("RELEASEHUB_API_ADDRESS", ":9100")
 	t.Setenv("RELEASEHUB_LOG_LEVEL", "warn")
+	t.Setenv("RELEASEHUB_SESSION_COOKIE_SECURE", "false")
 
 	path := writeConfig(t, `
 api:
@@ -46,6 +48,12 @@ log:
 	}
 	if cfg.Database.Server != "postgres.internal" {
 		t.Fatalf("YAML mapping mismatch, got %q", cfg.Database.Server)
+	}
+	if cfg.ManagerPassword != "manager-secret" {
+		t.Fatalf("manager password environment mapping mismatch")
+	}
+	if cfg.Session.CookieSecure {
+		t.Fatal("session cookie secure environment mapping mismatch")
 	}
 	if cfg.OIDC.AccessTokenMaxTTL != 5*time.Minute {
 		t.Fatalf("OIDC access token maximum should default to five minutes, got %s", cfg.OIDC.AccessTokenMaxTTL)
@@ -123,6 +131,7 @@ func TestConfigStringRedactsSecrets(t *testing.T) {
 	cfg.OIDC.ClientSecret = "oidc-secret"
 	cfg.ArgoCD.Token = "argocd-secret"
 	cfg.Session.EncryptionKey = "session-secret"
+	cfg.ManagerPassword = "manager-secret"
 
 	text := cfg.String()
 	for _, secret := range []string{
@@ -131,6 +140,7 @@ func TestConfigStringRedactsSecrets(t *testing.T) {
 		"oidc-secret",
 		"argocd-secret",
 		"session-secret",
+		"manager-secret",
 	} {
 		if strings.Contains(text, secret) {
 			t.Fatalf("configuration output leaked secret %q", secret)

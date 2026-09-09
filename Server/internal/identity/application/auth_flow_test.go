@@ -99,6 +99,32 @@ func TestAuthFlowRevokesSessionWhenIdentityRefreshFails(t *testing.T) {
 	require.ErrorContains(t, err, "inactive")
 }
 
+func TestAuthFlowSupportsLocalSessionWithoutOIDCProvider(t *testing.T) {
+	now := time.Date(2026, 9, 8, 0, 0, 0, 0, time.UTC)
+	clock := &mutableClock{now: now}
+	user := identity.User{ID: uuid.New(), Username: "admin"}
+	identities := &memoryIdentities{users: map[uuid.UUID]identity.User{user.ID: user}, bindings: map[string]uuid.UUID{}}
+	identityService, _ := application.NewIdentityService(identities)
+	sessions := &memorySessions{sessions: map[string]identity.Session{}}
+	sessionService, _ := application.NewSessionService(sessions, clock, 30*time.Minute, time.Hour)
+	states, _ := application.NewLoginStateCodec([]byte("12345678901234567890123456789012"), clock, 5*time.Minute)
+	protector, _ := application.NewTokenProtector([]byte("12345678901234567890123456789012"))
+	flow, err := application.NewAuthFlow(nil, states, identityService, sessionService, protector, 5*time.Minute)
+	require.NoError(t, err)
+	sessionToken, csrfToken, err := sessionService.CreateLocal(context.Background(), user.ID)
+	require.NoError(t, err)
+
+	session, authenticatedUser, err := flow.Authenticate(context.Background(), sessionToken)
+	require.NoError(t, err)
+	require.Equal(t, "local", session.AuthenticationMethod)
+	require.Equal(t, user, authenticatedUser)
+	_, _, err = flow.Begin()
+	require.ErrorContains(t, err, "unavailable")
+	redirectURL, err := flow.Logout(context.Background(), sessionToken, csrfToken)
+	require.NoError(t, err)
+	require.Empty(t, redirectURL)
+}
+
 type fakeOIDCProvider struct {
 	authentication              application.OIDCAuthentication
 	state, verifier             string

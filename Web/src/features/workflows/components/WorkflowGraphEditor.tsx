@@ -11,6 +11,9 @@ import { useWorkflowEditor } from '../hooks/useWorkflowEditor'
 import { StateInspector } from './StateInspector'
 import { TransitionInspector } from './TransitionInspector'
 import styles from './WorkflowGraphEditor.module.css'
+import { WorkflowStateNode } from './WorkflowStateNode'
+
+const nodeTypes = { workflowState: WorkflowStateNode }
 
 interface Props {
   initialDocument: ReleaseWorkflowDocument
@@ -55,7 +58,11 @@ export function WorkflowGraphEditor({
         <ReactFlow
           nodes={graph.nodes}
           edges={graph.edges}
+          nodeTypes={nodeTypes}
           fitView
+          fitViewOptions={{ padding: 0.2 }}
+          minZoom={0.35}
+          maxZoom={1.5}
           onNodesChange={(changes) => emit({ type: 'nodes', changes })}
           onEdgesChange={(changes) => emit({ type: 'edges', changes })}
           onConnect={(connection) => emit({ type: 'connect', connection })}
@@ -71,7 +78,7 @@ export function WorkflowGraphEditor({
             setSelectedNode(undefined)
           }}
         >
-          <Background />
+          <Background gap={20} size={1} />
           <MiniMap pannable zoomable />
           <Controls />
         </ReactFlow>

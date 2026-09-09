@@ -2,16 +2,20 @@ export const en = {
   app: {
     title: 'ReleaseHub',
     description: 'Deployment governance and release operations.',
+    sidebar: {
+      collapse: 'Collapse sidebar',
+      expand: 'Expand sidebar',
+    },
   },
   navigation: {
     overview: 'Overview',
     resources: 'Resources',
     candidates: 'Candidate queue',
     applications: 'Applications',
-    requests: 'Deployment Requests',
-    workflows: 'Release Workflows',
-    plans: 'Deployment Plans',
-    access: 'Access management',
+    requests: 'Requests',
+    workflows: 'Workflows',
+    plans: 'Plans',
+    access: 'Access',
   },
   candidates: {
     title: 'Argo CD candidate queue',
@@ -52,11 +56,34 @@ export const en = {
   },
   session: {
     loading: 'Checking your session',
-    signInRequired: {
-      title: 'Sign in required',
+    brand: {
+      logoAlt: 'ReleaseHub brand mark',
+      eyebrow: 'Release governance',
+      title: 'Move every release forward with clarity.',
       description:
-        'Sign in to ReleaseHub through your organization identity provider.',
-      action: 'Sign in',
+        'Coordinate approvals, deployment plans, and production changes from one trusted workspace.',
+    },
+    signInRequired: {
+      eyebrow: 'Sign in to your workspace',
+      title: 'Welcome back',
+      description:
+        'Sign in with a local password or your organization identity provider.',
+      alternative: 'or',
+      action: 'Sign in with enterprise account',
+    },
+    local: {
+      username: 'Username',
+      password: 'Password',
+      signIn: 'Sign in with password',
+      error: 'The username or password is invalid.',
+    },
+    passwordChange: {
+      title: 'Change password',
+      required: 'You must change the initial password before continuing.',
+      current: 'Current password',
+      new: 'New password',
+      action: 'Change password',
+      error: 'The password could not be changed. Use at least 8 characters.',
     },
   },
   overview: {
@@ -128,13 +155,53 @@ export const en = {
       description:
         'This page is unavailable or you do not have management permission.',
     },
+    listError: {
+      title: 'Access data is unavailable',
+      description: 'The active tab could not be loaded. Try again.',
+      retry: 'Retry',
+    },
     tabs: {
       users: 'Users',
       groups: 'Groups',
       roles: 'Roles',
+      memberships: 'Memberships',
       bindings: 'Role bindings',
       denies: 'Deny policies',
     },
+    sections: {
+      users: {
+        title: 'Users',
+        description: 'Manage local account status and create local users.',
+      },
+      groups: {
+        title: 'Groups',
+        description: 'Manage authorization Groups and their owner scopes.',
+      },
+      roles: {
+        title: 'Roles',
+        description: 'Manage custom Roles and Permission sets.',
+      },
+      memberships: {
+        title: 'Memberships',
+        description: 'Review and revoke manually managed Group memberships.',
+      },
+      bindings: {
+        title: 'Role bindings',
+        description: 'Bind a Group and Role to an explicit Scope.',
+      },
+      denies: {
+        title: 'Deny policies',
+        description:
+          'Manage explicit denials that take precedence over grants.',
+      },
+    },
+    filters: {
+      search: 'Search this tab',
+      all: 'All statuses',
+      active: 'Active',
+      inactive: 'Inactive',
+    },
+    pagination: { previous: 'Previous', next: 'Next' },
     columns: {
       username: 'Username',
       name: 'Name',
@@ -147,16 +214,20 @@ export const en = {
       permission: 'Permission',
       status: 'Status',
       actions: 'Actions',
+      source: 'Source',
     },
     actions: {
       createGroup: 'Create Group',
+      createUser: 'Create user',
       createRole: 'Create Role',
       createBinding: 'Create binding',
       createDeny: 'Create deny',
       addMember: 'Add member',
       disable: 'Disable',
+      revoke: 'Revoke',
     },
     modal: {
+      user: 'Create local user',
       group: 'Create Group',
       role: 'Create Role',
       membership: 'Add Group member',
@@ -171,12 +242,35 @@ export const en = {
       oidcViewerOnly: 'Restrict OIDC mapping to viewer Role',
       permissions: 'Permissions',
       user: 'User',
+      username: 'Username',
+      initialPassword: 'Initial password',
+      confirmInitialPassword: 'Confirm initial password',
+      passwordMismatch: 'The initial passwords do not match.',
+      initialPasswordHint:
+        'The user must change this password after the first login. Use 8 to 72 characters.',
+      userSearch: 'Search username',
+      scopeResource: 'Scope resource',
     },
-    disable: { confirm: 'Disable this record and revoke its active access?' },
+    disable: {
+      confirm: 'Disable this record and revoke its active access?',
+      impact:
+        'Affected record: {{record}}. Existing sessions or authorization paths will become inactive.',
+    },
+    revoke: {
+      confirm: 'Revoke this record? Audit history will be retained.',
+      impact:
+        'Affected record: {{record}}. Historical records will remain available.',
+    },
     mutation: {
       success: 'Access policy updated.',
+      invalid: 'The input is invalid. Review the fields and try again.',
+      unauthenticated: 'Your session has expired. Sign in again.',
       conflict: 'The access policy conflicts with current data.',
       notAuthorized: 'The record does not exist or you cannot manage it.',
+      selfDisable: 'You cannot disable the account currently in use.',
+      lastManager:
+        'This change would remove the final platform management path.',
+      protected: 'This record is managed by the system and cannot be changed.',
       error: 'The access policy could not be updated.',
     },
     status: { active: 'Active', inactive: 'Inactive' },
@@ -565,6 +659,17 @@ export const en = {
       system: 'System',
       light: 'Light',
       dark: 'Dark',
+    },
+  },
+  account: {
+    openMenu: 'Open account menu for {{username}}',
+    personalSettings: 'Personal settings',
+    themeSettings: 'Theme settings',
+    signOut: 'Sign out',
+    signOutError: 'Sign out failed. Try again.',
+    fields: {
+      username: 'Username',
+      userId: 'User ID',
     },
   },
 } as const

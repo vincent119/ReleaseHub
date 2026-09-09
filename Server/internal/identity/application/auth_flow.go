@@ -35,6 +35,9 @@ type OIDCProvider interface {
 
 // BackchannelLogout validates a provider event and revokes all sessions for the bound identity.
 func (f *AuthFlow) BackchannelLogout(ctx context.Context, rawToken string) error {
+	if f.provider == nil {
+		return fmt.Errorf("OIDC authentication is unavailable")
+	}
 	issuer, subject, err := f.provider.VerifyLogoutToken(ctx, rawToken)
 	if err != nil {
 		return fmt.Errorf("verify back-channel logout: %w", err)
@@ -78,8 +81,8 @@ func WithOIDCGroupSynchronizer(synchronizer OIDCGroupSynchronizer) AuthFlowOptio
 
 // NewAuthFlow creates the BFF authentication use case.
 func NewAuthFlow(provider OIDCProvider, states *LoginStateCodec, identityService *IdentityService, sessions *SessionService, protector *TokenProtector, identitySyncInterval time.Duration, options ...AuthFlowOption) (*AuthFlow, error) {
-	if provider == nil || states == nil || identityService == nil || sessions == nil || protector == nil || identitySyncInterval <= 0 {
-		return nil, fmt.Errorf("OIDC provider, login state, identity, session, token protection, and identity sync are required")
+	if states == nil || identityService == nil || sessions == nil || protector == nil || identitySyncInterval <= 0 {
+		return nil, fmt.Errorf("login state, identity, session, token protection, and identity sync are required")
 	}
 	flow := &AuthFlow{provider: provider, states: states, identity: identityService, sessions: sessions, protector: protector, identitySyncInterval: identitySyncInterval}
 	for _, option := range options {
@@ -92,6 +95,9 @@ func NewAuthFlow(provider OIDCProvider, states *LoginStateCodec, identityService
 
 // Begin creates one signed login attempt and provider redirect URL.
 func (f *AuthFlow) Begin() (cookieValue, redirectURL string, err error) {
+	if f.provider == nil {
+		return "", "", fmt.Errorf("OIDC authentication is unavailable")
+	}
 	cookieValue, state, verifier, nonce, err := f.states.New()
 	if err != nil {
 		return "", "", err
@@ -101,6 +107,9 @@ func (f *AuthFlow) Begin() (cookieValue, redirectURL string, err error) {
 
 // Complete verifies callback state and creates an opaque local session.
 func (f *AuthFlow) Complete(ctx context.Context, cookieValue, state, code string) (identity.User, string, string, error) {
+	if f.provider == nil {
+		return identity.User{}, "", "", fmt.Errorf("OIDC authentication is unavailable")
+	}
 	loginState, err := f.states.Verify(cookieValue, state)
 	if err != nil {
 		return identity.User{}, "", "", fmt.Errorf("verify login state: %w", err)
@@ -139,6 +148,13 @@ func (f *AuthFlow) Authenticate(ctx context.Context, token string) (identity.Ses
 	user, err := f.identity.FindUser(ctx, session.UserID)
 	if err != nil {
 		return identity.Session{}, identity.User{}, err
+	}
+	if session.AuthenticationMethod == "local" {
+		return session, user, nil
+	}
+	if f.provider == nil {
+		_ = f.sessions.Revoke(ctx, session.ID)
+		return identity.Session{}, identity.User{}, fmt.Errorf("OIDC authentication is unavailable")
 	}
 	if !f.sessions.IdentitySyncDue(session, f.identitySyncInterval) {
 		return session, user, nil
@@ -187,6 +203,12 @@ func (f *AuthFlow) Logout(ctx context.Context, token, csrfToken string) (string,
 	}
 	if err := f.sessions.Revoke(ctx, session.ID); err != nil {
 		return "", err
+	}
+	if session.AuthenticationMethod == "local" {
+		return "", nil
+	}
+	if f.provider == nil {
+		return "", fmt.Errorf("OIDC authentication is unavailable")
 	}
 	return f.provider.LogoutURL(), nil
 }

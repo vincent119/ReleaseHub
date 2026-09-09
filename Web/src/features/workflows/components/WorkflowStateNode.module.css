@@ -1,0 +1,80 @@
+.node {
+  width: 12rem;
+  min-height: 4.75rem;
+  padding: 0.75rem 0.875rem;
+  color: var(--ant-color-text);
+  background: var(--workflow-surface-elevated, var(--ant-color-bg-elevated));
+  border: 1px solid var(--workflow-border, var(--ant-color-border));
+  border-top: 3px solid var(--workflow-accent, var(--ant-color-primary));
+  border-radius: 0.75rem;
+  box-shadow: var(--rh-shadow-card);
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
+}
+
+.node:hover,
+.selected {
+  border-color: var(--workflow-accent, var(--ant-color-primary));
+  box-shadow:
+    0 0 0 3px var(--workflow-accent-soft, var(--ant-color-primary-bg)),
+    var(--rh-shadow-floating);
+  transform: translateY(-1px);
+}
+
+.node[data-state-type='Review'] {
+  border-top-color: var(--workflow-review, var(--ant-color-warning));
+}
+
+.node[data-state-type='Deployment'] {
+  border-top-color: var(--workflow-accent, var(--ant-color-info));
+}
+
+.node[data-state-type='Terminal'] {
+  border-top-color: var(--workflow-terminal, var(--ant-color-success));
+}
+
+.type,
+.key {
+  display: block;
+  overflow: hidden;
+  color: var(--ant-color-text-secondary);
+  font-size: 0.6875rem;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.type {
+  margin-bottom: 0.25rem;
+  color: var(--workflow-accent, var(--ant-color-primary-text));
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.name {
+  display: block;
+  overflow: hidden;
+  margin-bottom: 0.125rem;
+  font-size: 0.875rem;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.node :global(.react-flow__handle) {
+  width: 0.625rem;
+  height: 0.625rem;
+  background: var(--workflow-accent, var(--ant-color-primary));
+  border: 2px solid
+    var(--workflow-surface-elevated, var(--ant-color-bg-elevated));
+  box-shadow: 0 0 0.5rem var(--workflow-accent-soft, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .node {
+    transition: none;
+  }
+}

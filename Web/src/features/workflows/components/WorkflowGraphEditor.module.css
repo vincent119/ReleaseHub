@@ -1,30 +1,115 @@
 .editor {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 20rem;
-  grid-template-rows: auto minmax(32rem, 1fr);
-  min-height: 38rem;
-  border: 1px solid var(--ant-color-border-secondary);
-  border-radius: var(--ant-border-radius-lg);
+  height: 100%;
+  min-height: 36rem;
+  grid-template-columns: minmax(0, 1fr) 22rem;
+  grid-template-rows: auto minmax(31rem, 1fr);
+  border: 1px solid var(--workflow-border, var(--ant-color-border-secondary));
+  border-radius: 1rem;
   overflow: hidden;
+  background: var(--workflow-surface, var(--ant-color-bg-container));
+  box-shadow: var(--workflow-panel-shadow, var(--ant-box-shadow-tertiary));
 }
 
 .toolbar {
   grid-column: 1 / -1;
-  padding: var(--rh-space-3);
-  border-bottom: 1px solid var(--ant-color-border-secondary);
-  background: var(--ant-color-bg-container);
+  min-height: 3.5rem;
+  padding: 0.625rem var(--rh-space-4, 1rem);
+  border-bottom: 1px solid
+    var(--workflow-border, var(--ant-color-border-secondary));
+  background: var(--workflow-surface-elevated, var(--ant-color-bg-container));
 }
 
 .canvas {
   min-width: 0;
-  background: var(--ant-color-bg-layout);
+  background-color: var(--workflow-workspace-bg, var(--rh-color-page));
+  background-image: var(--workflow-ambient, var(--rh-ambient-page));
+  background-position: center;
+}
+
+.canvas :global(.react-flow__background-pattern) {
+  fill: color-mix(
+    in srgb,
+    var(--workflow-accent, var(--ant-color-primary)) 36%,
+    transparent
+  );
+}
+
+.canvas :global(.react-flow__edge-path) {
+  stroke: color-mix(
+    in srgb,
+    var(--workflow-accent, var(--ant-color-text-tertiary)) 58%,
+    var(--ant-color-text-tertiary)
+  );
+  stroke-width: 1.5;
+}
+
+.canvas :global(.react-flow__edge.selected .react-flow__edge-path) {
+  stroke: var(--workflow-accent, var(--ant-color-primary));
+  stroke-width: 2;
+  filter: drop-shadow(0 0 0.3rem var(--workflow-accent-soft, transparent));
+}
+
+.canvas :global(.react-flow__edge-text) {
+  fill: var(--ant-color-text);
+  font-size: 0.6875rem;
+  font-weight: 600;
+}
+
+.canvas :global(.react-flow__edge-textbg) {
+  fill: var(--workflow-surface-elevated, var(--ant-color-bg-elevated));
+  stroke: var(--workflow-border, var(--ant-color-border-secondary));
+  stroke-width: 1;
+}
+
+.canvas :global(.react-flow__controls),
+.canvas :global(.react-flow__minimap) {
+  overflow: hidden;
+  background: var(--workflow-surface-elevated, var(--ant-color-bg-elevated));
+  border: 1px solid var(--workflow-border, var(--ant-color-border-secondary));
+  border-radius: 0.625rem;
+  box-shadow: var(--workflow-panel-shadow, var(--ant-box-shadow-tertiary));
+}
+
+.canvas :global(.react-flow__controls-button) {
+  color: var(--ant-color-text);
+  background: var(--workflow-surface-elevated, var(--ant-color-bg-elevated));
+  border-bottom-color: var(
+    --workflow-border,
+    var(--ant-color-border-secondary)
+  );
+}
+
+.canvas :global(.react-flow__controls-button:hover) {
+  color: var(--workflow-accent, var(--ant-color-primary));
+}
+
+.canvas :global(.react-flow__controls-button svg) {
+  fill: currentColor;
 }
 
 .inspector {
-  padding: var(--rh-space-4);
+  padding: var(--rh-space-4, 1rem);
   overflow: auto;
-  border-left: 1px solid var(--ant-color-border-secondary);
-  background: var(--ant-color-bg-container);
+  border-left: 1px solid
+    var(--workflow-border, var(--ant-color-border-secondary));
+  background: var(--workflow-surface, var(--ant-color-bg-container));
+  backdrop-filter: blur(1.25rem);
+}
+
+.inspector > :global(.ant-card) {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+.inspector > :global(.ant-card .ant-card-head),
+.inspector > :global(.ant-card .ant-card-body) {
+  padding-inline: 0;
+}
+
+.inspector :global(.ant-form-item) {
+  margin-bottom: var(--rh-space-4, 1rem);
 }
 
 @media (max-width: 960px) {
@@ -34,7 +119,8 @@
   }
 
   .inspector {
-    border-top: 1px solid var(--ant-color-border-secondary);
+    border-top: 1px solid
+      var(--workflow-border, var(--ant-color-border-secondary));
     border-left: 0;
   }
 }

@@ -144,6 +144,7 @@ function graphNode(
 ): WorkflowNode {
   return {
     id: state.key,
+    type: 'workflowState',
     position: { x: point.x - nodeWidth / 2, y: point.y - nodeHeight / 2 },
     data: { state, label: `${state.name}\n${state.type}` },
     sourcePosition: Position.Right,

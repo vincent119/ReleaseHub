@@ -14,6 +14,21 @@ import (
 // ErrAccessManagementNotFound hides access-management data from unauthorized users.
 var ErrAccessManagementNotFound = errors.New("access management not found")
 
+// ErrAccessManagementConflict identifies an already-applied or stale mutation.
+var ErrAccessManagementConflict = errors.New("access management conflict")
+
+// ErrInvalidAccessRequest identifies malformed filters or command input.
+var ErrInvalidAccessRequest = errors.New("invalid access management request")
+
+// ErrLastPlatformManager prevents removing the final effective platform-management path.
+var ErrLastPlatformManager = errors.New("last platform manager path is protected")
+
+// ErrSelfDisable prevents an administrator from disabling the active account.
+var ErrSelfDisable = errors.New("administrators cannot disable their own account")
+
+// ErrProtectedAccessResource prevents lifecycle changes to system-owned policy records.
+var ErrProtectedAccessResource = errors.New("system access resource is protected")
+
 // AccessPrincipal is the authenticated local user requesting access-management data.
 type AccessPrincipal struct {
 	UserID   uuid.UUID
@@ -28,9 +43,10 @@ type ProjectScope struct {
 
 // AccessUser is a user referenced by an included Group.
 type AccessUser struct {
-	ID         uuid.UUID
-	Username   string
-	DisabledAt *time.Time
+	ID             uuid.UUID
+	Username       string
+	DisabledAt     *time.Time
+	AllowedActions []string `gorm:"-"`
 }
 
 // AccessGroup is a platform, Organization, or Project-owned Group.
@@ -39,19 +55,22 @@ type AccessGroup struct {
 	OwnerKind      string
 	OwnerID        *uuid.UUID
 	Name           string
+	SystemKey      *string
 	OIDCViewerOnly bool
 	DisabledAt     *time.Time
+	AllowedActions []string `gorm:"-"`
 }
 
 // AccessRole is a platform or Project-owned Role and its permissions.
 type AccessRole struct {
-	ID          uuid.UUID
-	OwnerKind   string
-	OwnerID     *uuid.UUID
-	Name        string
-	SystemKey   *string
-	Active      bool
-	Permissions []string
+	ID             uuid.UUID
+	OwnerKind      string
+	OwnerID        *uuid.UUID
+	Name           string
+	SystemKey      *string
+	Active         bool
+	Permissions    []string `gorm:"-"`
+	AllowedActions []string `gorm:"-"`
 }
 
 // AccessPermission describes whether a permission may be composed into a Project-owned Role.
@@ -63,11 +82,14 @@ type AccessPermission struct {
 
 // AccessMembership associates one user with one Group.
 type AccessMembership struct {
-	ID      uuid.UUID
-	GroupID uuid.UUID
-	UserID  uuid.UUID
-	Source  string
-	Active  bool
+	ID             uuid.UUID
+	GroupID        uuid.UUID
+	UserID         uuid.UUID
+	GroupName      string
+	Username       string
+	Source         string
+	Active         bool
+	AllowedActions []string `gorm:"-"`
 }
 
 // AccessBinding grants one Role to one Group at a resource scope.
@@ -75,18 +97,22 @@ type AccessBinding struct {
 	ID             uuid.UUID
 	GroupID        uuid.UUID
 	RoleID         uuid.UUID
+	GroupName      string
+	RoleName       string
 	OrganizationID uuid.UUID
 	ScopeKind      string
 	ProjectID      uuid.UUID
 	EnvironmentID  *uuid.UUID
 	ApplicationID  *uuid.UUID
 	Active         bool
+	AllowedActions []string `gorm:"-"`
 }
 
 // AccessDeny explicitly denies one permission for a Group at a resource scope.
 type AccessDeny struct {
 	ID             uuid.UUID
 	GroupID        uuid.UUID
+	GroupName      string
 	Permission     string
 	OrganizationID uuid.UUID
 	ScopeKind      string
@@ -94,6 +120,34 @@ type AccessDeny struct {
 	EnvironmentID  *uuid.UUID
 	ApplicationID  *uuid.UUID
 	Active         bool
+	AllowedActions []string `gorm:"-"`
+}
+
+// AccessCollectionCapability describes one visible Access resource collection.
+type AccessCollectionCapability struct {
+	Key       string
+	Visible   bool
+	CanCreate bool
+}
+
+// AccessCapabilities is the server-owned action policy consumed by the Access UI.
+type AccessCapabilities struct {
+	Collections []AccessCollectionCapability
+	Permissions []AccessPermission
+}
+
+// AccessScopeOptions contains legal downstream choices for a selected scope.
+type AccessScopeOptions struct {
+	Groups      []AccessGroup
+	Roles       []AccessRole
+	Permissions []AccessPermission
+}
+
+// AccessListPage is one stable cursor page of an Access resource collection.
+type AccessListPage[T any] struct {
+	Items      []T
+	NextCursor string
+	HasMore    bool
 }
 
 // AccessSnapshot is the filtered read model consumed by the administration UI.
@@ -107,11 +161,15 @@ type AccessSnapshot struct {
 	Memberships       []AccessMembership
 	Bindings          []AccessBinding
 	Denies            []AccessDeny
+	managedGroups     map[uuid.UUID]struct{}
+	managedRoles      map[uuid.UUID]struct{}
 }
 
 // AccessManagementRepository loads policy records before application-layer filtering.
 type AccessManagementRepository interface {
 	ListProjectScopes(context.Context) ([]ProjectScope, error)
+	ResolveAccessScope(context.Context, string, uuid.UUID) (authz.Scope, error)
+	FindMembershipCandidates(context.Context, uuid.UUID, string, bool, int) ([]AccessUser, error)
 	LoadAccessSnapshot(context.Context) (AccessSnapshot, error)
 	CreateGroup(context.Context, AccessMutation, CreateGroupInput) (AccessGroup, error)
 	DisableGroup(context.Context, AccessMutation, uuid.UUID) error
@@ -120,6 +178,10 @@ type AccessManagementRepository interface {
 	CreateBinding(context.Context, AccessMutation, CreateBindingInput) (AccessBinding, error)
 	CreateDeny(context.Context, AccessMutation, CreateDenyInput) (AccessDeny, error)
 	DisableUser(context.Context, AccessMutation, uuid.UUID) error
+	RevokeMembership(context.Context, AccessMutation, uuid.UUID) error
+	DisableRole(context.Context, AccessMutation, uuid.UUID) error
+	RevokeBinding(context.Context, AccessMutation, uuid.UUID) error
+	RevokeDeny(context.Context, AccessMutation, uuid.UUID) error
 }
 
 // AccessManagementAuthorizer revalidates sensitive access-management reads.
@@ -166,6 +228,8 @@ func (s *AccessManagementService) Load(ctx context.Context, principal AccessPrin
 		return AccessSnapshot{}, fmt.Errorf("list access management Project scopes: %w", err)
 	}
 	allowedProjects := make(map[uuid.UUID]struct{})
+	managedGroups := make(map[uuid.UUID]struct{})
+	managedRoles := make(map[uuid.UUID]struct{})
 	for _, value := range scopes {
 		scope, scopeErr := authz.NewProjectScope(value.OrganizationID, value.ProjectID)
 		if scopeErr != nil {
@@ -182,6 +246,12 @@ func (s *AccessManagementService) Load(ctx context.Context, principal AccessPrin
 		if groupAllowed || roleAllowed {
 			allowedProjects[value.ProjectID] = struct{}{}
 		}
+		if groupAllowed {
+			managedGroups[value.ProjectID] = struct{}{}
+		}
+		if roleAllowed {
+			managedRoles[value.ProjectID] = struct{}{}
+		}
 	}
 	if len(allowedProjects) == 0 {
 		return AccessSnapshot{}, ErrAccessManagementNotFound
@@ -191,10 +261,35 @@ func (s *AccessManagementService) Load(ctx context.Context, principal AccessPrin
 		return AccessSnapshot{}, err
 	}
 	value = filterAccessSnapshot(value, allowedProjects)
+	value.managedGroups = managedGroups
+	value.managedRoles = managedRoles
 	for projectID := range allowedProjects {
 		value.ManagedProjects = append(value.ManagedProjects, projectID)
 	}
 	return value, nil
+}
+
+func (value AccessSnapshot) canManageGroup(group AccessGroup) bool {
+	if value.CanManagePlatform {
+		return true
+	}
+	return group.OwnerKind == "project" && group.OwnerID != nil && containsProject(value.managedGroups, *group.OwnerID)
+}
+
+func (value AccessSnapshot) canManageRole(role AccessRole) bool {
+	if value.CanManagePlatform {
+		return true
+	}
+	return role.OwnerKind == "project" && role.OwnerID != nil && containsProject(value.managedRoles, *role.OwnerID)
+}
+
+func (value AccessSnapshot) canManagePolicyAt(projectID uuid.UUID) bool {
+	return value.CanManagePlatform || containsProject(value.managedGroups, projectID)
+}
+
+func containsProject(projects map[uuid.UUID]struct{}, projectID uuid.UUID) bool {
+	_, ok := projects[projectID]
+	return ok
 }
 
 func filterAccessSnapshot(value AccessSnapshot, allowedProjects map[uuid.UUID]struct{}) AccessSnapshot {
@@ -202,6 +297,9 @@ func filterAccessSnapshot(value AccessSnapshot, allowedProjects map[uuid.UUID]st
 	includedGroups := make(map[uuid.UUID]struct{})
 	includedRoles := make(map[uuid.UUID]struct{})
 	for _, binding := range value.Bindings {
+		if binding.ScopeKind == "platform" {
+			continue
+		}
 		if _, ok := allowedProjects[binding.ProjectID]; !ok {
 			continue
 		}

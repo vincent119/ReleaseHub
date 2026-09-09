@@ -58,7 +58,7 @@ type CreateDenyInput struct {
 func (s *AccessManagementService) CreateGroup(ctx context.Context, principal AccessPrincipal, mutation AccessMutation, input CreateGroupInput) (AccessGroup, error) {
 	input.Name = strings.TrimSpace(input.Name)
 	if input.Name == "" || len(input.Name) > 128 || !validOwner(input.OwnerKind, input.OwnerID, true) {
-		return AccessGroup{}, fmt.Errorf("invalid Group input")
+		return AccessGroup{}, fmt.Errorf("%w: invalid Group input", ErrInvalidAccessRequest)
 	}
 	allowed, err := s.mayManageOwner(ctx, principal, s.groupManage, input.OwnerKind, input.OwnerID)
 	if err != nil || !allowed {
@@ -78,6 +78,9 @@ func (s *AccessManagementService) DisableGroup(ctx context.Context, principal Ac
 	if !ok {
 		return ErrAccessManagementNotFound
 	}
+	if group.SystemKey != nil {
+		return ErrProtectedAccessResource
+	}
 	allowed, err := s.mayManageOwner(ctx, principal, s.groupManage, group.OwnerKind, group.OwnerID)
 	if err != nil || !allowed {
 		return accessDecision(err)
@@ -90,7 +93,7 @@ func (s *AccessManagementService) DisableGroup(ctx context.Context, principal Ac
 func (s *AccessManagementService) CreateRole(ctx context.Context, principal AccessPrincipal, mutation AccessMutation, input CreateRoleInput) (AccessRole, error) {
 	input.Name = strings.TrimSpace(input.Name)
 	if input.Name == "" || len(input.Name) > 128 || !validOwner(input.OwnerKind, input.OwnerID, false) || len(input.Permissions) == 0 {
-		return AccessRole{}, fmt.Errorf("invalid Role input")
+		return AccessRole{}, fmt.Errorf("%w: invalid Role input", ErrInvalidAccessRequest)
 	}
 	allowed, err := s.mayManageOwner(ctx, principal, s.roleManage, input.OwnerKind, input.OwnerID)
 	if err != nil || !allowed {
@@ -125,9 +128,26 @@ func (s *AccessManagementService) AddMembership(ctx context.Context, principal A
 
 // CreateBinding assigns a Group and Role to a validated Project descendant scope.
 func (s *AccessManagementService) CreateBinding(ctx context.Context, principal AccessPrincipal, mutation AccessMutation, input CreateBindingInput) (AccessBinding, error) {
+	if input.ScopeKind == "platform" {
+		platform, err := s.platformAllowed(ctx, principal)
+		if err != nil || !platform {
+			return AccessBinding{}, accessDecision(err)
+		}
+		value, err := s.repository.LoadAccessSnapshot(ctx)
+		if err != nil {
+			return AccessBinding{}, err
+		}
+		group, groupOK := findGroup(value.Groups, input.GroupID)
+		role, roleOK := findRole(value.Roles, input.RoleID)
+		if !groupOK || !roleOK || group.DisabledAt != nil || !role.Active || group.OwnerKind != "platform" || role.OwnerKind != "platform" {
+			return AccessBinding{}, ErrAccessManagementNotFound
+		}
+		mutation.ActorID = principal.UserID
+		return s.repository.CreateBinding(ctx, mutation, input)
+	}
 	scope, err := commandScope(input.OrganizationID, input.ProjectID, input.ScopeKind, input.EnvironmentID, input.ApplicationID)
 	if err != nil {
-		return AccessBinding{}, err
+		return AccessBinding{}, fmt.Errorf("%w: %v", ErrInvalidAccessRequest, err)
 	}
 	allowed, err := s.authorizer.AuthorizeFresh(ctx, authz.AuthorizationRequest{UserID: principal.UserID, Disabled: principal.Disabled, Permission: s.groupManage, Scope: scope})
 	platform, platformErr := s.platformAllowed(ctx, principal)
@@ -151,11 +171,11 @@ func (s *AccessManagementService) CreateBinding(ctx context.Context, principal A
 func (s *AccessManagementService) CreateDeny(ctx context.Context, principal AccessPrincipal, mutation AccessMutation, input CreateDenyInput) (AccessDeny, error) {
 	scope, err := commandScope(input.OrganizationID, input.ProjectID, input.ScopeKind, input.EnvironmentID, input.ApplicationID)
 	if err != nil {
-		return AccessDeny{}, err
+		return AccessDeny{}, fmt.Errorf("%w: %v", ErrInvalidAccessRequest, err)
 	}
 	permission, err := authz.NewPermission(input.Permission)
 	if err != nil {
-		return AccessDeny{}, err
+		return AccessDeny{}, fmt.Errorf("%w: invalid permission", ErrInvalidAccessRequest)
 	}
 	allowed, err := s.authorizer.AuthorizeFresh(ctx, authz.AuthorizationRequest{UserID: principal.UserID, Disabled: principal.Disabled, Permission: s.groupManage, Scope: scope})
 	platform, platformErr := s.platformAllowed(ctx, principal)
@@ -181,6 +201,9 @@ func (s *AccessManagementService) DisableUser(ctx context.Context, principal Acc
 	if err != nil || !allowed {
 		return accessDecision(err)
 	}
+	if principal.UserID == userID {
+		return ErrSelfDisable
+	}
 	value, err := s.repository.LoadAccessSnapshot(ctx)
 	if err != nil {
 		return err
@@ -197,6 +220,136 @@ func (s *AccessManagementService) DisableUser(ctx context.Context, principal Acc
 	}
 	mutation.ActorID = principal.UserID
 	return s.repository.DisableUser(ctx, mutation, userID)
+}
+
+// RevokeMembership deactivates one manual Group membership.
+func (s *AccessManagementService) RevokeMembership(ctx context.Context, principal AccessPrincipal, mutation AccessMutation, membershipID uuid.UUID) error {
+	value, err := s.repository.LoadAccessSnapshot(ctx)
+	if err != nil {
+		return err
+	}
+	var membership AccessMembership
+	for _, candidate := range value.Memberships {
+		if candidate.ID == membershipID {
+			membership = candidate
+			break
+		}
+	}
+	if membership.ID == uuid.Nil {
+		return ErrAccessManagementNotFound
+	}
+	if !membership.Active {
+		return ErrAccessManagementConflict
+	}
+	if membership.Source != "manual" {
+		return ErrProtectedAccessResource
+	}
+	group, ok := findGroup(value.Groups, membership.GroupID)
+	if !ok {
+		return ErrAccessManagementNotFound
+	}
+	allowed, err := s.mayManageOwner(ctx, principal, s.groupManage, group.OwnerKind, group.OwnerID)
+	if err != nil || !allowed {
+		return accessDecision(err)
+	}
+	mutation.ActorID = principal.UserID
+	return s.repository.RevokeMembership(ctx, mutation, membershipID)
+}
+
+// DisableRole deactivates one custom Role while preserving its audit history.
+func (s *AccessManagementService) DisableRole(ctx context.Context, principal AccessPrincipal, mutation AccessMutation, roleID uuid.UUID) error {
+	value, err := s.repository.LoadAccessSnapshot(ctx)
+	if err != nil {
+		return err
+	}
+	role, ok := findRole(value.Roles, roleID)
+	if !ok {
+		return ErrAccessManagementNotFound
+	}
+	if !role.Active {
+		return ErrAccessManagementConflict
+	}
+	if role.SystemKey != nil {
+		return ErrProtectedAccessResource
+	}
+	allowed, err := s.mayManageOwner(ctx, principal, s.roleManage, role.OwnerKind, role.OwnerID)
+	if err != nil || !allowed {
+		return accessDecision(err)
+	}
+	mutation.ActorID = principal.UserID
+	return s.repository.DisableRole(ctx, mutation, roleID)
+}
+
+// RevokeBinding deactivates one Project-descendant Role binding.
+func (s *AccessManagementService) RevokeBinding(ctx context.Context, principal AccessPrincipal, mutation AccessMutation, bindingID uuid.UUID) error {
+	value, err := s.repository.LoadAccessSnapshot(ctx)
+	if err != nil {
+		return err
+	}
+	var binding AccessBinding
+	for _, candidate := range value.Bindings {
+		if candidate.ID == bindingID {
+			binding = candidate
+			break
+		}
+	}
+	if binding.ID == uuid.Nil {
+		return ErrAccessManagementNotFound
+	}
+	if !binding.Active {
+		return ErrAccessManagementConflict
+	}
+	if binding.ScopeKind == "platform" {
+		platform, err := s.platformAllowed(ctx, principal)
+		if err != nil || !platform {
+			return accessDecision(err)
+		}
+		mutation.ActorID = principal.UserID
+		return s.repository.RevokeBinding(ctx, mutation, bindingID)
+	}
+	scope, err := commandScope(binding.OrganizationID, binding.ProjectID, binding.ScopeKind, binding.EnvironmentID, binding.ApplicationID)
+	if err != nil {
+		return ErrAccessManagementNotFound
+	}
+	allowed, err := s.authorizer.AuthorizeFresh(ctx, authz.AuthorizationRequest{UserID: principal.UserID, Disabled: principal.Disabled, Permission: s.groupManage, Scope: scope})
+	platform, platformErr := s.platformAllowed(ctx, principal)
+	if err != nil || platformErr != nil || (!allowed && !platform) {
+		return accessDecision(errorsJoin(err, platformErr))
+	}
+	mutation.ActorID = principal.UserID
+	return s.repository.RevokeBinding(ctx, mutation, bindingID)
+}
+
+// RevokeDeny deactivates one explicit deny policy.
+func (s *AccessManagementService) RevokeDeny(ctx context.Context, principal AccessPrincipal, mutation AccessMutation, denyID uuid.UUID) error {
+	value, err := s.repository.LoadAccessSnapshot(ctx)
+	if err != nil {
+		return err
+	}
+	var deny AccessDeny
+	for _, candidate := range value.Denies {
+		if candidate.ID == denyID {
+			deny = candidate
+			break
+		}
+	}
+	if deny.ID == uuid.Nil {
+		return ErrAccessManagementNotFound
+	}
+	if !deny.Active {
+		return ErrAccessManagementConflict
+	}
+	scope, err := commandScope(deny.OrganizationID, deny.ProjectID, deny.ScopeKind, deny.EnvironmentID, deny.ApplicationID)
+	if err != nil {
+		return ErrAccessManagementNotFound
+	}
+	allowed, err := s.authorizer.AuthorizeFresh(ctx, authz.AuthorizationRequest{UserID: principal.UserID, Disabled: principal.Disabled, Permission: s.groupManage, Scope: scope})
+	platform, platformErr := s.platformAllowed(ctx, principal)
+	if err != nil || platformErr != nil || (!allowed && !platform) {
+		return accessDecision(errorsJoin(err, platformErr))
+	}
+	mutation.ActorID = principal.UserID
+	return s.repository.RevokeDeny(ctx, mutation, denyID)
 }
 
 func (s *AccessManagementService) platformAllowed(ctx context.Context, principal AccessPrincipal) (bool, error) {
@@ -274,16 +427,16 @@ func commandScope(organizationID, projectID uuid.UUID, kind string, environmentI
 		return authz.NewProjectScope(organizationID, projectID)
 	case "environment":
 		if environmentID == nil {
-			return authz.Scope{}, fmt.Errorf("environment ID is required")
+			return authz.Scope{}, fmt.Errorf("%w: environment ID is required", ErrInvalidAccessRequest)
 		}
 		return authz.NewEnvironmentScope(organizationID, projectID, *environmentID)
 	case "application":
 		if environmentID == nil || applicationID == nil {
-			return authz.Scope{}, fmt.Errorf("environment and Application IDs are required")
+			return authz.Scope{}, fmt.Errorf("%w: environment and Application IDs are required", ErrInvalidAccessRequest)
 		}
 		return authz.NewApplicationScope(organizationID, projectID, *environmentID, *applicationID)
 	default:
-		return authz.Scope{}, fmt.Errorf("unsupported scope kind %q", kind)
+		return authz.Scope{}, fmt.Errorf("%w: unsupported scope kind %q", ErrInvalidAccessRequest, kind)
 	}
 }
 

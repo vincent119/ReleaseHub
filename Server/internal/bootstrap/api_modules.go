@@ -2,6 +2,7 @@ package bootstrap
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	argoapp "github.com/vincent119/ReleaseHub/Server/internal/argocd/application"
@@ -46,27 +47,30 @@ type apiHandlerDependencies struct {
 	resources *processResources
 	policy    *authzinfra.PolicyEngine
 	groups    *authzapp.OIDCGroupService
+	local     *identityapp.LocalAuthService
 }
 
 type authComposition struct {
 	cfg      config.Config
 	services *identityServices
 	security *identitySecurity
-	provider *identityinfra.OIDCProvider
+	provider identityapp.OIDCProvider
 	groups   *authzapp.OIDCGroupService
+	local    *identityapp.LocalAuthService
 }
 
 type apiHandlerParts struct {
-	auth       httpserver.AuthHandlerOptions
-	catalog    httpserver.CatalogHandlerOptions
-	argoCD     httpserver.ArgoCDHandlerOptions
-	access     httpserver.AccessHandlerOptions
-	workflow   httpserver.WorkflowHandlerOptions
-	plan       httpserver.PlanHandlerOptions
-	deployment httpserver.DeploymentHandlerOptions
+	auth        httpserver.AuthHandlerOptions
+	oidcEnabled bool
+	catalog     httpserver.CatalogHandlerOptions
+	argoCD      httpserver.ArgoCDHandlerOptions
+	access      httpserver.AccessHandlerOptions
+	workflow    httpserver.WorkflowHandlerOptions
+	plan        httpserver.PlanHandlerOptions
+	deployment  httpserver.DeploymentHandlerOptions
 }
 
-func newAPIModules(cfg config.Config, version string, resources *processResources) (*apiModules, error) {
+func newAPIModulesWithLocal(cfg config.Config, version string, resources *processResources, local *identityapp.LocalAuthService) (*apiModules, error) {
 	policy, err := newPolicyModule(resources.db, cfg.Database)
 	if err != nil {
 		return nil, err
@@ -77,7 +81,7 @@ func newAPIModules(cfg config.Config, version string, resources *processResource
 	}
 	handler, err := newAPIHandlerOptions(apiHandlerDependencies{
 		cfg: cfg, version: version, resources: resources,
-		policy: policy.engine, groups: groups,
+		policy: policy.engine, groups: groups, local: local,
 	})
 	if err != nil {
 		return nil, err
@@ -114,7 +118,7 @@ func newAPIHandlerOptions(dependencies apiHandlerDependencies) (httpserver.APIOp
 	if err != nil {
 		return httpserver.APIOptions{}, err
 	}
-	parts.access, err = newAccessHandlerOptions(dependencies.resources.db, dependencies.policy)
+	parts.access, err = newAccessHandlerOptions(dependencies.resources.db, dependencies.policy, dependencies.local)
 	if err != nil {
 		return httpserver.APIOptions{}, err
 	}
@@ -131,7 +135,7 @@ func newAPIHandlerOptions(dependencies apiHandlerDependencies) (httpserver.APIOp
 }
 
 func buildCoreHandlerParts(dependencies apiHandlerDependencies) (apiHandlerParts, error) {
-	auth, err := newAuthHandlerOptions(dependencies.cfg, dependencies.resources.db, dependencies.groups)
+	auth, oidcEnabled, err := newAuthHandlerOptions(dependencies.cfg, dependencies.resources.db, dependencies.groups, dependencies.local)
 	if err != nil {
 		return apiHandlerParts{}, err
 	}
@@ -140,13 +144,16 @@ func buildCoreHandlerParts(dependencies apiHandlerDependencies) (apiHandlerParts
 		return apiHandlerParts{}, err
 	}
 	argoCD, err := newArgoCDHandlerOptions(dependencies.resources.db, dependencies.resources.argoClient, dependencies.policy)
-	return apiHandlerParts{auth: auth, catalog: catalog, argoCD: argoCD}, err
+	return apiHandlerParts{auth: auth, oidcEnabled: oidcEnabled, catalog: catalog, argoCD: argoCD}, err
 }
 
 func apiHandlerOptions(dependencies apiHandlerDependencies, parts apiHandlerParts) httpserver.APIOptions {
 	return httpserver.APIOptions{
-		System: httpserver.SystemHandlerOptions{Version: dependencies.version, TenancyMode: dependencies.cfg.Tenancy.Mode},
-		Auth:   parts.auth, Catalog: parts.catalog,
+		System: httpserver.SystemHandlerOptions{
+			Version: dependencies.version, TenancyMode: dependencies.cfg.Tenancy.Mode,
+			OIDCEnabled: parts.oidcEnabled,
+		},
+		Auth: parts.auth, Catalog: parts.catalog,
 		ArgoCD: parts.argoCD, Access: parts.access, Workflow: parts.workflow, Plan: parts.plan,
 		Deployment: parts.deployment,
 	}
@@ -199,48 +206,44 @@ func newCatalogHandlerOptions(db *gorm.DB, policy *authzinfra.PolicyEngine) (htt
 }
 
 func newArgoCDHandlerOptions(db *gorm.DB, client *argoinfra.Client, policy *authzinfra.PolicyEngine) (httpserver.ArgoCDHandlerOptions, error) {
-	onboardingRepository, err := argoinfra.NewOnboardingRepository(db)
-	if err != nil {
-		return httpserver.ArgoCDHandlerOptions{}, err
-	}
-	onboarding, err := argoapp.NewOnboardingService(onboardingRepository, client, policy)
-	if err != nil {
-		return httpserver.ArgoCDHandlerOptions{}, err
-	}
 	candidateRepository, err := argoinfra.NewCandidateRepository(db)
 	if err != nil {
 		return httpserver.ArgoCDHandlerOptions{}, err
 	}
 	candidates, err := argoapp.NewCandidateService(candidateRepository, policy)
-	return httpserver.ArgoCDHandlerOptions{Onboarding: onboarding, Candidates: candidates}, err
-}
-
-func newAccessHandlerOptions(db *gorm.DB, policy *authzinfra.PolicyEngine) (httpserver.AccessHandlerOptions, error) {
-	repository, err := authzinfra.NewAccessManagementRepository(db)
 	if err != nil {
-		return httpserver.AccessHandlerOptions{}, err
+		return httpserver.ArgoCDHandlerOptions{}, err
 	}
-	service, err := authzapp.NewAccessManagementService(repository, policy)
-	return httpserver.AccessHandlerOptions{Service: service}, err
+	options := httpserver.ArgoCDHandlerOptions{Candidates: candidates}
+	if client == nil {
+		return options, nil
+	}
+	onboardingRepository, err := argoinfra.NewOnboardingRepository(db)
+	if err != nil {
+		return httpserver.ArgoCDHandlerOptions{}, err
+	}
+	options.Onboarding, err = argoapp.NewOnboardingService(onboardingRepository, client, policy)
+	return options, err
 }
 
-func newAuthHandlerOptions(cfg config.Config, db *gorm.DB, groups *authzapp.OIDCGroupService) (httpserver.AuthHandlerOptions, error) {
+func newAuthHandlerOptions(cfg config.Config, db *gorm.DB, groups *authzapp.OIDCGroupService, local *identityapp.LocalAuthService) (httpserver.AuthHandlerOptions, bool, error) {
 	services, err := newIdentityServices(cfg, db)
 	if err != nil {
-		return httpserver.AuthHandlerOptions{}, err
+		return httpserver.AuthHandlerOptions{}, false, err
 	}
 	security, err := newIdentitySecurity(cfg)
 	if err != nil {
-		return httpserver.AuthHandlerOptions{}, err
+		return httpserver.AuthHandlerOptions{}, false, err
 	}
 	provider, err := discoverOIDCProvider(cfg)
 	if err != nil {
-		return httpserver.AuthHandlerOptions{}, err
+		return httpserver.AuthHandlerOptions{}, false, err
 	}
-	return composeAuthHandlerOptions(authComposition{
+	options, err := composeAuthHandlerOptions(authComposition{
 		cfg: cfg, services: services, security: security,
-		provider: provider, groups: groups,
+		provider: provider, groups: groups, local: local,
 	})
+	return options, provider != nil, err
 }
 
 func newIdentityServices(cfg config.Config, db *gorm.DB) (*identityServices, error) {
@@ -270,7 +273,10 @@ func newIdentitySecurity(cfg config.Config) (*identitySecurity, error) {
 	return &identitySecurity{states: states, protector: protector}, err
 }
 
-func discoverOIDCProvider(cfg config.Config) (*identityinfra.OIDCProvider, error) {
+func discoverOIDCProvider(cfg config.Config) (identityapp.OIDCProvider, error) {
+	if strings.TrimSpace(cfg.OIDC.Issuer) == "" && strings.TrimSpace(cfg.OIDC.ClientID) == "" && strings.TrimSpace(cfg.OIDC.RedirectURL) == "" {
+		return nil, nil
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	return identityinfra.NewOIDCProvider(ctx, cfg.OIDC)
@@ -284,7 +290,7 @@ func composeAuthHandlerOptions(composition authComposition) (httpserver.AuthHand
 		identityapp.WithOIDCGroupSynchronizer(composition.groups),
 	)
 	return httpserver.AuthHandlerOptions{
-		Flow: flow, WebRedirectURL: composition.cfg.OIDC.WebRedirectURL,
+		Flow: flow, Local: composition.local, WebRedirectURL: composition.cfg.OIDC.WebRedirectURL,
 		CookieSecure:  composition.cfg.Session.CookieSecure,
 		LoginStateTTL: composition.cfg.Session.LoginStateTTL,
 		SessionTTL:    composition.cfg.Session.AbsoluteTTL,

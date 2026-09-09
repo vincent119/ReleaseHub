@@ -1,31 +1,27 @@
-import {
-  AppstoreOutlined,
-  ApartmentOutlined,
-  DeploymentUnitOutlined,
-  FileDoneOutlined,
-  NodeIndexOutlined,
-  SafetyCertificateOutlined,
-  TeamOutlined,
-} from '@ant-design/icons'
+import { MenuFoldOutlined, MenuUnfoldOutlined } from '@ant-design/icons'
 import {
   Alert,
   Button,
   Card,
   Flex,
+  Form,
+  Input,
   Layout,
   Menu,
   Result,
   Space,
   Spin,
   Table,
+  Tooltip,
   Typography,
   message,
 } from 'antd'
+import { useState } from 'react'
 import type { TableProps } from 'antd'
-import { Link, NavLink, Navigate, Route, Routes, useParams } from 'react-router'
+import { Link, Navigate, Route, Routes, useParams } from 'react-router'
 import { useTranslation } from 'react-i18next'
 
-import { PreferenceControls } from '@/features/preferences'
+import { AccountMenu } from '@/features/account'
 import { CandidatesPage } from '@/features/candidates'
 import { ResourcesPage } from '@/features/resources'
 import { AccessPage } from '@/features/access'
@@ -33,17 +29,24 @@ import { WorkflowsPage } from '@/features/workflows'
 import { PlansPage } from '@/features/plans'
 import { NotificationCenter } from '@/features/notifications'
 import { RequestDetailPage, RequestsPage } from '@/features/requests'
+import { useThemePreference } from '@/shared/theme/useThemePreference'
 import {
   confirmApplicationOnboarding,
+  changeLocalPassword,
+  loginLocal,
   useDryRunApplicationOnboarding,
   useGetAuthSession,
   useGetCatalogApplication,
   useGetCatalogApplicationStatus,
+  useGetSystemStatus,
   useListVisibleCatalogApplications,
 } from '@/generated/api'
 import type { CatalogApplication } from '@/generated/model'
+import releaseHubMark from '@/assets/releasehub-mark.svg'
 
 import styles from './App.module.css'
+import { navigationItems } from './navigationItems'
+import { useSidebarPreference } from './useSidebarPreference'
 
 export function App() {
   return (
@@ -55,7 +58,14 @@ export function App() {
 
 function ApplicationShell() {
   const { t } = useTranslation()
+  const { resolvedTheme } = useThemePreference()
+  const { collapsed: desktopCollapsed, setCollapsed: setDesktopCollapsed } =
+    useSidebarPreference()
+  const [belowLg, setBelowLg] = useState(
+    () => window.matchMedia('(max-width: 991.98px)').matches,
+  )
   const session = useGetAuthSession()
+  const sidebarCollapsed = belowLg || desktopCollapsed
 
   if (session.isPending) {
     return <LoadingPage label={t('session.loading')} />
@@ -64,26 +74,82 @@ function ApplicationShell() {
     return <SignInPage />
   }
 
-  const username = session.data.data.data.username
+  const { userId, username } = session.data.data.data
+
+  if (session.data.data.data.mustChangePassword) {
+    return <ChangePasswordPage />
+  }
 
   return (
     <Layout className={styles.layout}>
-      <Layout.Sider breakpoint="lg" collapsedWidth="0" className={styles.sider}>
-        <div className={styles.brand}>{t('app.title')}</div>
+      <Layout.Sider
+        breakpoint="lg"
+        width={200}
+        collapsed={sidebarCollapsed}
+        collapsedWidth={belowLg ? 0 : 80}
+        trigger={null}
+        className={styles.sider}
+        onBreakpoint={setBelowLg}
+      >
+        <div
+          className={`${styles.brand} ${sidebarCollapsed ? styles.brandCollapsed : ''}`}
+        >
+          <img
+            className={styles.brandMark}
+            src={releaseHubMark}
+            alt={t('app.title')}
+          />
+          {!sidebarCollapsed && (
+            <span aria-hidden="true">{t('app.title')}</span>
+          )}
+        </div>
         <Menu
-          theme="dark"
+          theme={resolvedTheme}
           mode="inline"
+          inlineCollapsed={sidebarCollapsed}
           selectedKeys={[location.pathname]}
           items={navigationItems(t)}
         />
+        {!belowLg && (
+          <div className={styles.sidebarControl}>
+            <Tooltip
+              placement="right"
+              title={
+                desktopCollapsed
+                  ? t('app.sidebar.expand')
+                  : t('app.sidebar.collapse')
+              }
+            >
+              <Button
+                type="text"
+                block
+                className={styles.sidebarControlButton}
+                icon={
+                  desktopCollapsed ? (
+                    <MenuUnfoldOutlined />
+                  ) : (
+                    <MenuFoldOutlined />
+                  )
+                }
+                aria-label={
+                  desktopCollapsed
+                    ? t('app.sidebar.expand')
+                    : t('app.sidebar.collapse')
+                }
+                onClick={() => setDesktopCollapsed((collapsed) => !collapsed)}
+              >
+                {!desktopCollapsed && t('app.sidebar.collapse')}
+              </Button>
+            </Tooltip>
+          </div>
+        )}
       </Layout.Sider>
       <Layout>
         <Layout.Header className={styles.header}>
           <Typography.Text strong>{t('app.title')}</Typography.Text>
-          <Flex align="center" gap="middle">
-            <Typography.Text type="secondary">{username}</Typography.Text>
+          <Flex align="center" gap="small">
             <NotificationCenter />
-            <PreferenceControls />
+            <AccountMenu userId={userId} username={username} />
           </Flex>
         </Layout.Header>
         <Layout.Content className={styles.content}>
@@ -107,53 +173,6 @@ function ApplicationShell() {
       </Layout>
     </Layout>
   )
-}
-
-function navigationItems(t: ReturnType<typeof useTranslation>['t']) {
-  return [
-    {
-      key: '/',
-      icon: <AppstoreOutlined />,
-      label: <NavLink to="/">{t('navigation.overview')}</NavLink>,
-    },
-    {
-      key: '/resources',
-      icon: <DeploymentUnitOutlined />,
-      label: <NavLink to="/resources">{t('navigation.resources')}</NavLink>,
-    },
-    {
-      key: '/candidates',
-      icon: <DeploymentUnitOutlined />,
-      label: <NavLink to="/candidates">{t('navigation.candidates')}</NavLink>,
-    },
-    {
-      key: '/applications',
-      icon: <SafetyCertificateOutlined />,
-      label: (
-        <NavLink to="/applications">{t('navigation.applications')}</NavLink>
-      ),
-    },
-    {
-      key: '/requests',
-      icon: <FileDoneOutlined />,
-      label: <NavLink to="/requests">{t('navigation.requests')}</NavLink>,
-    },
-    {
-      key: '/workflows',
-      icon: <ApartmentOutlined />,
-      label: <NavLink to="/workflows">{t('navigation.workflows')}</NavLink>,
-    },
-    {
-      key: '/plans',
-      icon: <NodeIndexOutlined />,
-      label: <NavLink to="/plans">{t('navigation.plans')}</NavLink>,
-    },
-    {
-      key: '/access',
-      icon: <TeamOutlined />,
-      label: <NavLink to="/access">{t('navigation.access')}</NavLink>,
-    },
-  ]
 }
 
 function OverviewPage() {
@@ -431,18 +450,200 @@ function LoadingPage({ label }: { label: string }) {
 
 function SignInPage() {
   const { t } = useTranslation()
+  const [error, setError] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const systemStatus = useGetSystemStatus()
+  const oidcEnabled =
+    systemStatus.data?.status === 200 && systemStatus.data.data.data.oidcEnabled
+
+  async function submit(values: { username: string; password: string }) {
+    setSubmitting(true)
+    setError(false)
+    try {
+      const response = await loginLocal(values)
+      if (response.status !== 200) throw new Error('login rejected')
+      window.location.reload()
+    } catch {
+      setError(true)
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <main className={styles.authPage}>
+      <div className={styles.authShell}>
+        <section className={styles.authBrand} aria-label={t('app.title')}>
+          <div className={styles.authBrandHeader}>
+            <img
+              className={styles.authBrandMark}
+              src={releaseHubMark}
+              alt={t('session.brand.logoAlt')}
+            />
+            <Typography.Text className={styles.authBrandName} aria-hidden>
+              {t('app.title')}
+            </Typography.Text>
+          </div>
+          <div className={styles.authBrandContent}>
+            <Typography.Text className={styles.authEyebrow}>
+              {t('session.brand.eyebrow')}
+            </Typography.Text>
+            <Typography.Title level={1} className={styles.authBrandTitle}>
+              {t('session.brand.title')}
+            </Typography.Title>
+            <Typography.Paragraph className={styles.authBrandDescription}>
+              {t('session.brand.description')}
+            </Typography.Paragraph>
+          </div>
+          <div className={styles.authFlow} aria-hidden="true">
+            <span className={styles.authFlowLine} />
+            <span
+              className={`${styles.authFlowNode} ${styles.authFlowNodeOne}`}
+            />
+            <span
+              className={`${styles.authFlowNode} ${styles.authFlowNodeTwo}`}
+            />
+            <span
+              className={`${styles.authFlowNode} ${styles.authFlowNodeThree}`}
+            />
+          </div>
+        </section>
+        <section
+          className={styles.authPanel}
+          aria-labelledby="releasehub-sign-in-title"
+        >
+          <div className={styles.authFormContainer}>
+            <Typography.Text className={styles.authFormEyebrow}>
+              {t('session.signInRequired.eyebrow')}
+            </Typography.Text>
+            <Typography.Title
+              level={2}
+              id="releasehub-sign-in-title"
+              className={styles.authFormTitle}
+            >
+              {t('session.signInRequired.title')}
+            </Typography.Title>
+            <Typography.Paragraph
+              type="secondary"
+              className={styles.authFormDescription}
+            >
+              {t('session.signInRequired.description')}
+            </Typography.Paragraph>
+            {error && (
+              <Alert
+                className={styles.authError}
+                type="error"
+                message={t('session.local.error')}
+                showIcon
+              />
+            )}
+            <Form
+              className={styles.authForm}
+              layout="vertical"
+              onFinish={submit}
+            >
+              <Form.Item
+                name="username"
+                label={t('session.local.username')}
+                rules={[{ required: true }]}
+              >
+                <Input autoComplete="username" />
+              </Form.Item>
+              <Form.Item
+                name="password"
+                label={t('session.local.password')}
+                rules={[{ required: true }]}
+              >
+                <Input.Password autoComplete="current-password" />
+              </Form.Item>
+              <Button
+                type="primary"
+                htmlType="submit"
+                loading={submitting}
+                block
+              >
+                {t('session.local.signIn')}
+              </Button>
+            </Form>
+            {oidcEnabled && (
+              <div className={styles.enterpriseSignIn}>
+                <div className={styles.authDivider}>
+                  <span>{t('session.signInRequired.alternative')}</span>
+                </div>
+                <Button href="/api/v1/auth/login" block>
+                  {t('session.signInRequired.action')}
+                </Button>
+              </div>
+            )}
+          </div>
+        </section>
+      </div>
+    </main>
+  )
+}
+
+function ChangePasswordPage() {
+  const { t } = useTranslation()
+  const [error, setError] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+
+  async function submit(values: {
+    currentPassword: string
+    newPassword: string
+  }) {
+    setSubmitting(true)
+    setError(false)
+    try {
+      const response = await changeLocalPassword(values, {
+        headers: { 'X-CSRF-Token': browserCookie('releasehub_csrf') ?? '' },
+      })
+      if (response.status !== 204) throw new Error('password change rejected')
+      window.location.reload()
+    } catch {
+      setError(true)
+      setSubmitting(false)
+    }
+  }
+
   return (
     <main className={styles.centered}>
-      <Result
-        status="403"
-        title={t('session.signInRequired.title')}
-        subTitle={t('session.signInRequired.description')}
-        extra={
-          <Button type="primary" href="/api/v1/auth/login">
-            {t('session.signInRequired.action')}
-          </Button>
-        }
-      />
+      <Card
+        title={t('session.passwordChange.title')}
+        className={styles.authCard}
+      >
+        <Space direction="vertical" size="middle" className={styles.fullWidth}>
+          <Alert
+            type="warning"
+            message={t('session.passwordChange.required')}
+            showIcon
+          />
+          {error && (
+            <Alert
+              type="error"
+              message={t('session.passwordChange.error')}
+              showIcon
+            />
+          )}
+          <Form layout="vertical" onFinish={submit}>
+            <Form.Item
+              name="currentPassword"
+              label={t('session.passwordChange.current')}
+              rules={[{ required: true }]}
+            >
+              <Input.Password autoComplete="current-password" />
+            </Form.Item>
+            <Form.Item
+              name="newPassword"
+              label={t('session.passwordChange.new')}
+              rules={[{ required: true, min: 8 }]}
+            >
+              <Input.Password autoComplete="new-password" />
+            </Form.Item>
+            <Button type="primary" htmlType="submit" loading={submitting} block>
+              {t('session.passwordChange.action')}
+            </Button>
+          </Form>
+        </Space>
+      </Card>
     </main>
   )
 }

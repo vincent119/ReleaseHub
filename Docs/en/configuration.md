@@ -1,6 +1,63 @@
 # Configuration
 
+## Loading and Precedence
+
 Server reads `/app/configs/config.yaml` by default. Precedence from lowest to highest is defaults, YAML, `RELEASEHUB_` environment variables, and CLI flags. Nested fields use underscores, so `database.password` maps to `RELEASEHUB_DATABASE_PASSWORD`.
+
+The complete non-secret example is [`Server/configs/config.example.yaml`](../../Server/configs/config.example.yaml). API, Worker, and Migrate share the same typed configuration, while each component uses its configured database pool.
+
+## Initial Manager
+
+Set the top-level `manager_password` value before the API starts against an initialized database. When the initial-manager records are missing, the API hashes this value and uses GORM to create the `admin` account, its local credential, and its `platform_administrator` membership. Existing credentials are never overwritten during restart.
+
+For local development, setting `manager_password: admin` creates the initial `admin / admin` login. The first login is restricted to changing the password or signing out. The new password must contain 8 to 72 bytes, and changing it revokes all active Sessions. On a new database, leaving `manager_password` empty skips local-manager bootstrap; it does not remove an existing local credential.
+
+## Local API Startup
+
+After applying database migrations, use the following local-only settings when testing local authentication over HTTP:
+
+```yaml
+manager_password: admin
+
+database:
+  ssl_mode: disable
+
+oidc:
+  issuer: ""
+  client_id: ""
+  client_secret: ""
+  redirect_url: ""
+  web_redirect_url: "http://localhost:5173/"
+  logout_url: ""
+  post_logout_redirect_url: ""
+
+argocd:
+  address: ""
+  token: ""
+
+session:
+  encryption_key: ""
+  cookie_secure: false
+```
+
+From the repository root, start API and Web together:
+
+```bash
+make dev
+```
+
+`make dev-api` generates an ephemeral Session encryption key when the environment does not already provide one, disables Secure cookies for local HTTP, and disables an incomplete OIDC configuration. `make dev-web` starts Vite and proxies `/api` to `http://127.0.0.1:7580`. Make uses `pnpm` from `PATH` when available and otherwise falls back to `corepack pnpm`; if neither can run, the preflight check stops before API starts.
+
+To start only the API without Make, generate a Session encryption key in the current shell first:
+
+```bash
+export RELEASEHUB_SESSION_ENCRYPTION_KEY="$(openssl rand -hex 32)"
+go run ./cmd/releasehub api --config ./configs/config.yaml
+```
+
+The key must contain at least 32 bytes and remains available only in the current shell. Keep `oidc.redirect_url` empty when OIDC is disabled; otherwise the API treats OIDC as partially configured and stops. When both `argocd.address` and `argocd.token` are empty, API starts without an Argo CD client and Argo CD-dependent operations return `503 Service Unavailable`. Worker still requires complete Argo CD configuration. Override `DEV_API_ADDRESS`, `DEV_API_PROXY_TARGET`, `DEV_WEB_PORT`, `DEV_WEB_URL`, or `SERVER_CONFIG` when the defaults do not match the local environment.
+
+## Secrets and External Dependencies
 
 The deployment templates require an existing Kubernetes Secret named `releasehub-secrets` with at least these keys:
 
@@ -12,7 +69,11 @@ The deployment templates require an existing Kubernetes Secret named `releasehub
 
 Secrets must not be stored in values, the Kustomize base, container images, or Git. Non-secret settings belong in the ConfigMap. Before enabling Worker, configure a valid Argo CD address and token plus the allowed ECR repositories in one AWS account and region.
 
-`log.format` accepts `json` or `console`. API and Worker logs include their component category. Health, readiness, metrics, and tracing endpoints do not emit access logs.
+Sessions, the queue, Audit, and Outbox records are currently stored in PostgreSQL. The schema still requires a valid `redis.address` and reserves pool fields, but the runtime does not create a Redis client. Do not treat Redis as the current session or queue store.
+
+## Logging and Observability
+
+`log.format` accepts `json` or `console`. API and Worker application logs include their component category. Successful `/healthz`, `/readyz`, and configured metrics-path probes do not emit access logs, request metrics, or traces. Failed responses retain diagnostic observations. When enabled, tracing exports through OTLP gRPC; ReleaseHub does not expose a separate tracing HTTP endpoint.
 
 ## Worker and Notifications
 
@@ -28,3 +89,13 @@ Secrets must not be stored in values, the Kustomize base, container images, or G
 | `notifications.projection_interval` | `1s` | Interval for Outbox projection and availability of SSE events |
 
 Phase one must run exactly one Worker replica. Multiple Worker replicas would each apply `max_parallel_deployments`, so the platform-wide limit could not be guaranteed. Web Nginx proxies the exact SSE path `/api/v1/notifications/events` with buffering and caching disabled. After reconnecting with `Last-Event-ID`, the client fetches data again under the user's current permissions.
+
+## Startup Validation
+
+The Server fails before creating a runtime when the database, Redis address, session encryption key, or component-specific OIDC, Argo CD, or AWS settings are missing. Before deployment, verify that:
+
+1. The ConfigMap contains no secret values.
+2. Every required key exists in `releasehub-secrets`.
+3. PostgreSQL is reachable and versioned migrations have completed according to [Database Initialization](database-initialization.md).
+4. When OIDC is enabled, its redirect URL matches the externally reachable ReleaseHub URL.
+5. Argo CD and ECR identities follow least privilege.

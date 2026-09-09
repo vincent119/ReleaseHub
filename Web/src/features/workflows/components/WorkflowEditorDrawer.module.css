@@ -1,0 +1,68 @@
+.drawer {
+  --workflow-workspace-bg: var(--rh-color-page);
+  --workflow-surface: var(--rh-color-surface);
+  --workflow-surface-elevated: var(--rh-color-surface-elevated);
+  --workflow-border: var(--rh-color-border);
+  --workflow-accent: var(--rh-color-primary);
+  --workflow-accent-soft: var(--rh-color-primary-soft);
+  --workflow-review: var(--rh-color-accent);
+  --workflow-terminal: var(--rh-color-success);
+  --workflow-ambient: var(--rh-ambient-page);
+  --workflow-panel-shadow: var(--rh-shadow-floating);
+}
+
+.drawer :global(.ant-drawer-header) {
+  min-height: 4.5rem;
+  padding: var(--rh-space-4, 1rem) var(--rh-space-6);
+  background: var(--workflow-surface);
+  border-bottom-color: var(--workflow-border);
+}
+
+.drawer :global(.ant-drawer-title) {
+  font-size: 1.125rem;
+  font-weight: 650;
+}
+
+.drawer :global(.ant-drawer-body) {
+  padding: 0;
+  background-color: var(--workflow-workspace-bg);
+  background-image: var(--workflow-ambient);
+  background-attachment: fixed;
+}
+
+.content {
+  display: flex;
+  min-height: 100%;
+  flex-direction: column;
+}
+
+.metadata {
+  display: grid;
+  grid-template-columns: minmax(16rem, 0.85fr) minmax(24rem, 1.4fr);
+  gap: 0 var(--rh-space-6);
+  padding: var(--rh-space-5, 1.25rem) var(--rh-space-6) 0;
+  background: var(--workflow-surface);
+  border-bottom: 1px solid var(--workflow-border);
+  box-shadow: var(--rh-shadow-card);
+  backdrop-filter: blur(1.25rem);
+}
+
+.validation {
+  margin: var(--rh-space-4, 1rem) var(--rh-space-6) 0;
+}
+
+.workspace {
+  min-height: 38rem;
+  flex: 1;
+  padding: var(--rh-space-4, 1rem) var(--rh-space-6) var(--rh-space-6);
+}
+
+@media (max-width: 960px) {
+  .metadata {
+    grid-template-columns: 1fr;
+  }
+
+  .workspace {
+    padding-inline: var(--rh-space-4, 1rem);
+  }
+}

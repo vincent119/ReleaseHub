@@ -21,10 +21,35 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
+// Defines values for AccessAction.
+const (
+	AddMember       AccessAction = "addMember"
+	Disable         AccessAction = "disable"
+	Revoke          AccessAction = "revoke"
+	ViewMemberships AccessAction = "viewMemberships"
+)
+
+// Valid indicates whether the value is a known member of the AccessAction enum.
+func (e AccessAction) Valid() bool {
+	switch e {
+	case AddMember:
+		return true
+	case Disable:
+		return true
+	case Revoke:
+		return true
+	case ViewMemberships:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for AccessBindingScopeKind.
 const (
 	AccessBindingScopeKindApplication AccessBindingScopeKind = "application"
 	AccessBindingScopeKindEnvironment AccessBindingScopeKind = "environment"
+	AccessBindingScopeKindPlatform    AccessBindingScopeKind = "platform"
 	AccessBindingScopeKindProject     AccessBindingScopeKind = "project"
 )
 
@@ -35,7 +60,39 @@ func (e AccessBindingScopeKind) Valid() bool {
 		return true
 	case AccessBindingScopeKindEnvironment:
 		return true
+	case AccessBindingScopeKindPlatform:
+		return true
 	case AccessBindingScopeKindProject:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AccessCollectionCapabilityKey.
+const (
+	Bindings    AccessCollectionCapabilityKey = "bindings"
+	Denies      AccessCollectionCapabilityKey = "denies"
+	Groups      AccessCollectionCapabilityKey = "groups"
+	Memberships AccessCollectionCapabilityKey = "memberships"
+	Roles       AccessCollectionCapabilityKey = "roles"
+	Users       AccessCollectionCapabilityKey = "users"
+)
+
+// Valid indicates whether the value is a known member of the AccessCollectionCapabilityKey enum.
+func (e AccessCollectionCapabilityKey) Valid() bool {
+	switch e {
+	case Bindings:
+		return true
+	case Denies:
+		return true
+	case Groups:
+		return true
+	case Memberships:
+		return true
+	case Roles:
+		return true
+	case Users:
 		return true
 	default:
 		return false
@@ -124,6 +181,7 @@ func (e AccessRoleOwnerKind) Valid() bool {
 const (
 	AccessScopeInputScopeKindApplication AccessScopeInputScopeKind = "application"
 	AccessScopeInputScopeKindEnvironment AccessScopeInputScopeKind = "environment"
+	AccessScopeInputScopeKindPlatform    AccessScopeInputScopeKind = "platform"
 	AccessScopeInputScopeKindProject     AccessScopeInputScopeKind = "project"
 )
 
@@ -133,6 +191,8 @@ func (e AccessScopeInputScopeKind) Valid() bool {
 	case AccessScopeInputScopeKindApplication:
 		return true
 	case AccessScopeInputScopeKindEnvironment:
+		return true
+	case AccessScopeInputScopeKindPlatform:
 		return true
 	case AccessScopeInputScopeKindProject:
 		return true
@@ -193,6 +253,7 @@ func (e CatalogEnvironmentResourceType) Valid() bool {
 const (
 	CreateAccessBindingRequestScopeKindApplication CreateAccessBindingRequestScopeKind = "application"
 	CreateAccessBindingRequestScopeKindEnvironment CreateAccessBindingRequestScopeKind = "environment"
+	CreateAccessBindingRequestScopeKindPlatform    CreateAccessBindingRequestScopeKind = "platform"
 	CreateAccessBindingRequestScopeKindProject     CreateAccessBindingRequestScopeKind = "project"
 )
 
@@ -202,6 +263,8 @@ func (e CreateAccessBindingRequestScopeKind) Valid() bool {
 	case CreateAccessBindingRequestScopeKindApplication:
 		return true
 	case CreateAccessBindingRequestScopeKindEnvironment:
+		return true
+	case CreateAccessBindingRequestScopeKindPlatform:
 		return true
 	case CreateAccessBindingRequestScopeKindProject:
 		return true
@@ -214,6 +277,7 @@ func (e CreateAccessBindingRequestScopeKind) Valid() bool {
 const (
 	CreateAccessDenyRequestScopeKindApplication CreateAccessDenyRequestScopeKind = "application"
 	CreateAccessDenyRequestScopeKindEnvironment CreateAccessDenyRequestScopeKind = "environment"
+	CreateAccessDenyRequestScopeKindPlatform    CreateAccessDenyRequestScopeKind = "platform"
 	CreateAccessDenyRequestScopeKindProject     CreateAccessDenyRequestScopeKind = "project"
 )
 
@@ -223,6 +287,8 @@ func (e CreateAccessDenyRequestScopeKind) Valid() bool {
 	case CreateAccessDenyRequestScopeKindApplication:
 		return true
 	case CreateAccessDenyRequestScopeKindEnvironment:
+		return true
+	case CreateAccessDenyRequestScopeKindPlatform:
 		return true
 	case CreateAccessDenyRequestScopeKindProject:
 		return true
@@ -834,21 +900,204 @@ func (e WorkflowStateType) Valid() bool {
 	}
 }
 
+// Defines values for AccessStatus.
+const (
+	AccessStatusActive   AccessStatus = "active"
+	AccessStatusAll      AccessStatus = "all"
+	AccessStatusInactive AccessStatus = "inactive"
+)
+
+// Valid indicates whether the value is a known member of the AccessStatus enum.
+func (e AccessStatus) Valid() bool {
+	switch e {
+	case AccessStatusActive:
+		return true
+	case AccessStatusAll:
+		return true
+	case AccessStatusInactive:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListAccessBindingsParamsStatus.
+const (
+	ListAccessBindingsParamsStatusActive   ListAccessBindingsParamsStatus = "active"
+	ListAccessBindingsParamsStatusAll      ListAccessBindingsParamsStatus = "all"
+	ListAccessBindingsParamsStatusInactive ListAccessBindingsParamsStatus = "inactive"
+)
+
+// Valid indicates whether the value is a known member of the ListAccessBindingsParamsStatus enum.
+func (e ListAccessBindingsParamsStatus) Valid() bool {
+	switch e {
+	case ListAccessBindingsParamsStatusActive:
+		return true
+	case ListAccessBindingsParamsStatusAll:
+		return true
+	case ListAccessBindingsParamsStatusInactive:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListAccessDeniesParamsStatus.
+const (
+	ListAccessDeniesParamsStatusActive   ListAccessDeniesParamsStatus = "active"
+	ListAccessDeniesParamsStatusAll      ListAccessDeniesParamsStatus = "all"
+	ListAccessDeniesParamsStatusInactive ListAccessDeniesParamsStatus = "inactive"
+)
+
+// Valid indicates whether the value is a known member of the ListAccessDeniesParamsStatus enum.
+func (e ListAccessDeniesParamsStatus) Valid() bool {
+	switch e {
+	case ListAccessDeniesParamsStatusActive:
+		return true
+	case ListAccessDeniesParamsStatusAll:
+		return true
+	case ListAccessDeniesParamsStatusInactive:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListAccessGroupsParamsStatus.
+const (
+	ListAccessGroupsParamsStatusActive   ListAccessGroupsParamsStatus = "active"
+	ListAccessGroupsParamsStatusAll      ListAccessGroupsParamsStatus = "all"
+	ListAccessGroupsParamsStatusInactive ListAccessGroupsParamsStatus = "inactive"
+)
+
+// Valid indicates whether the value is a known member of the ListAccessGroupsParamsStatus enum.
+func (e ListAccessGroupsParamsStatus) Valid() bool {
+	switch e {
+	case ListAccessGroupsParamsStatusActive:
+		return true
+	case ListAccessGroupsParamsStatusAll:
+		return true
+	case ListAccessGroupsParamsStatusInactive:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListAccessMembershipsParamsStatus.
+const (
+	ListAccessMembershipsParamsStatusActive   ListAccessMembershipsParamsStatus = "active"
+	ListAccessMembershipsParamsStatusAll      ListAccessMembershipsParamsStatus = "all"
+	ListAccessMembershipsParamsStatusInactive ListAccessMembershipsParamsStatus = "inactive"
+)
+
+// Valid indicates whether the value is a known member of the ListAccessMembershipsParamsStatus enum.
+func (e ListAccessMembershipsParamsStatus) Valid() bool {
+	switch e {
+	case ListAccessMembershipsParamsStatusActive:
+		return true
+	case ListAccessMembershipsParamsStatusAll:
+		return true
+	case ListAccessMembershipsParamsStatusInactive:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListAccessRolesParamsStatus.
+const (
+	ListAccessRolesParamsStatusActive   ListAccessRolesParamsStatus = "active"
+	ListAccessRolesParamsStatusAll      ListAccessRolesParamsStatus = "all"
+	ListAccessRolesParamsStatusInactive ListAccessRolesParamsStatus = "inactive"
+)
+
+// Valid indicates whether the value is a known member of the ListAccessRolesParamsStatus enum.
+func (e ListAccessRolesParamsStatus) Valid() bool {
+	switch e {
+	case ListAccessRolesParamsStatusActive:
+		return true
+	case ListAccessRolesParamsStatusAll:
+		return true
+	case ListAccessRolesParamsStatusInactive:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for GetAccessScopeOptionsParamsScopeKind.
+const (
+	GetAccessScopeOptionsParamsScopeKindApplication GetAccessScopeOptionsParamsScopeKind = "application"
+	GetAccessScopeOptionsParamsScopeKindEnvironment GetAccessScopeOptionsParamsScopeKind = "environment"
+	GetAccessScopeOptionsParamsScopeKindPlatform    GetAccessScopeOptionsParamsScopeKind = "platform"
+	GetAccessScopeOptionsParamsScopeKindProject     GetAccessScopeOptionsParamsScopeKind = "project"
+)
+
+// Valid indicates whether the value is a known member of the GetAccessScopeOptionsParamsScopeKind enum.
+func (e GetAccessScopeOptionsParamsScopeKind) Valid() bool {
+	switch e {
+	case GetAccessScopeOptionsParamsScopeKindApplication:
+		return true
+	case GetAccessScopeOptionsParamsScopeKindEnvironment:
+		return true
+	case GetAccessScopeOptionsParamsScopeKindPlatform:
+		return true
+	case GetAccessScopeOptionsParamsScopeKindProject:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListAccessUsersParamsStatus.
+const (
+	ListAccessUsersParamsStatusActive   ListAccessUsersParamsStatus = "active"
+	ListAccessUsersParamsStatusAll      ListAccessUsersParamsStatus = "all"
+	ListAccessUsersParamsStatusInactive ListAccessUsersParamsStatus = "inactive"
+)
+
+// Valid indicates whether the value is a known member of the ListAccessUsersParamsStatus enum.
+func (e ListAccessUsersParamsStatus) Valid() bool {
+	switch e {
+	case ListAccessUsersParamsStatusActive:
+		return true
+	case ListAccessUsersParamsStatusAll:
+		return true
+	case ListAccessUsersParamsStatusInactive:
+		return true
+	default:
+		return false
+	}
+}
+
+// AccessAction defines model for AccessAction.
+type AccessAction string
+
 // AccessBinding defines model for AccessBinding.
 type AccessBinding struct {
 	Active         bool                   `json:"active"`
+	AllowedActions []AccessAction         `json:"allowedActions"`
 	ApplicationId  *openapi_types.UUID    `json:"applicationId,omitempty"`
 	EnvironmentId  *openapi_types.UUID    `json:"environmentId,omitempty"`
 	GroupId        openapi_types.UUID     `json:"groupId"`
+	GroupName      string                 `json:"groupName"`
 	Id             openapi_types.UUID     `json:"id"`
-	OrganizationId openapi_types.UUID     `json:"organizationId"`
-	ProjectId      openapi_types.UUID     `json:"projectId"`
+	OrganizationId *openapi_types.UUID    `json:"organizationId,omitempty"`
+	ProjectId      *openapi_types.UUID    `json:"projectId,omitempty"`
 	RoleId         openapi_types.UUID     `json:"roleId"`
+	RoleName       string                 `json:"roleName"`
 	ScopeKind      AccessBindingScopeKind `json:"scopeKind"`
 }
 
 // AccessBindingScopeKind defines model for AccessBinding.ScopeKind.
 type AccessBindingScopeKind string
+
+// AccessBindingListResponse defines model for AccessBindingListResponse.
+type AccessBindingListResponse struct {
+	Data []AccessBinding `json:"data"`
+	Meta CursorPageMeta  `json:"meta"`
+}
 
 // AccessBindingResponse defines model for AccessBindingResponse.
 type AccessBindingResponse struct {
@@ -856,12 +1105,36 @@ type AccessBindingResponse struct {
 	Meta ResponseMeta  `json:"meta"`
 }
 
+// AccessCapabilities defines model for AccessCapabilities.
+type AccessCapabilities struct {
+	Collections []AccessCollectionCapability `json:"collections"`
+	Permissions []AccessPermission           `json:"permissions"`
+}
+
+// AccessCapabilitiesResponse defines model for AccessCapabilitiesResponse.
+type AccessCapabilitiesResponse struct {
+	Data AccessCapabilities `json:"data"`
+	Meta ResponseMeta       `json:"meta"`
+}
+
+// AccessCollectionCapability defines model for AccessCollectionCapability.
+type AccessCollectionCapability struct {
+	CanCreate bool                          `json:"canCreate"`
+	Key       AccessCollectionCapabilityKey `json:"key"`
+	Visible   bool                          `json:"visible"`
+}
+
+// AccessCollectionCapabilityKey defines model for AccessCollectionCapability.Key.
+type AccessCollectionCapabilityKey string
+
 // AccessDeny defines model for AccessDeny.
 type AccessDeny struct {
 	Active         bool                `json:"active"`
+	AllowedActions []AccessAction      `json:"allowedActions"`
 	ApplicationId  *openapi_types.UUID `json:"applicationId,omitempty"`
 	EnvironmentId  *openapi_types.UUID `json:"environmentId,omitempty"`
 	GroupId        openapi_types.UUID  `json:"groupId"`
+	GroupName      string              `json:"groupName"`
 	Id             openapi_types.UUID  `json:"id"`
 	OrganizationId openapi_types.UUID  `json:"organizationId"`
 	Permission     string              `json:"permission"`
@@ -872,6 +1145,12 @@ type AccessDeny struct {
 // AccessDenyScopeKind defines model for AccessDeny.ScopeKind.
 type AccessDenyScopeKind string
 
+// AccessDenyListResponse defines model for AccessDenyListResponse.
+type AccessDenyListResponse struct {
+	Data []AccessDeny   `json:"data"`
+	Meta CursorPageMeta `json:"meta"`
+}
+
 // AccessDenyResponse defines model for AccessDenyResponse.
 type AccessDenyResponse struct {
 	Data AccessDeny   `json:"data"`
@@ -880,16 +1159,24 @@ type AccessDenyResponse struct {
 
 // AccessGroup defines model for AccessGroup.
 type AccessGroup struct {
+	AllowedActions []AccessAction       `json:"allowedActions"`
 	Disabled       bool                 `json:"disabled"`
 	Id             openapi_types.UUID   `json:"id"`
 	Name           string               `json:"name"`
 	OidcViewerOnly bool                 `json:"oidcViewerOnly"`
 	OwnerId        *openapi_types.UUID  `json:"ownerId,omitempty"`
 	OwnerKind      AccessGroupOwnerKind `json:"ownerKind"`
+	SystemKey      *string              `json:"systemKey,omitempty"`
 }
 
 // AccessGroupOwnerKind defines model for AccessGroup.OwnerKind.
 type AccessGroupOwnerKind string
+
+// AccessGroupListResponse defines model for AccessGroupListResponse.
+type AccessGroupListResponse struct {
+	Data []AccessGroup  `json:"data"`
+	Meta CursorPageMeta `json:"meta"`
+}
 
 // AccessGroupResponse defines model for AccessGroupResponse.
 type AccessGroupResponse struct {
@@ -918,15 +1205,24 @@ type AccessManagementSnapshotResponse struct {
 
 // AccessMembership defines model for AccessMembership.
 type AccessMembership struct {
-	Active  bool                   `json:"active"`
-	GroupId openapi_types.UUID     `json:"groupId"`
-	Id      openapi_types.UUID     `json:"id"`
-	Source  AccessMembershipSource `json:"source"`
-	UserId  openapi_types.UUID     `json:"userId"`
+	Active         bool                   `json:"active"`
+	AllowedActions []AccessAction         `json:"allowedActions"`
+	GroupId        openapi_types.UUID     `json:"groupId"`
+	GroupName      string                 `json:"groupName"`
+	Id             openapi_types.UUID     `json:"id"`
+	Source         AccessMembershipSource `json:"source"`
+	UserId         openapi_types.UUID     `json:"userId"`
+	Username       string                 `json:"username"`
 }
 
 // AccessMembershipSource defines model for AccessMembership.Source.
 type AccessMembershipSource string
+
+// AccessMembershipListResponse defines model for AccessMembershipListResponse.
+type AccessMembershipListResponse struct {
+	Data []AccessMembership `json:"data"`
+	Meta CursorPageMeta     `json:"meta"`
+}
 
 // AccessMembershipResponse defines model for AccessMembershipResponse.
 type AccessMembershipResponse struct {
@@ -943,17 +1239,24 @@ type AccessPermission struct {
 
 // AccessRole defines model for AccessRole.
 type AccessRole struct {
-	Active      bool                `json:"active"`
-	Id          openapi_types.UUID  `json:"id"`
-	Name        string              `json:"name"`
-	OwnerId     *openapi_types.UUID `json:"ownerId,omitempty"`
-	OwnerKind   AccessRoleOwnerKind `json:"ownerKind"`
-	Permissions []string            `json:"permissions"`
-	SystemKey   *string             `json:"systemKey,omitempty"`
+	Active         bool                `json:"active"`
+	AllowedActions []AccessAction      `json:"allowedActions"`
+	Id             openapi_types.UUID  `json:"id"`
+	Name           string              `json:"name"`
+	OwnerId        *openapi_types.UUID `json:"ownerId,omitempty"`
+	OwnerKind      AccessRoleOwnerKind `json:"ownerKind"`
+	Permissions    []string            `json:"permissions"`
+	SystemKey      *string             `json:"systemKey,omitempty"`
 }
 
 // AccessRoleOwnerKind defines model for AccessRole.OwnerKind.
 type AccessRoleOwnerKind string
+
+// AccessRoleListResponse defines model for AccessRoleListResponse.
+type AccessRoleListResponse struct {
+	Data []AccessRole   `json:"data"`
+	Meta CursorPageMeta `json:"meta"`
+}
 
 // AccessRoleResponse defines model for AccessRoleResponse.
 type AccessRoleResponse struct {
@@ -965,19 +1268,51 @@ type AccessRoleResponse struct {
 type AccessScopeInput struct {
 	ApplicationId  *openapi_types.UUID       `json:"applicationId,omitempty"`
 	EnvironmentId  *openapi_types.UUID       `json:"environmentId,omitempty"`
-	OrganizationId openapi_types.UUID        `json:"organizationId"`
-	ProjectId      openapi_types.UUID        `json:"projectId"`
+	OrganizationId *openapi_types.UUID       `json:"organizationId,omitempty"`
+	ProjectId      *openapi_types.UUID       `json:"projectId,omitempty"`
 	ScopeKind      AccessScopeInputScopeKind `json:"scopeKind"`
 }
 
 // AccessScopeInputScopeKind defines model for AccessScopeInput.ScopeKind.
 type AccessScopeInputScopeKind string
 
+// AccessScopeOptions defines model for AccessScopeOptions.
+type AccessScopeOptions struct {
+	Groups      []AccessGroup      `json:"groups"`
+	Permissions []AccessPermission `json:"permissions"`
+	Roles       []AccessRole       `json:"roles"`
+}
+
+// AccessScopeOptionsResponse defines model for AccessScopeOptionsResponse.
+type AccessScopeOptionsResponse struct {
+	Data AccessScopeOptions `json:"data"`
+	Meta ResponseMeta       `json:"meta"`
+}
+
 // AccessUser defines model for AccessUser.
 type AccessUser struct {
-	Disabled bool               `json:"disabled"`
-	Id       openapi_types.UUID `json:"id"`
-	Username string             `json:"username"`
+	AllowedActions []AccessAction     `json:"allowedActions"`
+	Disabled       bool               `json:"disabled"`
+	Id             openapi_types.UUID `json:"id"`
+	Username       string             `json:"username"`
+}
+
+// AccessUserCandidatesResponse defines model for AccessUserCandidatesResponse.
+type AccessUserCandidatesResponse struct {
+	Data []AccessUser `json:"data"`
+	Meta ResponseMeta `json:"meta"`
+}
+
+// AccessUserListResponse defines model for AccessUserListResponse.
+type AccessUserListResponse struct {
+	Data []AccessUser   `json:"data"`
+	Meta CursorPageMeta `json:"meta"`
+}
+
+// AccessUserResponse defines model for AccessUserResponse.
+type AccessUserResponse struct {
+	Data AccessUser   `json:"data"`
+	Meta ResponseMeta `json:"meta"`
 }
 
 // ArgoCDCandidate defines model for ArgoCDCandidate.
@@ -1043,8 +1378,9 @@ type ArgoCDCandidateListResponse struct {
 
 // AuthSession defines model for AuthSession.
 type AuthSession struct {
-	UserId   openapi_types.UUID `json:"userId"`
-	Username string             `json:"username"`
+	MustChangePassword bool               `json:"mustChangePassword"`
+	UserId             openapi_types.UUID `json:"userId"`
+	Username           string             `json:"username"`
 }
 
 // AuthSessionResponse defines model for AuthSessionResponse.
@@ -1217,13 +1553,19 @@ type CatalogResourceTreeResponse struct {
 	Meta                  ResponseMeta              `json:"meta"`
 }
 
+// ChangePasswordRequest defines model for ChangePasswordRequest.
+type ChangePasswordRequest struct {
+	CurrentPassword string `json:"currentPassword"`
+	NewPassword     string `json:"newPassword"`
+}
+
 // CreateAccessBindingRequest defines model for CreateAccessBindingRequest.
 type CreateAccessBindingRequest struct {
 	ApplicationId  *openapi_types.UUID                 `json:"applicationId,omitempty"`
 	EnvironmentId  *openapi_types.UUID                 `json:"environmentId,omitempty"`
 	GroupId        openapi_types.UUID                  `json:"groupId"`
-	OrganizationId openapi_types.UUID                  `json:"organizationId"`
-	ProjectId      openapi_types.UUID                  `json:"projectId"`
+	OrganizationId *openapi_types.UUID                 `json:"organizationId,omitempty"`
+	ProjectId      *openapi_types.UUID                 `json:"projectId,omitempty"`
 	RoleId         openapi_types.UUID                  `json:"roleId"`
 	ScopeKind      CreateAccessBindingRequestScopeKind `json:"scopeKind"`
 }
@@ -1236,9 +1578,9 @@ type CreateAccessDenyRequest struct {
 	ApplicationId  *openapi_types.UUID              `json:"applicationId,omitempty"`
 	EnvironmentId  *openapi_types.UUID              `json:"environmentId,omitempty"`
 	GroupId        openapi_types.UUID               `json:"groupId"`
-	OrganizationId openapi_types.UUID               `json:"organizationId"`
+	OrganizationId *openapi_types.UUID              `json:"organizationId,omitempty"`
 	Permission     string                           `json:"permission"`
-	ProjectId      openapi_types.UUID               `json:"projectId"`
+	ProjectId      *openapi_types.UUID              `json:"projectId,omitempty"`
 	ScopeKind      CreateAccessDenyRequestScopeKind `json:"scopeKind"`
 }
 
@@ -1271,6 +1613,12 @@ type CreateAccessRoleRequest struct {
 
 // CreateAccessRoleRequestOwnerKind defines model for CreateAccessRoleRequest.OwnerKind.
 type CreateAccessRoleRequestOwnerKind string
+
+// CreateAccessUserRequest defines model for CreateAccessUserRequest.
+type CreateAccessUserRequest struct {
+	InitialPassword string `json:"initialPassword"`
+	Username        string `json:"username"`
+}
 
 // CreateDeploymentPlanRequest defines model for CreateDeploymentPlanRequest.
 type CreateDeploymentPlanRequest struct {
@@ -1673,6 +2021,12 @@ type ErrorResponse struct {
 	RequestId string                  `json:"requestId"`
 }
 
+// LocalLoginRequest defines model for LocalLoginRequest.
+type LocalLoginRequest struct {
+	Password string `json:"password"`
+	Username string `json:"username"`
+}
+
 // LogoutResponse defines model for LogoutResponse.
 type LogoutResponse struct {
 	Data LogoutResult `json:"data"`
@@ -1798,7 +2152,10 @@ type ResponseMeta struct {
 // SystemStatus defines model for SystemStatus.
 type SystemStatus struct {
 	// Name Example: ReleaseHub
-	Name        string                  `json:"name"`
+	Name string `json:"name"`
+
+	// OidcEnabled Indicates whether the OIDC login flow is available in this API runtime.
+	OidcEnabled bool                    `json:"oidcEnabled"`
 	TenancyMode SystemStatusTenancyMode `json:"tenancyMode"`
 
 	// Version Example: 0.1.0
@@ -1861,6 +2218,9 @@ type WorkflowReviewPolicyType string
 // WorkflowStateType defines model for WorkflowStateType.
 type WorkflowStateType string
 
+// AccessStatus defines model for AccessStatus.
+type AccessStatus string
+
 // ApplicationId defines model for ApplicationId.
 type ApplicationId = openapi_types.UUID
 
@@ -1915,15 +2275,56 @@ type WorkflowId = openapi_types.UUID
 // WorkflowVersionId defines model for WorkflowVersionId.
 type WorkflowVersionId = openapi_types.UUID
 
+// ListAccessBindingsParams defines parameters for ListAccessBindings.
+type ListAccessBindingsParams struct {
+	Status *ListAccessBindingsParamsStatus `form:"status,omitempty" json:"status,omitempty"`
+	Cursor *Cursor                         `form:"cursor,omitempty" json:"cursor,omitempty"`
+	Limit  *Limit                          `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// ListAccessBindingsParamsStatus defines parameters for ListAccessBindings.
+type ListAccessBindingsParamsStatus string
+
 // CreateAccessBindingParams defines parameters for CreateAccessBinding.
 type CreateAccessBindingParams struct {
 	XCSRFToken CsrfToken `json:"X-CSRF-Token"`
 }
 
+// RevokeAccessBindingParams defines parameters for RevokeAccessBinding.
+type RevokeAccessBindingParams struct {
+	XCSRFToken CsrfToken `json:"X-CSRF-Token"`
+}
+
+// ListAccessDeniesParams defines parameters for ListAccessDenies.
+type ListAccessDeniesParams struct {
+	Status *ListAccessDeniesParamsStatus `form:"status,omitempty" json:"status,omitempty"`
+	Cursor *Cursor                       `form:"cursor,omitempty" json:"cursor,omitempty"`
+	Limit  *Limit                        `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// ListAccessDeniesParamsStatus defines parameters for ListAccessDenies.
+type ListAccessDeniesParamsStatus string
+
 // CreateAccessDenyParams defines parameters for CreateAccessDeny.
 type CreateAccessDenyParams struct {
 	XCSRFToken CsrfToken `json:"X-CSRF-Token"`
 }
+
+// RevokeAccessDenyParams defines parameters for RevokeAccessDeny.
+type RevokeAccessDenyParams struct {
+	XCSRFToken CsrfToken `json:"X-CSRF-Token"`
+}
+
+// ListAccessGroupsParams defines parameters for ListAccessGroups.
+type ListAccessGroupsParams struct {
+	Search *string                       `form:"search,omitempty" json:"search,omitempty"`
+	Status *ListAccessGroupsParamsStatus `form:"status,omitempty" json:"status,omitempty"`
+	Cursor *Cursor                       `form:"cursor,omitempty" json:"cursor,omitempty"`
+	Limit  *Limit                        `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// ListAccessGroupsParamsStatus defines parameters for ListAccessGroups.
+type ListAccessGroupsParamsStatus string
 
 // CreateAccessGroupParams defines parameters for CreateAccessGroup.
 type CreateAccessGroupParams struct {
@@ -1935,13 +2336,71 @@ type DisableAccessGroupParams struct {
 	XCSRFToken CsrfToken `json:"X-CSRF-Token"`
 }
 
+// ListAccessMembershipCandidatesParams defines parameters for ListAccessMembershipCandidates.
+type ListAccessMembershipCandidatesParams struct {
+	Query string `form:"query" json:"query"`
+	Limit *int   `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
 // CreateAccessMembershipParams defines parameters for CreateAccessMembership.
 type CreateAccessMembershipParams struct {
 	XCSRFToken CsrfToken `json:"X-CSRF-Token"`
 }
 
+// ListAccessMembershipsParams defines parameters for ListAccessMemberships.
+type ListAccessMembershipsParams struct {
+	GroupId *openapi_types.UUID                `form:"groupId,omitempty" json:"groupId,omitempty"`
+	UserId  *openapi_types.UUID                `form:"userId,omitempty" json:"userId,omitempty"`
+	Status  *ListAccessMembershipsParamsStatus `form:"status,omitempty" json:"status,omitempty"`
+	Cursor  *Cursor                            `form:"cursor,omitempty" json:"cursor,omitempty"`
+	Limit   *Limit                             `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// ListAccessMembershipsParamsStatus defines parameters for ListAccessMemberships.
+type ListAccessMembershipsParamsStatus string
+
+// RevokeAccessMembershipParams defines parameters for RevokeAccessMembership.
+type RevokeAccessMembershipParams struct {
+	XCSRFToken CsrfToken `json:"X-CSRF-Token"`
+}
+
+// ListAccessRolesParams defines parameters for ListAccessRoles.
+type ListAccessRolesParams struct {
+	Search *string                      `form:"search,omitempty" json:"search,omitempty"`
+	Status *ListAccessRolesParamsStatus `form:"status,omitempty" json:"status,omitempty"`
+	Cursor *Cursor                      `form:"cursor,omitempty" json:"cursor,omitempty"`
+	Limit  *Limit                       `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// ListAccessRolesParamsStatus defines parameters for ListAccessRoles.
+type ListAccessRolesParamsStatus string
+
 // CreateAccessRoleParams defines parameters for CreateAccessRole.
 type CreateAccessRoleParams struct {
+	XCSRFToken CsrfToken `json:"X-CSRF-Token"`
+}
+
+// DisableAccessRoleParams defines parameters for DisableAccessRole.
+type DisableAccessRoleParams struct {
+	XCSRFToken CsrfToken `json:"X-CSRF-Token"`
+}
+
+// GetAccessScopeOptionsParamsScopeKind defines parameters for GetAccessScopeOptions.
+type GetAccessScopeOptionsParamsScopeKind string
+
+// ListAccessUsersParams defines parameters for ListAccessUsers.
+type ListAccessUsersParams struct {
+	Search *string                      `form:"search,omitempty" json:"search,omitempty"`
+	Status *ListAccessUsersParamsStatus `form:"status,omitempty" json:"status,omitempty"`
+	Cursor *Cursor                      `form:"cursor,omitempty" json:"cursor,omitempty"`
+	Limit  *Limit                       `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// ListAccessUsersParamsStatus defines parameters for ListAccessUsers.
+type ListAccessUsersParamsStatus string
+
+// CreateAccessUserParams defines parameters for CreateAccessUser.
+type CreateAccessUserParams struct {
 	XCSRFToken CsrfToken `json:"X-CSRF-Token"`
 }
 
@@ -1963,6 +2422,11 @@ type CompleteAuthCallbackParams struct {
 
 // LogoutAuthSessionParams defines parameters for LogoutAuthSession.
 type LogoutAuthSessionParams struct {
+	XCSRFToken string `json:"X-CSRF-Token"`
+}
+
+// ChangeLocalPasswordParams defines parameters for ChangeLocalPassword.
+type ChangeLocalPasswordParams struct {
 	XCSRFToken string `json:"X-CSRF-Token"`
 }
 
@@ -2145,11 +2609,20 @@ type CreateAccessMembershipJSONRequestBody = CreateAccessMembershipRequest
 // CreateAccessRoleJSONRequestBody defines body for CreateAccessRole for application/json ContentType.
 type CreateAccessRoleJSONRequestBody = CreateAccessRoleRequest
 
+// CreateAccessUserJSONRequestBody defines body for CreateAccessUser for application/json ContentType.
+type CreateAccessUserJSONRequestBody = CreateAccessUserRequest
+
 // AssignArgoCDCandidateJSONRequestBody defines body for AssignArgoCDCandidate for application/json ContentType.
 type AssignArgoCDCandidateJSONRequestBody = ArgoCDCandidateAssignmentRequest
 
 // BackchannelLogoutFormdataRequestBody defines body for BackchannelLogout for application/x-www-form-urlencoded ContentType.
 type BackchannelLogoutFormdataRequestBody = BackchannelLogoutRequest
+
+// LoginLocalJSONRequestBody defines body for LoginLocal for application/json ContentType.
+type LoginLocalJSONRequestBody = LocalLoginRequest
+
+// ChangeLocalPasswordJSONRequestBody defines body for ChangeLocalPassword for application/json ContentType.
+type ChangeLocalPasswordJSONRequestBody = ChangePasswordRequest
 
 // ConfirmApplicationOnboardingJSONRequestBody defines body for ConfirmApplicationOnboarding for application/json ContentType.
 type ConfirmApplicationOnboardingJSONRequestBody = OnboardingConfirmRequest
@@ -2272,163 +2745,211 @@ func (t *WorkflowCondition_Value) UnmarshalJSON(b []byte) error {
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
-	// CreateAccessBinding 建立 Group、Role 與 scope 綁定
+	// ListAccessBindings List manageable Role bindings
+	// (GET /api/v1/access/bindings)
+	ListAccessBindings(c *gin.Context, params ListAccessBindingsParams)
+	// CreateAccessBinding Bind a Group and Role to a scope
 	// (POST /api/v1/access/bindings)
 	CreateAccessBinding(c *gin.Context, params CreateAccessBindingParams)
-	// CreateAccessDeny 建立明確拒絕 policy
+	// RevokeAccessBinding Revoke an active Role binding
+	// (POST /api/v1/access/bindings/{bindingId}/revoke)
+	RevokeAccessBinding(c *gin.Context, bindingId openapi_types.UUID, params RevokeAccessBindingParams)
+	// GetAccessCapabilities Get server-owned Access collection capabilities
+	// (GET /api/v1/access/capabilities)
+	GetAccessCapabilities(c *gin.Context)
+	// ListAccessDenies List manageable explicit Deny policies
+	// (GET /api/v1/access/denies)
+	ListAccessDenies(c *gin.Context, params ListAccessDeniesParams)
+	// CreateAccessDeny Create an explicit Deny policy
 	// (POST /api/v1/access/denies)
 	CreateAccessDeny(c *gin.Context, params CreateAccessDenyParams)
-	// CreateAccessGroup 建立 Group
+	// RevokeAccessDeny Revoke an active explicit Deny policy
+	// (POST /api/v1/access/denies/{denyId}/revoke)
+	RevokeAccessDeny(c *gin.Context, denyId openapi_types.UUID, params RevokeAccessDenyParams)
+	// ListAccessGroups List manageable Groups
+	// (GET /api/v1/access/groups)
+	ListAccessGroups(c *gin.Context, params ListAccessGroupsParams)
+	// CreateAccessGroup Create a Group
 	// (POST /api/v1/access/groups)
 	CreateAccessGroup(c *gin.Context, params CreateAccessGroupParams)
-	// DisableAccessGroup 停用 Group 並撤銷其有效 policy
+	// DisableAccessGroup Disable a Group and revoke its active policies
 	// (POST /api/v1/access/groups/{groupId}/disable)
 	DisableAccessGroup(c *gin.Context, groupId openapi_types.UUID, params DisableAccessGroupParams)
-	// CreateAccessMembership 將使用者加入 Group
+	// ListAccessMembershipCandidates Find minimal user identities eligible for one manageable Group
+	// (GET /api/v1/access/groups/{groupId}/membership-candidates)
+	ListAccessMembershipCandidates(c *gin.Context, groupId openapi_types.UUID, params ListAccessMembershipCandidatesParams)
+	// CreateAccessMembership Add a user to a Group
 	// (POST /api/v1/access/groups/{groupId}/memberships)
 	CreateAccessMembership(c *gin.Context, groupId openapi_types.UUID, params CreateAccessMembershipParams)
-	// CreateAccessRole 建立自訂 Role
+	// ListAccessMemberships List manageable Group memberships
+	// (GET /api/v1/access/memberships)
+	ListAccessMemberships(c *gin.Context, params ListAccessMembershipsParams)
+	// RevokeAccessMembership Revoke an active manual Group membership
+	// (POST /api/v1/access/memberships/{membershipId}/revoke)
+	RevokeAccessMembership(c *gin.Context, membershipId openapi_types.UUID, params RevokeAccessMembershipParams)
+	// ListAccessRoles List manageable Roles
+	// (GET /api/v1/access/roles)
+	ListAccessRoles(c *gin.Context, params ListAccessRolesParams)
+	// CreateAccessRole Create a custom Role
 	// (POST /api/v1/access/roles)
 	CreateAccessRole(c *gin.Context, params CreateAccessRoleParams)
-	// GetAccessManagementSnapshot 取得目前使用者可管理的存取控制資料
+	// DisableAccessRole Disable an active custom Role
+	// (POST /api/v1/access/roles/{roleId}/disable)
+	DisableAccessRole(c *gin.Context, roleId openapi_types.UUID, params DisableAccessRoleParams)
+	// GetAccessScopeOptions Get legal Group, Role, and Permission options for one selected scope
+	// (GET /api/v1/access/scopes/{scopeKind}/{scopeId}/options)
+	GetAccessScopeOptions(c *gin.Context, scopeKind GetAccessScopeOptionsParamsScopeKind, scopeId string)
+	// GetAccessManagementSnapshot Get access-control data manageable by the current user
 	// (GET /api/v1/access/snapshot)
 	GetAccessManagementSnapshot(c *gin.Context)
-	// DisableAccessUser 本地停用使用者並撤銷所有 Session
+	// ListAccessUsers List manageable users
+	// (GET /api/v1/access/users)
+	ListAccessUsers(c *gin.Context, params ListAccessUsersParams)
+	// CreateAccessUser Create a local user with a first-login password change requirement
+	// (POST /api/v1/access/users)
+	CreateAccessUser(c *gin.Context, params CreateAccessUserParams)
+	// DisableAccessUser Disable a local user and revoke all sessions
 	// (POST /api/v1/access/users/{userId}/disable)
 	DisableAccessUser(c *gin.Context, userId openapi_types.UUID, params DisableAccessUserParams)
-	// ListArgoCDCandidateAssignmentScopes 列出 Candidate 可指派的 production scope
+	// ListArgoCDCandidateAssignmentScopes List production scopes available for Candidate assignment
 	// (GET /api/v1/argocd/candidate-assignment-scopes)
 	ListArgoCDCandidateAssignmentScopes(c *gin.Context)
-	// ListArgoCDCandidates 列出目前存在的 Argo CD onboarding candidates
+	// ListArgoCDCandidates List current Argo CD onboarding candidates
 	// (GET /api/v1/argocd/candidates)
 	ListArgoCDCandidates(c *gin.Context)
-	// AssignArgoCDCandidate 將 Candidate 指派至 ReleaseHub Application scope
+	// AssignArgoCDCandidate Assign a Candidate to a ReleaseHub Application scope
 	// (POST /api/v1/argocd/candidates/{candidateId}/assignment)
 	AssignArgoCDCandidate(c *gin.Context, candidateId CandidateId, params AssignArgoCDCandidateParams)
-	// BackchannelLogout 接收 OIDC back-channel logout
+	// BackchannelLogout Receive OIDC back-channel logout
 	// (POST /api/v1/auth/backchannel-logout)
 	BackchannelLogout(c *gin.Context)
-	// CompleteAuthCallback 完成 OIDC callback
+	// CompleteAuthCallback Complete the OIDC callback
 	// (GET /api/v1/auth/callback)
 	CompleteAuthCallback(c *gin.Context, params CompleteAuthCallbackParams)
-	// BeginAuthLogin 開始 OIDC 登入
+	// LoginLocal Sign in with a local account
+	// (POST /api/v1/auth/local/login)
+	LoginLocal(c *gin.Context)
+	// BeginAuthLogin Start OIDC login
 	// (GET /api/v1/auth/login)
 	BeginAuthLogin(c *gin.Context)
-	// LogoutAuthSession 撤銷目前 BFF Session
+	// LogoutAuthSession Revoke the current BFF Session
 	// (POST /api/v1/auth/logout)
 	LogoutAuthSession(c *gin.Context, params LogoutAuthSessionParams)
-	// GetAuthSession 取得目前 BFF Session
+	// ChangeLocalPassword Change the local account password
+	// (POST /api/v1/auth/password)
+	ChangeLocalPassword(c *gin.Context, params ChangeLocalPasswordParams)
+	// GetAuthSession Get the current BFF Session
 	// (GET /api/v1/auth/session)
 	GetAuthSession(c *gin.Context)
-	// ListCatalogApplications 列出 Environment 中受權的 Applications
+	// ListCatalogApplications List authorized Applications in an Environment
 	// (GET /api/v1/catalog/applications)
 	ListCatalogApplications(c *gin.Context, params ListCatalogApplicationsParams)
-	// GetCatalogApplication 取得受權的單一 Application
+	// GetCatalogApplication Get one authorized Application
 	// (GET /api/v1/catalog/applications/{applicationId})
 	GetCatalogApplication(c *gin.Context, applicationId ApplicationId)
-	// ConfirmApplicationOnboarding 確認 onboarding 並關閉 automated sync
+	// ConfirmApplicationOnboarding Confirm onboarding and disable automated sync
 	// (POST /api/v1/catalog/applications/{applicationId}/onboarding/confirm)
 	ConfirmApplicationOnboarding(c *gin.Context, applicationId ApplicationId, params ConfirmApplicationOnboardingParams)
-	// DryRunApplicationOnboarding 驗證 Application onboarding 條件
+	// DryRunApplicationOnboarding Validate Application onboarding prerequisites
 	// (POST /api/v1/catalog/applications/{applicationId}/onboarding/dry-run)
 	DryRunApplicationOnboarding(c *gin.Context, applicationId ApplicationId, params DryRunApplicationOnboardingParams)
-	// GetCatalogApplicationStatus 取得受權 Application 的 Argo CD 與 onboarding 狀態
+	// GetCatalogApplicationStatus Get Argo CD and onboarding state for an authorized Application
 	// (GET /api/v1/catalog/applications/{applicationId}/status)
 	GetCatalogApplicationStatus(c *gin.Context, applicationId ApplicationId)
-	// CreateCatalogOrganization 建立 Organization
+	// CreateCatalogOrganization Create an Organization
 	// (POST /api/v1/catalog/organizations)
 	CreateCatalogOrganization(c *gin.Context, params CreateCatalogOrganizationParams)
-	// CreateCatalogProject 建立 Project
+	// CreateCatalogProject Create a Project
 	// (POST /api/v1/catalog/organizations/{organizationId}/projects)
 	CreateCatalogProject(c *gin.Context, organizationId openapi_types.UUID, params CreateCatalogProjectParams)
-	// CreateCatalogEnvironmentLabelMapping 建立 Argo CD label 至 Environment mapping
+	// CreateCatalogEnvironmentLabelMapping Create an Argo CD label-to-Environment mapping
 	// (POST /api/v1/catalog/organizations/{organizationId}/projects/{projectId}/environment-label-mappings)
 	CreateCatalogEnvironmentLabelMapping(c *gin.Context, organizationId openapi_types.UUID, projectId openapi_types.UUID, params CreateCatalogEnvironmentLabelMappingParams)
-	// CreateCatalogEnvironment 建立 Environment
+	// CreateCatalogEnvironment Create an Environment
 	// (POST /api/v1/catalog/organizations/{organizationId}/projects/{projectId}/environments)
 	CreateCatalogEnvironment(c *gin.Context, organizationId openapi_types.UUID, projectId openapi_types.UUID, params CreateCatalogEnvironmentParams)
-	// GetCatalogResourceTree 取得目前使用者可見的資源階層
+	// GetCatalogResourceTree Get the resource hierarchy visible to the current user
 	// (GET /api/v1/catalog/resource-tree)
 	GetCatalogResourceTree(c *gin.Context)
-	// ListVisibleCatalogApplications 列出目前使用者可查看的 Applications
+	// ListVisibleCatalogApplications List Applications visible to the current user
 	// (GET /api/v1/catalog/visible-applications)
 	ListVisibleCatalogApplications(c *gin.Context)
-	// GetDeploymentBinding 取得 Environment 現行的 Workflow 與 Plan Version binding
+	// GetDeploymentBinding Get the current Workflow and Plan Version binding for an Environment
 	// (GET /api/v1/deployment-bindings)
 	GetDeploymentBinding(c *gin.Context, params GetDeploymentBindingParams)
-	// BindDeploymentDefinitions 綁定 Environment 使用的 Workflow 與 Plan Version
+	// BindDeploymentDefinitions Bind an Environment to Workflow and Plan Versions
 	// (POST /api/v1/deployment-bindings)
 	BindDeploymentDefinitions(c *gin.Context, params BindDeploymentDefinitionsParams)
-	// GetDeploymentExecution 取得 Deployment execution 與各 Application 狀態
+	// GetDeploymentExecution Get a Deployment execution and its Application states
 	// (GET /api/v1/deployment-executions/{executionId})
 	GetDeploymentExecution(c *gin.Context, executionId ExecutionId)
-	// ListDeploymentHistory 列出可供 Forward Rollback 判斷的成功部署歷史
+	// ListDeploymentHistory List successful deployment history eligible for Forward Rollback evaluation
 	// (GET /api/v1/deployment-history)
 	ListDeploymentHistory(c *gin.Context, params ListDeploymentHistoryParams)
-	// ListDeploymentPlans 列出可查看的 Deployment Plan 與版本
+	// ListDeploymentPlans List visible Deployment Plans and versions
 	// (GET /api/v1/deployment-plans)
 	ListDeploymentPlans(c *gin.Context, params ListDeploymentPlansParams)
-	// CreateDeploymentPlan 建立 Deployment Plan 與第一個 Draft Version
+	// CreateDeploymentPlan Create a Deployment Plan and its first Draft Version
 	// (POST /api/v1/deployment-plans)
 	CreateDeploymentPlan(c *gin.Context, params CreateDeploymentPlanParams)
-	// CreateDeploymentPlanVersion 建立下一個 Deployment Plan Draft Version
+	// CreateDeploymentPlanVersion Create the next Deployment Plan Draft Version
 	// (POST /api/v1/deployment-plans/{planId}/versions)
 	CreateDeploymentPlanVersion(c *gin.Context, planId PlanId, params CreateDeploymentPlanVersionParams)
-	// ChangeDeploymentPlanVersionLifecycle 發布或停用 Deployment Plan Version
+	// ChangeDeploymentPlanVersionLifecycle Publish or disable a Deployment Plan Version
 	// (POST /api/v1/deployment-plans/{planId}/versions/{planVersionId}/lifecycle)
 	ChangeDeploymentPlanVersionLifecycle(c *gin.Context, planId PlanId, planVersionId PlanVersionId, params ChangeDeploymentPlanVersionLifecycleParams)
-	// ListDeploymentRequests 列出目前使用者可查看的 Deployment Request
+	// ListDeploymentRequests List Deployment Requests visible to the current user
 	// (GET /api/v1/deployment-requests)
 	ListDeploymentRequests(c *gin.Context, params ListDeploymentRequestsParams)
-	// GetDeploymentRequest 取得 Deployment Request、Version 與目前流程快照
+	// GetDeploymentRequest Get a Deployment Request, Version, and current workflow snapshot
 	// (GET /api/v1/deployment-requests/{requestId})
 	GetDeploymentRequest(c *gin.Context, requestId RequestId)
-	// UpdateDeploymentRequestVersionMetadata 以新 Version 更新受審的選填資料
+	// UpdateDeploymentRequestVersionMetadata Update reviewed optional data through a new Version
 	// (PATCH /api/v1/deployment-requests/{requestId}/versions/{requestVersionId})
 	UpdateDeploymentRequestVersionMetadata(c *gin.Context, requestId RequestId, requestVersionId RequestVersionId, params UpdateDeploymentRequestVersionMetadataParams)
-	// RetryDeploymentRequest 依 Workflow 與 Plan 重試指定失敗 Application
+	// RetryDeploymentRequest Retry selected failed Applications according to the Workflow and Plan
 	// (POST /api/v1/deployment-requests/{requestId}/versions/{requestVersionId}/retry)
 	RetryDeploymentRequest(c *gin.Context, requestId RequestId, requestVersionId RequestVersionId, params RetryDeploymentRequestParams)
-	// DecideDeploymentReview 核准或拒絕 Deployment Request review task
+	// DecideDeploymentReview Approve or reject a Deployment Request review task
 	// (POST /api/v1/deployment-requests/{requestId}/versions/{requestVersionId}/reviews/{reviewTaskId}/decisions)
 	DecideDeploymentReview(c *gin.Context, requestId RequestId, requestVersionId RequestVersionId, reviewTaskId ReviewTaskId, params DecideDeploymentReviewParams)
-	// ReassignDeploymentReview 重新指派等待中的 Deployment Request review task
+	// ReassignDeploymentReview Reassign a pending Deployment Request review task
 	// (POST /api/v1/deployment-requests/{requestId}/versions/{requestVersionId}/reviews/{reviewTaskId}/reassignments)
 	ReassignDeploymentReview(c *gin.Context, requestId RequestId, requestVersionId RequestVersionId, reviewTaskId ReviewTaskId, params ReassignDeploymentReviewParams)
-	// TerminateDeploymentRequest 依 Workflow 終止未收斂的 deployment execution
+	// TerminateDeploymentRequest Terminate an unconverged deployment execution according to the Workflow
 	// (POST /api/v1/deployment-requests/{requestId}/versions/{requestVersionId}/terminate)
 	TerminateDeploymentRequest(c *gin.Context, requestId RequestId, requestVersionId RequestVersionId, params TerminateDeploymentRequestParams)
-	// TransitionDeploymentRequest 執行 Workflow 允許的 transition
+	// TransitionDeploymentRequest Execute a transition allowed by the Workflow
 	// (POST /api/v1/deployment-requests/{requestId}/versions/{requestVersionId}/transitions)
 	TransitionDeploymentRequest(c *gin.Context, requestId RequestId, requestVersionId RequestVersionId, params TransitionDeploymentRequestParams)
-	// UnlockDeploymentRequest 核對實際狀態後人工解除 Application operation lock
+	// UnlockDeploymentRequest Manually release Application operation locks after actual-state verification
 	// (POST /api/v1/deployment-requests/{requestId}/versions/{requestVersionId}/unlock)
 	UnlockDeploymentRequest(c *gin.Context, requestId RequestId, requestVersionId RequestVersionId, params UnlockDeploymentRequestParams)
-	// ListNotifications 列出目前使用者保存期限內的站內通知
+	// ListNotifications List retained in-app notifications for the current user
 	// (GET /api/v1/notifications)
 	ListNotifications(c *gin.Context, params ListNotificationsParams)
-	// StreamNotificationEvents 訂閱通知事件並以 Last-Event-ID 恢復
+	// StreamNotificationEvents Subscribe to notification events and resume with Last-Event-ID
 	// (GET /api/v1/notifications/events)
 	StreamNotificationEvents(c *gin.Context, params StreamNotificationEventsParams)
-	// MarkAllNotificationsRead 將目前可見通知全部標記為已讀
+	// MarkAllNotificationsRead Mark all currently visible notifications as read
 	// (POST /api/v1/notifications/read-all)
 	MarkAllNotificationsRead(c *gin.Context, params MarkAllNotificationsReadParams)
-	// MarkNotificationRead 將一筆通知標記為已讀
+	// MarkNotificationRead Mark one notification as read
 	// (POST /api/v1/notifications/{notificationId}/read)
 	MarkNotificationRead(c *gin.Context, notificationId NotificationId, params MarkNotificationReadParams)
-	// ListReleaseWorkflows 列出 Release Workflow 與版本
+	// ListReleaseWorkflows List Release Workflows and versions
 	// (GET /api/v1/release-workflows)
 	ListReleaseWorkflows(c *gin.Context)
-	// CreateReleaseWorkflow 建立 Release Workflow 與第一個 Draft Version
+	// CreateReleaseWorkflow Create a Release Workflow and its first Draft Version
 	// (POST /api/v1/release-workflows)
 	CreateReleaseWorkflow(c *gin.Context, params CreateReleaseWorkflowParams)
-	// CreateReleaseWorkflowVersion 建立下一個 Release Workflow Draft Version
+	// CreateReleaseWorkflowVersion Create the next Release Workflow Draft Version
 	// (POST /api/v1/release-workflows/{workflowId}/versions)
 	CreateReleaseWorkflowVersion(c *gin.Context, workflowId WorkflowId, params CreateReleaseWorkflowVersionParams)
-	// ChangeReleaseWorkflowVersionLifecycle 發布或停用 Release Workflow Version
+	// ChangeReleaseWorkflowVersionLifecycle Publish or disable a Release Workflow Version
 	// (POST /api/v1/release-workflows/{workflowId}/versions/{workflowVersionId}/lifecycle)
 	ChangeReleaseWorkflowVersionLifecycle(c *gin.Context, workflowId WorkflowId, workflowVersionId WorkflowVersionId, params ChangeReleaseWorkflowVersionLifecycleParams)
-	// GetSystemStatus 取得平台基本資訊
+	// GetSystemStatus Get platform system information
 	// (GET /api/v1/system/status)
 	GetSystemStatus(c *gin.Context)
 }
@@ -2441,6 +2962,49 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(c *gin.Context)
+
+// ListAccessBindings operation middleware
+func (siw *ServerInterfaceWrapper) ListAccessBindings(c *gin.Context) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListAccessBindingsParams
+
+	// ------------- Optional query parameter "status" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "status", c.Request.URL.Query(), &params.Status, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter status: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", c.Request.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter cursor: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", c.Request.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter limit: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.ListAccessBindings(c, params)
+}
 
 // CreateAccessBinding operation middleware
 func (siw *ServerInterfaceWrapper) CreateAccessBinding(c *gin.Context) {
@@ -2485,6 +3049,114 @@ func (siw *ServerInterfaceWrapper) CreateAccessBinding(c *gin.Context) {
 	siw.Handler.CreateAccessBinding(c, params)
 }
 
+// RevokeAccessBinding operation middleware
+func (siw *ServerInterfaceWrapper) RevokeAccessBinding(c *gin.Context) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "bindingId" -------------
+	var bindingId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "bindingId", c.Param("bindingId"), &bindingId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter bindingId: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RevokeAccessBindingParams
+
+	headers := c.Request.Header
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandler(c, fmt.Errorf("Expected one value for X-CSRF-Token, got %d", n), http.StatusBadRequest)
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter X-CSRF-Token: %w", err), http.StatusBadRequest)
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		siw.ErrorHandler(c, fmt.Errorf("Header parameter X-CSRF-Token is required, but not found"), http.StatusBadRequest)
+		return
+	}
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.RevokeAccessBinding(c, bindingId, params)
+}
+
+// GetAccessCapabilities operation middleware
+func (siw *ServerInterfaceWrapper) GetAccessCapabilities(c *gin.Context) {
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.GetAccessCapabilities(c)
+}
+
+// ListAccessDenies operation middleware
+func (siw *ServerInterfaceWrapper) ListAccessDenies(c *gin.Context) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListAccessDeniesParams
+
+	// ------------- Optional query parameter "status" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "status", c.Request.URL.Query(), &params.Status, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter status: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", c.Request.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter cursor: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", c.Request.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter limit: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.ListAccessDenies(c, params)
+}
+
 // CreateAccessDeny operation middleware
 func (siw *ServerInterfaceWrapper) CreateAccessDeny(c *gin.Context) {
 
@@ -2526,6 +3198,109 @@ func (siw *ServerInterfaceWrapper) CreateAccessDeny(c *gin.Context) {
 	}
 
 	siw.Handler.CreateAccessDeny(c, params)
+}
+
+// RevokeAccessDeny operation middleware
+func (siw *ServerInterfaceWrapper) RevokeAccessDeny(c *gin.Context) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "denyId" -------------
+	var denyId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "denyId", c.Param("denyId"), &denyId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter denyId: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RevokeAccessDenyParams
+
+	headers := c.Request.Header
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandler(c, fmt.Errorf("Expected one value for X-CSRF-Token, got %d", n), http.StatusBadRequest)
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter X-CSRF-Token: %w", err), http.StatusBadRequest)
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		siw.ErrorHandler(c, fmt.Errorf("Header parameter X-CSRF-Token is required, but not found"), http.StatusBadRequest)
+		return
+	}
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.RevokeAccessDeny(c, denyId, params)
+}
+
+// ListAccessGroups operation middleware
+func (siw *ServerInterfaceWrapper) ListAccessGroups(c *gin.Context) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListAccessGroupsParams
+
+	// ------------- Optional query parameter "search" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "search", c.Request.URL.Query(), &params.Search, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter search: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	// ------------- Optional query parameter "status" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "status", c.Request.URL.Query(), &params.Status, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter status: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", c.Request.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter cursor: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", c.Request.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter limit: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.ListAccessGroups(c, params)
 }
 
 // CreateAccessGroup operation middleware
@@ -2623,6 +3398,50 @@ func (siw *ServerInterfaceWrapper) DisableAccessGroup(c *gin.Context) {
 	siw.Handler.DisableAccessGroup(c, groupId, params)
 }
 
+// ListAccessMembershipCandidates operation middleware
+func (siw *ServerInterfaceWrapper) ListAccessMembershipCandidates(c *gin.Context) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "groupId" -------------
+	var groupId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "groupId", c.Param("groupId"), &groupId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter groupId: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListAccessMembershipCandidatesParams
+
+	// ------------- Required query parameter "query" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "query", c.Request.URL.Query(), &params.Query, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter query: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", c.Request.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter limit: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.ListAccessMembershipCandidates(c, groupId, params)
+}
+
 // CreateAccessMembership operation middleware
 func (siw *ServerInterfaceWrapper) CreateAccessMembership(c *gin.Context) {
 
@@ -2675,6 +3494,168 @@ func (siw *ServerInterfaceWrapper) CreateAccessMembership(c *gin.Context) {
 	siw.Handler.CreateAccessMembership(c, groupId, params)
 }
 
+// ListAccessMemberships operation middleware
+func (siw *ServerInterfaceWrapper) ListAccessMemberships(c *gin.Context) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListAccessMembershipsParams
+
+	// ------------- Optional query parameter "groupId" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "groupId", c.Request.URL.Query(), &params.GroupId, runtime.BindQueryParameterOptions{Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter groupId: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	// ------------- Optional query parameter "userId" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "userId", c.Request.URL.Query(), &params.UserId, runtime.BindQueryParameterOptions{Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter userId: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	// ------------- Optional query parameter "status" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "status", c.Request.URL.Query(), &params.Status, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter status: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", c.Request.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter cursor: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", c.Request.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter limit: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.ListAccessMemberships(c, params)
+}
+
+// RevokeAccessMembership operation middleware
+func (siw *ServerInterfaceWrapper) RevokeAccessMembership(c *gin.Context) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "membershipId" -------------
+	var membershipId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "membershipId", c.Param("membershipId"), &membershipId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter membershipId: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RevokeAccessMembershipParams
+
+	headers := c.Request.Header
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandler(c, fmt.Errorf("Expected one value for X-CSRF-Token, got %d", n), http.StatusBadRequest)
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter X-CSRF-Token: %w", err), http.StatusBadRequest)
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		siw.ErrorHandler(c, fmt.Errorf("Header parameter X-CSRF-Token is required, but not found"), http.StatusBadRequest)
+		return
+	}
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.RevokeAccessMembership(c, membershipId, params)
+}
+
+// ListAccessRoles operation middleware
+func (siw *ServerInterfaceWrapper) ListAccessRoles(c *gin.Context) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListAccessRolesParams
+
+	// ------------- Optional query parameter "search" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "search", c.Request.URL.Query(), &params.Search, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter search: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	// ------------- Optional query parameter "status" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "status", c.Request.URL.Query(), &params.Status, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter status: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", c.Request.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter cursor: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", c.Request.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter limit: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.ListAccessRoles(c, params)
+}
+
 // CreateAccessRole operation middleware
 func (siw *ServerInterfaceWrapper) CreateAccessRole(c *gin.Context) {
 
@@ -2718,6 +3699,92 @@ func (siw *ServerInterfaceWrapper) CreateAccessRole(c *gin.Context) {
 	siw.Handler.CreateAccessRole(c, params)
 }
 
+// DisableAccessRole operation middleware
+func (siw *ServerInterfaceWrapper) DisableAccessRole(c *gin.Context) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "roleId" -------------
+	var roleId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "roleId", c.Param("roleId"), &roleId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter roleId: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DisableAccessRoleParams
+
+	headers := c.Request.Header
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandler(c, fmt.Errorf("Expected one value for X-CSRF-Token, got %d", n), http.StatusBadRequest)
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter X-CSRF-Token: %w", err), http.StatusBadRequest)
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		siw.ErrorHandler(c, fmt.Errorf("Header parameter X-CSRF-Token is required, but not found"), http.StatusBadRequest)
+		return
+	}
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.DisableAccessRole(c, roleId, params)
+}
+
+// GetAccessScopeOptions operation middleware
+func (siw *ServerInterfaceWrapper) GetAccessScopeOptions(c *gin.Context) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "scopeKind" -------------
+	var scopeKind GetAccessScopeOptionsParamsScopeKind
+
+	err = runtime.BindStyledParameterWithOptions("simple", "scopeKind", c.Param("scopeKind"), &scopeKind, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter scopeKind: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	// ------------- Path parameter "scopeId" -------------
+	var scopeId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "scopeId", c.Param("scopeId"), &scopeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter scopeId: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.GetAccessScopeOptions(c, scopeKind, scopeId)
+}
+
 // GetAccessManagementSnapshot operation middleware
 func (siw *ServerInterfaceWrapper) GetAccessManagementSnapshot(c *gin.Context) {
 
@@ -2729,6 +3796,100 @@ func (siw *ServerInterfaceWrapper) GetAccessManagementSnapshot(c *gin.Context) {
 	}
 
 	siw.Handler.GetAccessManagementSnapshot(c)
+}
+
+// ListAccessUsers operation middleware
+func (siw *ServerInterfaceWrapper) ListAccessUsers(c *gin.Context) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListAccessUsersParams
+
+	// ------------- Optional query parameter "search" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "search", c.Request.URL.Query(), &params.Search, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter search: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	// ------------- Optional query parameter "status" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "status", c.Request.URL.Query(), &params.Status, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter status: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", c.Request.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter cursor: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", c.Request.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter limit: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.ListAccessUsers(c, params)
+}
+
+// CreateAccessUser operation middleware
+func (siw *ServerInterfaceWrapper) CreateAccessUser(c *gin.Context) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateAccessUserParams
+
+	headers := c.Request.Header
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandler(c, fmt.Errorf("Expected one value for X-CSRF-Token, got %d", n), http.StatusBadRequest)
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter X-CSRF-Token: %w", err), http.StatusBadRequest)
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		siw.ErrorHandler(c, fmt.Errorf("Header parameter X-CSRF-Token is required, but not found"), http.StatusBadRequest)
+		return
+	}
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.CreateAccessUser(c, params)
 }
 
 // DisableAccessUser operation middleware
@@ -2909,6 +4070,19 @@ func (siw *ServerInterfaceWrapper) CompleteAuthCallback(c *gin.Context) {
 	siw.Handler.CompleteAuthCallback(c, params)
 }
 
+// LoginLocal operation middleware
+func (siw *ServerInterfaceWrapper) LoginLocal(c *gin.Context) {
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.LoginLocal(c)
+}
+
 // BeginAuthLogin operation middleware
 func (siw *ServerInterfaceWrapper) BeginAuthLogin(c *gin.Context) {
 
@@ -2963,6 +4137,49 @@ func (siw *ServerInterfaceWrapper) LogoutAuthSession(c *gin.Context) {
 	}
 
 	siw.Handler.LogoutAuthSession(c, params)
+}
+
+// ChangeLocalPassword operation middleware
+func (siw *ServerInterfaceWrapper) ChangeLocalPassword(c *gin.Context) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ChangeLocalPasswordParams
+
+	headers := c.Request.Header
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken string
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandler(c, fmt.Errorf("Expected one value for X-CSRF-Token, got %d", n), http.StatusBadRequest)
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter X-CSRF-Token: %w", err), http.StatusBadRequest)
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		siw.ErrorHandler(c, fmt.Errorf("Header parameter X-CSRF-Token is required, but not found"), http.StatusBadRequest)
+		return
+	}
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.ChangeLocalPassword(c, params)
 }
 
 // GetAuthSession operation middleware
@@ -4825,14 +6042,28 @@ func RegisterHandlersWithOptions(router gin.IRouter, si ServerInterface, options
 		ErrorHandler:       errorHandler,
 	}
 
+	router.GET(options.BaseURL+"/api/v1/access/capabilities", wrapper.GetAccessCapabilities)
+	router.GET(options.BaseURL+"/api/v1/access/users", wrapper.ListAccessUsers)
+	router.POST(options.BaseURL+"/api/v1/access/users", wrapper.CreateAccessUser)
 	router.GET(options.BaseURL+"/api/v1/access/snapshot", wrapper.GetAccessManagementSnapshot)
+	router.GET(options.BaseURL+"/api/v1/access/groups", wrapper.ListAccessGroups)
 	router.POST(options.BaseURL+"/api/v1/access/groups", wrapper.CreateAccessGroup)
 	router.POST(options.BaseURL+"/api/v1/access/groups/:groupId/disable", wrapper.DisableAccessGroup)
 	router.POST(options.BaseURL+"/api/v1/access/groups/:groupId/memberships", wrapper.CreateAccessMembership)
+	router.GET(options.BaseURL+"/api/v1/access/groups/:groupId/membership-candidates", wrapper.ListAccessMembershipCandidates)
+	router.GET(options.BaseURL+"/api/v1/access/scopes/:scopeKind/:scopeId/options", wrapper.GetAccessScopeOptions)
+	router.GET(options.BaseURL+"/api/v1/access/roles", wrapper.ListAccessRoles)
 	router.POST(options.BaseURL+"/api/v1/access/roles", wrapper.CreateAccessRole)
+	router.GET(options.BaseURL+"/api/v1/access/bindings", wrapper.ListAccessBindings)
 	router.POST(options.BaseURL+"/api/v1/access/bindings", wrapper.CreateAccessBinding)
+	router.GET(options.BaseURL+"/api/v1/access/denies", wrapper.ListAccessDenies)
 	router.POST(options.BaseURL+"/api/v1/access/denies", wrapper.CreateAccessDeny)
 	router.POST(options.BaseURL+"/api/v1/access/users/:userId/disable", wrapper.DisableAccessUser)
+	router.POST(options.BaseURL+"/api/v1/access/memberships/:membershipId/revoke", wrapper.RevokeAccessMembership)
+	router.GET(options.BaseURL+"/api/v1/access/memberships", wrapper.ListAccessMemberships)
+	router.POST(options.BaseURL+"/api/v1/access/roles/:roleId/disable", wrapper.DisableAccessRole)
+	router.POST(options.BaseURL+"/api/v1/access/bindings/:bindingId/revoke", wrapper.RevokeAccessBinding)
+	router.POST(options.BaseURL+"/api/v1/access/denies/:denyId/revoke", wrapper.RevokeAccessDeny)
 	router.GET(options.BaseURL+"/api/v1/argocd/candidates", wrapper.ListArgoCDCandidates)
 	router.GET(options.BaseURL+"/api/v1/argocd/candidate-assignment-scopes", wrapper.ListArgoCDCandidateAssignmentScopes)
 	router.POST(options.BaseURL+"/api/v1/argocd/candidates/:candidateId/assignment", wrapper.AssignArgoCDCandidate)
@@ -4874,6 +6105,8 @@ func RegisterHandlersWithOptions(router gin.IRouter, si ServerInterface, options
 	router.GET(options.BaseURL+"/api/v1/notifications/events", wrapper.StreamNotificationEvents)
 	router.GET(options.BaseURL+"/api/v1/auth/login", wrapper.BeginAuthLogin)
 	router.GET(options.BaseURL+"/api/v1/auth/callback", wrapper.CompleteAuthCallback)
+	router.POST(options.BaseURL+"/api/v1/auth/local/login", wrapper.LoginLocal)
+	router.POST(options.BaseURL+"/api/v1/auth/password", wrapper.ChangeLocalPassword)
 	router.GET(options.BaseURL+"/api/v1/auth/session", wrapper.GetAuthSession)
 	router.POST(options.BaseURL+"/api/v1/auth/logout", wrapper.LogoutAuthSession)
 	router.POST(options.BaseURL+"/api/v1/auth/backchannel-logout", wrapper.BackchannelLogout)
@@ -4885,172 +6118,188 @@ func RegisterHandlersWithOptions(router gin.IRouter, si ServerInterface, options
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
-	"6ZmNksycmvl/AQAA//8=",
+	"7H1rc9w2tuBfYfXOh917uyXZyeTecT4pku2o4odWspNUZXynIBLdjSs2wABgyz0qVW3tX90/soUnARJ8",
+	"Nvthj78ksgQCBwfnfQ4OHicxWWUEQ8zZ5MXjJAMUrCCHVP7rPI4hY7cc8Fz+G+HJi8mfOaSbyXSCwQpO",
+	"XkyY+ut0wuIlXAExLIFzkKd88mIC0nQynUCcryYv/tD/AjFHaziZThDWP36aTvgmU5NRhBeTp6fp5DzL",
+	"UhQDjgi+SuziGeDLYm3gjZlOKPwzRxQmkxec5tAFaU7oCgiI8hyJkdX1LgBOUAI4rF0tdkZsuRaj8w/k",
+	"HmK70hKCBNJird9nF7c3r2ZqUNNiK4TfQLzgy8mLZ8GlcsoIrTu8WP21z4Qv8RpRglcQcwdTpXmhN2g7",
+	"ZL38DOO8kQygM2K7ta4SuMoIhzje/AI3tafjDJuJcY0HBD4bfD7/61+nrfh9g1aI1+E1lX8M8trzs6lY",
+	"C60Erz07O5Mr6X/ZdRDmcAGpXOgd4WjexmHYH7Qddt/TBcDon+UVS3sk/qjtlrxOQf3mMvXH7Vf4FVLW",
+	"hMXMG7PlepT8N4wbeC+zA7Zb6Ab+mUPGazdF7d9HWacNh7Q8bNtV1wg+fADsvmFFZ8h2q/1G6P08JQ+1",
+	"az0UA8ZZqQ2dD5Vx26z7ZAY7ZsN5LDhY/Nvo/wQxcJcK1Q+S5C1c3UmZKpCs/sGWKGMSjjW5D5kFUz31",
+	"Twgn4hfCYKEkg5QjKFfWBsWLR/PlHSEpBFh8CtKUPMBEgaXMGQ5X8oe/UDifvJj8j9PCGDrV+zn1NvNk",
+	"QQKUgo2ctmynlHGF8zSV29ZYrewJljVq7xkWlORZ+Nvw2HeSCB6rf0XdJiEVSd4b5syVY72/piSFHTcs",
+	"htbul8Ukg78gnLh0mqWAi2knFsqJd0oT79TD5mvBS39MJFzmjNwTsPtwoHRhcozlEvUWa5I7CWCZN94g",
+	"xm8gywhmsMonCeCgJwcYnguwwAqq2ZomUXboNVjAt2J0GUUSID1T697a99VrO13AN0tuAfwFyMAdSpGB",
+	"1Yc8JmkKB4mmC/ulXWETOqUM0hVibMAK1/bL6rwlVLjb8JfshpgxjtZD9B7PN3QO1XMG+IJCwGuU1L3y",
+	"OowkypnwxLXIYFpMMAmLqzDvFDGLHxOIxUoh3blGDEmZWl24tOF76dOY8VMH6PrtX0K8+aaQj1chVxVw",
+	"wdWhhRv1c0c9umPl6exgWnUbXTXq+kT9Vaog7dH1qeSXQypTAcAY4tZsZE9i9rUggICg2Y0w0S5LEpZg",
+	"HZkTa+ZuDP1MJwQl8a8IPkD6Hqeb8IrkAUM6UCjJbxtsXZeDHNM3pErYhnG40iGyloVD/FyAorFT2b2D",
+	"+h6cKoljdFZVJHdIXpUQjMGsdit74ta3AIMFFHL/FoOMLQmvQm+tl9EckhhgtfC1oe4gM2lbaRy5rU20",
+	"sShLgp/YYJ8/cavEqRJqYS72g7CIzOzPpzBmbr8Zb0gKQ3MpG7rfXB8ZpO2+ToXKQuc2rTfiXez1Menb",
+	"mWwMURFg3T3KjYLsjsGn2Ls9z0hOY+gq6hXAOUi1ogwqZUFnHWEUQ3EYxO7mt17Pmc3CPcTKLo58dAXe",
+	"LMT2psULMEbhT29Te+LLa89p9EHXsYuqJ6nFY71Vq01NIcEvYQoXoE+Ywpu+Zq76DUmtcQwiZmRfYod+",
+	"QpNjUGcQtFooO/AorAjy9WxngSRIY3RRVGel7E0ICQDGED9mI3sSPLcxyeAVzvKAA3EMEb+DZ8T2kskq",
+	"Fmk5qfeZlY7+WY3rJh2//1FCYKMP0A2nYzCvd0b7Y2LpVn1RoTvXUG6r3KroJMcuHhLMEtiyVYlsVC0U",
+	"9m/3Sgeja9Zt9jSKZhUAjMGcZiO7Pwy6IBeXlsQCnEkXJE6cStxat1aNFH9mGYibxujQSHhEzskKcJjc",
+	"bnBcF7NjHOFmYEpj6iFyBt5CulbCqTJqjijjtxDic+7JDIGzGUeSvysfLSFI+bIonR4aCEhB/7XFEcpN",
+	"XS8BC++cQkbSNUxu4BrVpgDFIOHO6xqxcAGNHOFLbZ+IZN1ZePqMMMQJ3XykadhJAHQBeQOMJYL3Z6x8",
+	"P1WwhFih6o7guOHw1gVG7JEgzH/4ftJadlvREmXWmdawXZmBCtyHCLnKKTV8UeY6b+8lOq6QVoCQqmTj",
+	"c5BH0gUmO8inc8bQQpqtumS00RMw0sGpv372/D+nbY5zqydQ/eJzBmMOk18H0sSw5H2/7LyNJoZZswUn",
+	"FUZtGV9l2z6m01AmLk1TPpZAhYBbFVC+sQAq3KeR2ItQpZ1dxfsAIiu+eNcxAtSfqNxPOq7Sjw716HcD",
+	"DOrK4VWA9c/TXap6umV09j/UMc3XZuo5iJnug7S7zR5mdzlf3sKaKPYqZ/xiCfACXgPGHgitcSAHZlv6",
+	"0HwowRIAr2WLW7okDq72cTY/gfg+XgKMYfqGLEher+tT+ed/cHOPrg9mvW+DYCCcXMIsJRvBiJdwjjDS",
+	"0ZcacHZsOJyNZTiUryuNbGo8hO6ftF9baRT1TXo6dI+lfN2qjOjQgV8ADlKycIzunlmhPbvKI/u4/am3",
+	"Z75qlIrVAUbvdZ33qf580+qDqnEf2jzRcX3CXiyAXe9wiB/ZwXs0U4awVoMj7wScbNy6FxeOaHoEWPwQ",
+	"1kcVjO00dHhbB9hGES8pic32qJ69Wn9NIYOY18T+KJrzGwhY7+xyazSO4DsCaILwotOgJpUdUNMjxeMa",
+	"g1LV4jQfo+PHeSo4C2GodGp9KGlsttBQ7pE5nF4Jb8AdTN+CLFP312oCMjtTw6lY/peaAh35x19Bmh9E",
+	"U2+t/+zevJ0MOpbt6a3tyA9Dfe9IAhujpWxkLTpuNZP6RVHWcAnXMCWZrmD4IE2VxWQ6ueVgoX66piTJ",
+	"4x43jLQRJUdOfcx0Q3E9Uze5DUdvRY+M+j2ayaUT7WF++qc6qkw4hBxw266EBYG931n1OHd220kfVW/B",
+	"o0GUG2mrtnE5u7JHB4SOyDsMi4/JMOXKyA7MUELA9twQxOge2cEloBAnqHsP4bN0TI/ehFtWxzvWms2s",
+	"oDdZ2lE71r4YLbdTNTOAjQr8bc9B5bPYI/OYNT9Q2FBFbGWty+s1Pv2ACE5Foe0wjBPeShOivOSMky4A",
+	"SSJTCCC9dpA1BymD0zL+ckoh5m4Cyilj+I/nrVUMGD50+/g/2+RGGRR/7iACJLpKDVsKLKTp+/nkxR+d",
+	"q1RVzffTNFhI3KMF0BBftLj3pGeo7vdTacfqVv1ht9vY2aF2i85X7dvUF5JrcmF4WO3NF3MBvpywar3N",
+	"3sYn7s2wGpx2zjeHk8htEKhrISOf57FfQlohfKX++KykQaaTHKM/c6j/LIDscOptxfwuwlW1cA3CZbYZ",
+	"pK4MtxjMClHcR66XyhAaTzIDnEOKJy8m//XHf/397+zTv/+lE51pNJShr0dFkWK/TgGuRUcCWUxRZqwI",
+	"B/jvz/72Q2CrCYnzlc4jNAlef/1L85VrYw8g+YFkK7+9Hh45DRCkxUPXI9Bh+/qT2Bqx25ZLtpb5ddhz",
+	"bZB2tNoON97ukNB3z/6jlYT8aLzz8Q/ftVHAFpHxMl7G1gW7DeG6sb767b0DK5gYD2bcDYbgqQfkBqYQ",
+	"MGh6te5f7pUA2FrwhY+jAyeWABlL/DTs78Dyx79oVNngErC3hNaEUTD8zIt+7oEcstOwucqAaAUZB6us",
+	"6z2SSll20e65mGtqIQ7ttqibe4PmMN7EqS8DKJgL7r/O71LElvJ23KW5KBfSkIH56mX21mX5aQjmjrCW",
+	"6w3tVN2q0Qr1eR7zHKS3HHB4QfAciR2Ei9PaLkFXU8crsOhxy7WA6Up86DaFqVyfHVj6X33PwRYbaGCb",
+	"kVXbF3pnefUjrMBcDyb4EWo3+2fvuxRwrjuxSufuwN2CMlWyevpU67gW8Ow8ElvAZV/GCEgDzuEq45oB",
+	"G85cQJdCDpM+Fwxjqbt7fdK1ToXE98MlNibJIIFmEVkXTe7PszTwqkF7ySoHtCdema0HMxrqf+cwl+rp",
+	"msJ5ihZLoWJvcoy1gZ3HMYSJHPEKIHUn/RpQ4bHbf/8kzkH+9AHSFcLitIMamVO0WFQ9XmN4iZUhp5uO",
+	"RRiBNx7KosAQ9rR4eMiFwacgQxEuxXZkqZqKGamNr3amONX8jUWA/fU8pJTQC72f8F/fQsb8pOf4N5nF",
+	"UdRVoNlywxrjtUrlvwGkPcYgvd9ucGwdyjuUon82UH+Q2qeT23uUZTV036cUE5XuE6oUosaGQ8cuEpqr",
+	"M0tkMvXp0j3x0vl2JP7tspQhBbVfxfgzYpzQzRWHq5Gq3oq5tcPh1pU2MHScAsbsC0ouAd9ygBMgw7iv",
+	"CH0ANLkhaXoH4vsgwQ3S055HuAuV1eAjBmR5CRn+pjoU3VUOeMTLAWHiOUw7kTqFUd0hWhjft4jYsyV4",
+	"/tcfXvwBZvOz2d8+Pf7w/dNfat2/GziHFOK4rip9gZhQ383tG2p6Nyw6iEYfBmdFb34129Tstxln1yno",
+	"eXerFGbb9qrTMacMrC81RPQ5CYJupXehjISD62oFDetwthcEq0KKQPTMUZOwbwNCbSfoa1AxwarpcvMN",
+	"zEJL911PyGyS89BK7VFHb9lped81m2lH7aUTXi0FUJJhFq+Y9WWyCJfogM/XgII0hWm7nzrUtRMAGK+u",
+	"Pt1bCWBrt0Ftux1xcouBN30cSjWc/TFjnEKwci3Rawrl6gxx+LM8y02Q3eeUrHq/KTmdcDLkIUoXH3Jh",
+	"OdHU2VU7XnaioKWAP8TNvQBVNVmX1fRfl8O6D3/lpuTB7J+fxH/OZn/7x+zTv/0lHJhM1FXfFvmV67eL",
+	"HErtfgrFZ+HWvCVkGKgCy7ajeyyfxFDPnqnFCWqVhET/WJppJtjrm60T910jeG7WpHmlanJo6whgZt97",
+	"bY+qm0xOHzRqO+VdLh+vHKO42D5C60899XJG9vTK8a2ucS2vtmM8RnKswT3yU4MLPkJarCrBAww4n9eX",
+	"9NYkBsRHPwO23MbF2F3KLkVr2Bh3XAGM5pDx2i101Di8vZOCP6SXXd0l9FbRSt7eAw3HyvCUkOEcrSYN",
+	"e1AGK53o+RJygNKx2NN/VvkwHLoT80/PfZuvVoBuDh6iMeBUItRFj6vp5Brq1OQawYfJdHKeZZSsVRGB",
+	"nGlQbuY2zyBlenxLoqYWfzWRkl+3UnQek12QHHfJRI4VKj2qZH+/ljWWiPqxgm1swBFPw6G8PEv6mZlb",
+	"J/ZtXqMS9g1RmIE9QDku8J14sdbW3m/ov/Teb0cVFqo8n05ieavosiVQOV62ob9TMqT/mc4O9R1/e9ic",
+	"9xzhBaQZRZhvZcsxlsO6rlPbeUFHWJXUNxUlFOUwHhVffgDsPhjkjZcwyVOYvCJ0SI3F6GJ5vaWaNdVT",
+	"skCwzl0Zq67LTe/1UgVl17ZeNbi81a02zKiNqoR0WKzsNnuKoCC3ktDu7l77iucrMeE53XRptN37ccp+",
+	"t65Gr9gugd63IFcJmEsYo+ZKdT3A1VLa6pdFUbUpve3rlqnstVXORJ6dnZ21cbkFehhSbiBob9G+2/21",
+	"dTKX13i3eUw1TKLqkuXY8wZvcrJJsQ2Li2HnJbVk+DmeW5jOtbe6TUeHjKQo3nwo3f05xxvNCkIZvFWH",
+	"rX4DUrGr8zQ1A8Q/b0gK9aj3WLDPrSAuLKy3W14qC/ctDoG6YuJWF5SJ2Qpd3Dq4XuVWC9Z0CMB3/pUc",
+	"0D/6zCNPfTq5SAnrcsMAGZerqCqzW/HOIYSYaeXQ7Q6a6chaysfI7pXipEGs8oECzBBvkvV7FdnTCbcQ",
+	"VTOMva9q+ZP1Rc5HLOyqeiuhuLwyxJavu/vSnMqffgk0N/VxE8LyS0pJw3tSsU4/t2i8RAaVWe9sxaqo",
+	"CG59HcTx7PogJ1YFqmYld6YQPt6QGKRvyALhYU1VssHdVLpfnO98RT5ruhtvGt9v40XYOfJ0P9dSvAVD",
+	"zfoXMHmf17SWozBBFMZch0MKu4KiSYde/nrqEFjvCPcCYttmBweEudZCi2gTaHDoOZaNeHpF5HYerqYQ",
+	"JHXnqS5Zd55Id5WqwxKF4mdpKbU/Cy3XKLBemt4DzkOs3pC3WhtJjZjh8ij1MFmt97Z9s9a3OzN5Wm5R",
+	"NwPXjvBtuZwNe/qtT+TBDYM13W/cueAu3ZX/kkqne9cyh9sN9OojOqSAua4dQV3fH2kVDsAH62dpl8BS",
+	"q7YZ14XDMHihwqVqx7yLELtBH4oOGB9RTJfZ5RCFqJX+IdtYioEN7XsDlt596O/D7m3fUtiBwkUlBa5l",
+	"5KQNGcVJON84XW+6fCuRIE2UcDFtW4+beiarL0zvzsJmWqfkt0r4gfr0Lpge6Zz9tod1X3/6t//597+f",
+	"lH71v/49OGOlcL5TpyN1HdkLeKqXN1A8mU7eApyDVAb8BK3cAo7YHDmlQLpNuHCjWqN+ijLc6nyzuoeO",
+	"qXviHWjnSylWbmjz82VUK++/BLlIqg5OAzsT7KRqua4n1IhKbp8pVe/jCvDdo2e7auEUgvl2wzhc1T3o",
+	"ZBQq/AxWmWAdc2Q/53eTmr6uL7FqlVTuaja5wonwiSCLHpaQLyGN+BJG768uL6KULBCOxHlFiEVgDZBs",
+	"vRIhHPElYtH59VVEcyy2clKs63gnHGKA481bHSo14pghvEjVY5opR22vVBS7PDt5dnI26dj8bG2p3YXC",
+	"R0Yb6rejee8Q90HpH2WZXn1VRE0sIVjb1iEPsn2Y3y3Bao45DisdGhDlqNpZFXzNgXqhw5CzMlRPbDQh",
+	"sQcQ/p3bWML5fanHhBYWJ6USneAtZNm4gngmz8s/c5VZfEe4/fkKq19c1TwNY5peEgx1g6bymO43AT5V",
+	"7jAC+eiHBdas13QKNyUfYECmfEAaevsqhUDDzf0k3bcvhKgkKPskraslEk2nW3hcfqUs5dY8twb7eawj",
+	"PoV4KypF07ClzmCcU8Q3t0K4KpJh6inlC0LuEVQRn8mLSaz+aVzVCVXqdJnf/UN/UKANZOgXKNAk5Bee",
+	"k6pGvV0CCpPo5w8frqWKjAnmFMQ8mhOlXAttHc0pwRziJAI4ie5AfA9xcmKr6lzFLqZy1NqLybOTs5Mz",
+	"zf4YZGjyYvLdydnJd/qFfrndU5Ch0/WzUyCve57eqUZqqqE9lELM6/wzeYMY914OYHI2ClaQC7Ks69lW",
+	"DDG99I3Wax2vG2p2GPkGrRCXTeCo1pJyI8/PzrRPzbXL4sR5T/9b55GVgm19bdvduxe0kuftn/N7DCPB",
+	"pZFGa5QBddH++7Pvq1TxYQmjGKQppNESsAiTaCXfgJEWlVo3YjHJ4IlHuxLlJar945NAAjMXSOSpubO5",
+	"QDHVvINJESRXmXyShUEscPyBpyN6n/8Fo/MP8l1vdVJSi/1Eks1oh9TwwMWTL710dViJXJ7thlyaSEUc",
+	"vkcqD4BF2gtrpBj5zsNUfjuNCFUUEiUECgriEfyMGJd/4AV5pSC+Z5oehJyMikjEiVrsb+HFDHAxwfMU",
+	"xZzZidUjJJEwQCMZAy5AkJNztRm1Qk/qFeiLgNqpFIMSUZxEQO02RMBP0zrRdvqof7pKnk4pXJN7Zb0H",
+	"6f1G/r2F3qWGyNQjylo/2CUmZWqbOpTT6tr35iWPjGsopkJmCgnJSSOdeV/55DUWdXlLIBYhrJI3Yv6M",
+	"Ei5N8+huE5neO1JxIpwjvulPVepoI4AjvYq7fDeSKl8gCmrM11ArzAu/cn3HKspdrUnwaMUSkzSF0oKK",
+	"vF0dQFm9hjxi8pXzGXnAMIlaQOx0VAnETYdUmDWXauC/oFFzCfGmi0UjxkWqXvVoDBr4WewdcQe4GtLo",
+	"YtmISY7crHFfsTqITaMAaDZoXErpac8UOmP3Vo0L5n4tG3WiQgcFCHjTR7KdPiYQb/qaNGFCD9gzavIj",
+	"NGbKJNbJlnE/2o0p466AWARSCkGysRbNCNbKcIKRD8p1UYWv1cAwffyZQ7opCIRBQGNBMAVBlLOy/Qni",
+	"K1CqEoddtKrybo5Fn9qjH6Q/5ddHrkC99xEPokE1BM0qVJFFV+Up23nuSKQJRj+QeowMQXWWbqeP+tnM",
+	"p1Nd3lCvEPUjMY2kG1CJztOjR6YTC5oxpR0n7SbXjqhGze2oQANSDwISw+yR9acifb5eBEmZCRHizOjT",
+	"Jp+hA5Wt7Pugs9i0FeqiY4t3RS+Kz/ZIfiFdbv5ZP3HPOzbhZVKpg91pEzgH8nLK8zPZfFZl4J6ftVSq",
+	"716Lf2SQFufTJLNfpmiBBLVJiEEa5QzSCCUQ8/aAytaM2JMzXiGc1AEaQbOTOaERwbBiHmzNKaxeJoef",
+	"3j1iubxbY6X6+vBBLBYXjGazpRjZz/EX1C4JcUeuvgOXUUhygf3YM+dJEgG1P5m96MFGJa7prFU6um8F",
+	"02ytPfRz1uOy21fgCRZn0sUddAj1qHzCaOWRVj/KPX0s/tE3VNVTC7gLHaGJXpKPnaJWzje7sdWdBZzs",
+	"2zSCnzmkGKTpRs+aTPeUklvJyp4K5XUjPErSTib4jRz3Lcq1hWwTKOxcDHNMRTCDQ1zi4yOPcAkQD2ou",
+	"KgA61Lz0C28J0WMl2q4MxUNGu+KccbKKNIl1lXSnj6qism/EK0zJAZWqpj9CZergq0fUSw7fYSGLp0KZ",
+	"rPRX9Qw7Up42zGW1Z286koKVnT7K//+CcPKkfxZURTJ7H7G5zuVWfPE+M60b2wnLLtdIWw0Pb3lNP/zm",
+	"kcG633ooWui7Oc61ez3rorZJsr6BC5BG+sRsVTGDqSI5VTXXxByhfPsuI1GvIY9SCbRXzwhwEl0Xst7d",
+	"EMGVDXWjcechimY6fmu3ZptI795JrKzZdMzXRm6AZIUwYlzemxDuRAyFAABpKlXVj5F+gU4flzOE4HSj",
+	"1NkD4kuEXQNJiQMt6p6FCUVFDVmUY5DzJcRcXhWz0X197NKWg58zwVX1UlmhYOaQlARMzW7vlu2YChWZ",
+	"zGRJPlHoc3Fyt/EMAbH9bnQnRnbxRj4ydbvjmzeyVbS+izciafdYvJFcn/sgb+SjIsNj9kYEiAf1RhQA",
+	"zd5ISmKTCenqk3hyyNgmswFGo+k9VwpMb+FHuLtBfBmBaI4o4zN1a9c0uIvU7c5In4c2obpKtNNHFe/t",
+	"63WEKTZgltlw8rF5HZZKbEZbWCtC5erzYdEDpLBbbC+Q8wgqum0J7Fgy8Q5pOul4F3ltNEgXJE5Oba59",
+	"VvTmnSm7pVnX0gW5uLQp3XP78a36dpc6qnHpNr11A3lOMVN2m/bz3jttBKfG1FPGc0ZJkqua+ZeFixTF",
+	"ZHWHsOquvz/7Tsxn9x0VB6a9jQ523hrBh60sPKl1HaQoUnE6FwjXIgSjS47yAJvJsRf17ZPc2u2idKNs",
+	"EaUzxBFYoSOJrmC50mlEgEoWJg+WCPZOVH/mMN8jJRmRKZAcXVxGxHZAjGL3dHuRzumj/VnoVYcGa1Wr",
+	"EiKlo+5vEBbLTo6iBKJWVB7IkLwAHKRk4Twv1WZQ6i8i5xPXspQyOkX4HiYRJ5JK7W5HJ3lLMp0thmIR",
+	"fancsONUbsIYEopCxW8Fx4JohdgK8HgJk0j1cVVReflGI4sAjhBegxTVaacBdRUSgAg4AMv6CvduvHMA",
+	"lWhRiCtzvjy9A/G9sI4xTIXRTPIGFvypGKsaLU+68sTn2cPDw0wK2JymEMckUW14uhFlZeFezFHn1RCq",
+	"BkpZpqy12waz9rvReMxvqh5gq4vbm1eRpB91mnP5PJiC4/ff9weH8hcFwiMupKAK+EvAKhRcynKr0Jvs",
+	"oCRIbKaPT0/nUmbOlwG6FGwtX4arMzIuyCpLIYfi+wszuFNMSbd8HxoCr6kJYro76FiR9e/OnlfpVvm9",
+	"QgD99OqVoVbtXqjm5cwI2d/gXeSQxslkOllCkOgI3RtSdCMvICzD9HQIgjMnHxVHKWSr8uiVzyassIIO",
+	"p0VR7d4Y1MAYYtIGvjBEW7QXiwvSbeEIKaFOJRrqRbR8mkA+UjDZjb1SfQChkwwe0djP+VITfuMJWU5R",
+	"kt3hF9dw3yNZU5iozkWsRL8N9HIrdD7CJraltgLiWD9J2koxmlaCAvQnuEBYfClPc9JF/NyUhYwk4YyS",
+	"NUog7SRiWl5VeDqQikNYVkKgRa7tR0IjzT6+0juAsHmjwcvTRAaq7qAQg5S3CRvZRMppYtiJYBoNQGV8",
+	"ORxYo3AVFRS68feZsGhmypM6zuRz6bmTxuC50bvVssY9yxQDSINZ1rUg0Y2OOrKynWbcF21qsjgy+C4V",
+	"x7UZvH+62UHqR+7LbGkMl8TmK6T/LKfXIXcVBW1yT872rM40rViQCxo0njmGD8WfbZh9BaEKsiteUre6",
+	"988+50VUTnOQObMB2SiVXSo2pTW03X07F5kOe00VG57YPbR9VRI/hXrcuxAcFGkdUDUxRELGKjZ2Wn7z",
+	"vTZsXg2/9e/T895/cqlDmPPavrjUYfBL7/GpnSrlKja65o5cBLphwhhgFReX7ZthxDIYozmCiRud+zGi",
+	"ehqAI7jK+CZKEePRwxLiCBOsHFBBbYSifx5KApsXpPSFxjmCNFLWddli/SpZUiYnijPwTxxhcXQvvYpJ",
+	"w6WaqNoZ9fTReyvpqUk4Vym1f3st72GmPfNVo6p04sorkGUIL/7f//m/Xw5h2RTD/uB0Udah5GHrTJ3Q",
+	"T1IuBflhDOI/LfJ+p7F6l63B4lcDHBCKd9O25YteSbv2wVcJXGWEQxxvZEfjHfkKtY/a7Tl6Fni/rs7A",
+	"16FKyVwMzGG6iSjMUrBR2bciDUzlOzGS0Z6HokbyWgtFC4RBGsXOG7pijZVwbxCLGEdpGtEcYzElodED",
+	"QFz8OCc0+o3Qe0gjCmOyhnTTnNFzICul9AzvOWc++wWaplo5g4lcDUQJms+hNPRMA/r+PoHapwuN2Gli",
+	"yoPUYzwwidgGx2MzaEI3M5o3hIkv6eYmx4fnz09HQeqZIBMmDkMjziXp2vR0Txlfk5ruSVa/qnyDv7pD",
+	"YxmFUpgw5FdlDCer4hXK7raPfb/hC7KASo+d1AUAAYeMS0mEY5QidQCCs51DkEmqk28G0pEZSKaCKXRa",
+	"SvDjLQ0o97Hj1s4veibXWz/a+vZ3YAWTG+1wHrYyycVXG5W5Y/df7X7A+7U4KpFVf/I9ffSf7n461VcR",
+	"uxL2tb252F4BX3ol/Ovoa3RETKPPoo1fzBW6rqzi8dfX15KxoOAx2ef00T5w/3TqXOqdpeAOpjMdYenK",
+	"ZU6M6434/q36/ABcF1igeMn/6+DoGmQflrdrgWrmdfeuhKQ8E9vrzP1GWuyG8Q00h1KgxlpUXMnJzEXY",
+	"ynLZPiTDAFnwjf93zP9Hw/N9+Pw4OPugdvGAnJBJtM04hbBDIMSYfB/E8N3HMNzltu2koOtMzI7ZjxGR",
+	"r+Gq21J2ZOEkm8tlsgJZMUEEcAyZnJrgdLODa1IDk/c2YbpEkAIaLzfRGjHZ/1WXM9a0PGikDj3FrHOK",
+	"/1f1QTjTf4SpdPcappdknRMaPSxRvHSlwlLG0hWiT6phm685Ge0hZwvKKp7DnbW+Vfka8uIt0KGvFX49",
+	"BSMVXHQtY3O1pEb6j7Y1C87T1BR/2MfbbOuCPV4Cve3asmiUeKlLt+a1WtWuKAU40u9HW3zoAGpYvxbn",
+	"Ir5tavkhzq0YfQnnCKNhZVC7NwprYT1Qcrc39Qeo3ru6SaipQj0AnU8t0cm7lR7RdemI2P8uaOlpdJWW",
+	"BsVVU+f30irN71LElkP0hXru029YwEk9l7FGXgrrDvgZxrn2OO3PLWVMxdwvzRe9+e5lsda+hL1dsong",
+	"LyGXN7Si4rvI4qWas9s9lVuo9ybRQXjvsgSDM/8CMS/d6y++rCe5JRJ2/6bR/C3m+VmP7i3Y+7bj+hrs",
+	"GY2sNqP9VZ6mm4jlsp3MPE+j4nQifTq61KZsoEpi+1rNGWmfN2PFewvkFaEPgMpXmNU9T7gGaV5OpnVh",
+	"iUzK6G4MoeR5X3ZwaHc/pCjAbKND7eS68kbubr8E1iOONQ6JrWu2LUXsuosub26F548/2nIBH8wDhUrL",
+	"QLSkPoW1JU7pkoI5t6aevGilzeEd0W6NMSoB8kOlW6QySwRpVb7slufveYCpKYXc6aP431XydGoJvSVt",
+	"4U9fLN9T/slVJ0eUJgju6yi4wMLS8qixzwOFR7hn8S0odXhp5UBPD1iGE+6wQsVI/SrVrcjPvMKOO2JA",
+	"9Rs9rfhDiuYw3sRNLSzVZcYg2byxX++OR69dgI+DqYvAjkXAwQM8PZjZC5xYAnCvGB+Aq8OBnD3FcQok",
+	"cAowQ7xyh346+f7580ahFOe6yyTmAAkDL1IzEnnHULdpUC72kADRtYotienslYGK1BguLzSbdHVMbszw",
+	"I3DVv8ZkhcZvm1PlnL85kYjQBFL1xIZJj0ccrWAkPoUypPtVO/UhnHTLvQXIu41dTh/1T53DqEZR9GWc",
+	"G7POnklQBUn7EWGUyI/27NvbxQ8RO9WLT40IVp2IDaE9mDA+Kx7VGInqHNNO/7Kw7qRNB3i8rNLkxyzx",
+	"/JIb79u3kIMEcLANlU67Dj4y464ZMwe388rgNNzSlv1W0GqVc2kuHNx7Mwx6UFPP/D5cULYiCZrbBol9",
+	"pYIinYhCIV8EoiRgQD+owpeU5ItlBOS5NJlqowuCUwq5ysLUvTnK6WZUHbVz7j+ai9wu2jjd9BIQzw+V",
+	"+lTtQjjdOEk/IRdkX+WvUSyUbnhPnSlSEt/LgoFS7tcLszb4fzZHb2oSykJFInqqIkmY4JnqC1ppj20e",
+	"9hrSsU2cpH0YrDo/kw2o1O1G0w22XFnQM401QAQJqSj/JH74ANi9fEEFxqglNnwJY5R4GllMcHzS6cbZ",
+	"2NcgzcRuLvXxfEF2j5Jt0sQ3xCX5q7jUL0he8EBhlkt+V10fYpDGebp/60iDzAG734sILMTbtFzLpMNe",
+	"topKwoRYFKeEwZZoWBnza0TkFXlf6Ngmf32b3mcZJWuomrHKTG7IC3NxuTcDKyjdKCxesmBN9pca9k3G",
+	"HULG3TiH9GXKOcmgSnyZdylUl1AcgTxBqj2F7iJqxeA38TZAvAnXzXnEScohwEaXc4YkIxBlKmZ7HGKO",
+	"i8PAgDekCz+YId/8yS1FgcXkl+NTWvqIkARAPZkTxzDbu8DpVUy7vbgZwX+sPDxokNlffljSESogxzHB",
+	"a0gXMHHrHJ1y3zrncNc+YZFtbTCOPthB3yTKthLFovLgIqWfneOk5T2JYhoB6rw6iwDe6F5tgpwdatfy",
+	"CLANjpeUYJKznVxFPcJAF0crxDiKTb2pNHxMamokUbVEzDmk/gJLSWsYAfeo9buK5v3xRqk0vq2T45So",
+	"56bCcumj/Ps3mbSlIFBo/HJMHEUW5YZ//zJ2TqVNA4h5DtJyPk2+hVgvTM6N24RYJMHAi6n8DqSpH7hW",
+	"9daqdyosfLZw+k6dTX/p8xbgHKSyn618PNFvpullClgE5hxSve2ZgmMNqU0bdrGZMOF2fHPJ1Ttv5M6r",
+	"rXZZWuJupa2wyR0b6dUFrcxRyqFu3EthAmS+I2eyLZB5f8QSNjtMG/4MLPQz0+6DdeUX6saWD3t/hMqj",
+	"TP8xKgrB0JYJFHKAMEwihGcgyyKPU+RNrIYCLp9Z6jnuFK5NPDbIeLecQrByZ3upPuj2SNEbwPhMfjG7",
+	"upz0aWzUzn4cfuYK/BmTULa811g+NbURU6WqWnkIjMopoyvVC1XM8qN6mDdFsrtVLo9mDnm8dJu9JICD",
+	"w7dzuc3vxLJ3sr7PPWi1K9OMhuUrqN7NKx9Qb/oRBD4DaVpvHL4F9P48Tb0ZbyBItr6h1fZq1HmaGvZI",
+	"i3Y2PhtJnboC9B4mkQoa78pm+S7wYuntzSvxoWoAX/Oo7d6lmYzt+krHEWi5LOxJhhgW9F7aNG1Hoo9h",
+	"CDE+uv/USaekmTLduQdR5Ttvya17vNeYtt6BCAv7kDQ71RTres+zwtioe525096qlrv9zR1MSRGYcxXf",
+	"18coBJfm7sUV2nafmax+s2Gtn0n/zQ7eoeVbWqvrVeki2lI0kjm8tpVmmt6RBbH2PnMFzW0XmksfHO2N",
+	"5hKcB7rMWYGimXG9oq9juddsgRrtbnOZOjtebg7QapN4OX00P/a54lxaZOgd59/s0sd0zzm8uePgjS/r",
+	"pnM10v413XauMOhOWbL47ZCLz2EyGn7zuR/n/laG/NsN6DG43BLeEV2DrsD05V2FdqSWuQ5trz5ngDKF",
+	"nZEvQVeESV8xwjaMw1WHd61u5UD7ltXOaNpdpzXabJo4xwBHDFLZrFllOtVZ/f77vl+hVVlu/fKs0Cg6",
+	"YFjydRngiM1V+FGAR0HMD+fTGrA9dzajJIaMBUi1chvUnoOipghhhQCfENXJCvKT09G1URo5TScvJqdS",
+	"YOvBj3XtuqsrnBTBZ72C0BL+52/UQ+Q4id5fXV5EKVkgrMKhP716ZaQVc2aSj1dX5zkvwr+arX7O74pW",
+	"2roLtjOPaWkcmEq/qJAgpt5xLL/EVfSSd+GiC3JxGZjuNSV5No1uSAqnpmOodHQg3tRMJfu/Baa6piTJ",
+	"Y0mvgfvk0+qtSjbVUWZZkWklh4vPQK1CdeGKMHN8/6l1sNViVlQ7i1QkXXWJSquZ89eVqQN9YMNbUV0l",
+	"GhexdWZTcxPKFrZNdcZWLaob7wXXCa1xFUgRTWXASKWHp/aix+3tS53hUEkTZwk/oPT06en/BwAA//8=",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

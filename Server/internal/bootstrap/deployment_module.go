@@ -23,15 +23,24 @@ func newDeploymentHandlerOptions(db *gorm.DB, policy *authzinfra.PolicyEngine, a
 	if err != nil {
 		return httpserver.DeploymentHandlerOptions{}, err
 	}
-	executions, err := newExecutionControlService(db, policy, argo)
+	reads, err := newDeploymentReadServices(db, policy)
 	if err != nil {
 		return httpserver.DeploymentHandlerOptions{}, err
 	}
-	reads, err := newDeploymentReadServices(db, policy)
-	return httpserver.DeploymentHandlerOptions{
-		Requests: requests, Workflows: workflows, Executions: executions, History: reads.history,
+	options := httpserver.DeploymentHandlerOptions{
+		Requests: requests, Workflows: workflows, History: reads.history,
 		Notifications: reads.notifications,
-	}, err
+	}
+	return addExecutionControl(db, policy, argo, options)
+}
+
+func addExecutionControl(db *gorm.DB, policy *authzinfra.PolicyEngine, argo *argoinfra.Client, options httpserver.DeploymentHandlerOptions) (httpserver.DeploymentHandlerOptions, error) {
+	if argo == nil {
+		return options, nil
+	}
+	execution, err := newExecutionControlService(db, policy, argo)
+	options.Executions = execution
+	return options, err
 }
 
 func newDeploymentReadServices(db *gorm.DB, policy *authzinfra.PolicyEngine) (deploymentReadServices, error) {

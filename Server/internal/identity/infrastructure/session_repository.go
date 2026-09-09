@@ -89,12 +89,13 @@ type sessionModel struct {
 	IdleExpiresAt          time.Time `gorm:"not null"`
 	AbsoluteExpiresAt      time.Time `gorm:"not null"`
 	RevokedAt              *time.Time
+	AuthenticationMethod   string `gorm:"not null"`
 }
 
 func (sessionModel) TableName() string { return "sessions" }
 func sessionModelFromDomain(session identity.Session) sessionModel {
-	return sessionModel{ID: session.ID, UserID: session.UserID, TokenHash: session.TokenHash, CSRFTokenHash: session.CSRFTokenHash, RefreshTokenCiphertext: session.RefreshTokenCiphertext, IdentityVerifiedAt: session.IdentityVerifiedAt, CreatedAt: session.CreatedAt, LastSeenAt: session.LastSeenAt, IdleExpiresAt: session.IdleExpiresAt, AbsoluteExpiresAt: session.AbsoluteExpiresAt, RevokedAt: session.RevokedAt}
+	return sessionModel{ID: session.ID, UserID: session.UserID, TokenHash: session.TokenHash, CSRFTokenHash: session.CSRFTokenHash, RefreshTokenCiphertext: session.RefreshTokenCiphertext, IdentityVerifiedAt: session.IdentityVerifiedAt, CreatedAt: session.CreatedAt, LastSeenAt: session.LastSeenAt, IdleExpiresAt: session.IdleExpiresAt, AbsoluteExpiresAt: session.AbsoluteExpiresAt, RevokedAt: session.RevokedAt, AuthenticationMethod: session.AuthenticationMethod}
 }
 func (m sessionModel) toDomain() identity.Session {
-	return identity.Session{ID: m.ID, UserID: m.UserID, TokenHash: m.TokenHash, CSRFTokenHash: m.CSRFTokenHash, RefreshTokenCiphertext: m.RefreshTokenCiphertext, IdentityVerifiedAt: m.IdentityVerifiedAt, CreatedAt: m.CreatedAt, LastSeenAt: m.LastSeenAt, IdleExpiresAt: m.IdleExpiresAt, AbsoluteExpiresAt: m.AbsoluteExpiresAt, RevokedAt: m.RevokedAt}
+	return identity.Session{ID: m.ID, UserID: m.UserID, TokenHash: m.TokenHash, CSRFTokenHash: m.CSRFTokenHash, RefreshTokenCiphertext: m.RefreshTokenCiphertext, IdentityVerifiedAt: m.IdentityVerifiedAt, CreatedAt: m.CreatedAt, LastSeenAt: m.LastSeenAt, IdleExpiresAt: m.IdleExpiresAt, AbsoluteExpiresAt: m.AbsoluteExpiresAt, RevokedAt: m.RevokedAt, AuthenticationMethod: m.AuthenticationMethod}
 }

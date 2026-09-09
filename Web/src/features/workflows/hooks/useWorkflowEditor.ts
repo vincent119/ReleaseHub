@@ -99,6 +99,7 @@ function addState(graph: WorkflowGraph): WorkflowGraph {
   }
   const node: WorkflowNode = {
     id: key,
+    type: 'workflowState',
     position: {
       x: 80 + graph.nodes.length * 32,
       y: 80 + graph.nodes.length * 24,

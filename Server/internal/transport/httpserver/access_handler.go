@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 
 	authzapp "github.com/vincent119/ReleaseHub/Server/internal/authorization/application"
+	identityapp "github.com/vincent119/ReleaseHub/Server/internal/identity/application"
 	identity "github.com/vincent119/ReleaseHub/Server/internal/identity/domain"
 	contract "github.com/vincent119/ReleaseHub/Server/internal/transport/openapi"
 )
@@ -22,103 +23,86 @@ type accessManagementService interface {
 	CreateBinding(context.Context, authzapp.AccessPrincipal, authzapp.AccessMutation, authzapp.CreateBindingInput) (authzapp.AccessBinding, error)
 	CreateDeny(context.Context, authzapp.AccessPrincipal, authzapp.AccessMutation, authzapp.CreateDenyInput) (authzapp.AccessDeny, error)
 	DisableUser(context.Context, authzapp.AccessPrincipal, authzapp.AccessMutation, uuid.UUID) error
+	Capabilities(context.Context, authzapp.AccessPrincipal) (authzapp.AccessCapabilities, error)
+	ListUsers(context.Context, authzapp.AccessPrincipal, string, string, string, int) (authzapp.AccessListPage[authzapp.AccessUser], error)
+	ListGroups(context.Context, authzapp.AccessPrincipal, string, string, string, int) (authzapp.AccessListPage[authzapp.AccessGroup], error)
+	ListRoles(context.Context, authzapp.AccessPrincipal, string, string, string, int) (authzapp.AccessListPage[authzapp.AccessRole], error)
+	ListMemberships(context.Context, authzapp.AccessPrincipal, *uuid.UUID, *uuid.UUID, string, string, int) (authzapp.AccessListPage[authzapp.AccessMembership], error)
+	ListBindings(context.Context, authzapp.AccessPrincipal, string, string, int) (authzapp.AccessListPage[authzapp.AccessBinding], error)
+	ListDenies(context.Context, authzapp.AccessPrincipal, string, string, int) (authzapp.AccessListPage[authzapp.AccessDeny], error)
+	MembershipCandidates(context.Context, authzapp.AccessPrincipal, uuid.UUID, string, int) ([]authzapp.AccessUser, error)
+	ScopeOptions(context.Context, authzapp.AccessPrincipal, string, string) (authzapp.AccessScopeOptions, error)
+	RevokeMembership(context.Context, authzapp.AccessPrincipal, authzapp.AccessMutation, uuid.UUID) error
+	DisableRole(context.Context, authzapp.AccessPrincipal, authzapp.AccessMutation, uuid.UUID) error
+	RevokeBinding(context.Context, authzapp.AccessPrincipal, authzapp.AccessMutation, uuid.UUID) error
+	RevokeDeny(context.Context, authzapp.AccessPrincipal, authzapp.AccessMutation, uuid.UUID) error
+}
+
+type localUserCreator interface {
+	CreateUser(context.Context, uuid.UUID, string, string, string) (identity.User, error)
 }
 
 type accessHandler struct {
-	authn   *authHandler
-	service accessManagementService
+	authn      *authHandler
+	service    accessManagementService
+	localUsers localUserCreator
 }
 
-// GetAccessManagementSnapshot returns the access records the current administrator may manage.
-func (h *accessHandler) GetAccessManagementSnapshot(c *gin.Context) {
-	_, user, ok := h.authn.authenticate(c)
+// CreateAccessUser creates one local identity and first-login credential after fresh platform authorization.
+func (h *accessHandler) CreateAccessUser(c *gin.Context, params contract.CreateAccessUserParams) {
+	_, actor, ok := h.authn.authenticateMutation(c, string(params.XCSRFToken))
 	if !ok {
 		return
 	}
-	if h.service == nil {
-		respondError(c, http.StatusServiceUnavailable, "ACCESS_MANAGEMENT_UNAVAILABLE", "Access management is unavailable")
+	if h.localUsers == nil {
+		respondError(c, http.StatusServiceUnavailable, "LOCAL_USER_CREATION_UNAVAILABLE", "Local user creation is unavailable")
 		return
 	}
-	value, err := h.service.Load(c.Request.Context(), authzapp.AccessPrincipal{UserID: user.ID, Disabled: user.Disabled})
+	var body contract.CreateAccessUserRequest
+	if err := c.ShouldBindJSON(&body); err != nil || len(body.InitialPassword) < 8 || len(body.InitialPassword) > 72 {
+		respondError(c, http.StatusBadRequest, "INVALID_REQUEST", "Local user request is invalid")
+		return
+	}
+	user, ok := h.createLocalUser(c, actor, body)
+	if !ok {
+		return
+	}
+	c.JSON(http.StatusCreated, contract.AccessUserResponse{Data: contract.AccessUser{Id: user.ID, Username: user.Username, Disabled: false, AllowedActions: []contract.AccessAction{contract.AccessAction("disable")}}, Meta: responseMeta(c)})
+}
+
+func (h *accessHandler) createLocalUser(c *gin.Context, actor identity.User, body contract.CreateAccessUserRequest) (identity.User, bool) {
+	capabilities, err := h.service.Capabilities(c.Request.Context(), accessPrincipal(actor))
+	if err != nil || !collectionCanCreate(capabilities, "users") {
+		respondError(c, http.StatusNotFound, "ACCESS_MANAGEMENT_NOT_FOUND", "Access management resource was not found")
+		return identity.User{}, false
+	}
+	user, err := h.localUsers.CreateUser(c.Request.Context(), actor.ID, c.GetHeader(requestIDHeader), body.Username, body.InitialPassword)
 	if err != nil {
-		respondAccessReadError(c, err)
+		respondLocalUserCreateError(c, err)
+		return identity.User{}, false
+	}
+	return user, true
+}
+
+func respondLocalUserCreateError(c *gin.Context, err error) {
+	if errors.Is(err, identityapp.ErrInvalidLocalUser) {
+		respondError(c, http.StatusBadRequest, "INVALID_REQUEST", "Local user request is invalid")
 		return
 	}
-	c.JSON(http.StatusOK, contract.AccessManagementSnapshotResponse{Data: accessSnapshotResponse(value), Meta: responseMeta(c)})
-}
-
-func respondAccessReadError(c *gin.Context, err error) {
-	if errors.Is(err, authzapp.ErrAccessManagementNotFound) {
-		respondError(c, http.StatusNotFound, "ACCESS_MANAGEMENT_NOT_FOUND", "Access management was not found")
+	if errors.Is(err, identityapp.ErrLocalUsernameConflict) {
+		respondError(c, http.StatusConflict, "ACCESS_USERNAME_CONFLICT", "The username is unavailable")
 		return
 	}
-	respondError(c, http.StatusInternalServerError, "ACCESS_MANAGEMENT_READ_FAILED", "Unable to read access management")
+	respondError(c, http.StatusInternalServerError, "ACCESS_USER_CREATE_FAILED", "Unable to create local user")
 }
 
-func accessSnapshotResponse(value authzapp.AccessSnapshot) contract.AccessManagementSnapshot {
-	return contract.AccessManagementSnapshot{
-		CanManagePlatform: value.CanManagePlatform, ManagedProjectIds: value.ManagedProjects,
-		Users: accessUsersResponse(value.Users), Groups: accessGroupsResponse(value.Groups),
-		Roles: accessRolesResponse(value.Roles), Permissions: accessPermissionsResponse(value.Permissions),
-		Memberships: accessMembershipsResponse(value.Memberships), Bindings: accessBindingsResponse(value.Bindings),
-		Denies: accessDeniesResponse(value.Denies),
+func collectionCanCreate(value authzapp.AccessCapabilities, key string) bool {
+	for _, collection := range value.Collections {
+		if collection.Key == key {
+			return collection.Visible && collection.CanCreate
+		}
 	}
-}
-
-func accessUsersResponse(values []authzapp.AccessUser) []contract.AccessUser {
-	result := make([]contract.AccessUser, 0, len(values))
-	for _, value := range values {
-		result = append(result, contract.AccessUser{Id: value.ID, Username: value.Username, Disabled: value.DisabledAt != nil})
-	}
-	return result
-}
-
-func accessGroupsResponse(values []authzapp.AccessGroup) []contract.AccessGroup {
-	result := make([]contract.AccessGroup, 0, len(values))
-	for _, value := range values {
-		result = append(result, accessGroupResponse(value))
-	}
-	return result
-}
-
-func accessRolesResponse(values []authzapp.AccessRole) []contract.AccessRole {
-	result := make([]contract.AccessRole, 0, len(values))
-	for _, value := range values {
-		result = append(result, accessRoleResponse(value))
-	}
-	return result
-}
-
-func accessPermissionsResponse(values []authzapp.AccessPermission) []contract.AccessPermission {
-	result := make([]contract.AccessPermission, 0, len(values))
-	for _, value := range values {
-		result = append(result, contract.AccessPermission{Key: value.Key, PlatformOnly: value.PlatformOnly, ProjectRoleDelegable: value.ProjectRoleDelegable})
-	}
-	return result
-}
-
-func accessMembershipsResponse(values []authzapp.AccessMembership) []contract.AccessMembership {
-	result := make([]contract.AccessMembership, 0, len(values))
-	for _, value := range values {
-		result = append(result, accessMembershipResponse(value))
-	}
-	return result
-}
-
-func accessBindingsResponse(values []authzapp.AccessBinding) []contract.AccessBinding {
-	result := make([]contract.AccessBinding, 0, len(values))
-	for _, value := range values {
-		result = append(result, accessBindingResponse(value))
-	}
-	return result
-}
-
-func accessDeniesResponse(values []authzapp.AccessDeny) []contract.AccessDeny {
-	result := make([]contract.AccessDeny, 0, len(values))
-	for _, value := range values {
-		result = append(result, accessDenyResponse(value))
-	}
-	return result
+	return false
 }
 
 // CreateAccessGroup creates a Group after mutation and authorization validation.
@@ -198,7 +182,7 @@ func (h *accessHandler) CreateAccessBinding(c *gin.Context, params contract.Crea
 		respondError(c, http.StatusBadRequest, "INVALID_REQUEST", "Role binding request is invalid")
 		return
 	}
-	value, err := h.service.CreateBinding(c.Request.Context(), accessPrincipal(user), accessMutation(c), authzapp.CreateBindingInput{GroupID: body.GroupId, RoleID: body.RoleId, OrganizationID: body.OrganizationId, ScopeKind: string(body.ScopeKind), ProjectID: body.ProjectId, EnvironmentID: body.EnvironmentId, ApplicationID: body.ApplicationId})
+	value, err := h.service.CreateBinding(c.Request.Context(), accessPrincipal(user), accessMutation(c), authzapp.CreateBindingInput{GroupID: body.GroupId, RoleID: body.RoleId, OrganizationID: accessUUIDValue(body.OrganizationId), ScopeKind: string(body.ScopeKind), ProjectID: accessUUIDValue(body.ProjectId), EnvironmentID: body.EnvironmentId, ApplicationID: body.ApplicationId})
 	if !h.respondAccessMutationError(c, err) {
 		return
 	}
@@ -216,7 +200,7 @@ func (h *accessHandler) CreateAccessDeny(c *gin.Context, params contract.CreateA
 		respondError(c, http.StatusBadRequest, "INVALID_REQUEST", "Deny policy request is invalid")
 		return
 	}
-	value, err := h.service.CreateDeny(c.Request.Context(), accessPrincipal(user), accessMutation(c), authzapp.CreateDenyInput{GroupID: body.GroupId, Permission: body.Permission, OrganizationID: body.OrganizationId, ScopeKind: string(body.ScopeKind), ProjectID: body.ProjectId, EnvironmentID: body.EnvironmentId, ApplicationID: body.ApplicationId})
+	value, err := h.service.CreateDeny(c.Request.Context(), accessPrincipal(user), accessMutation(c), authzapp.CreateDenyInput{GroupID: body.GroupId, Permission: body.Permission, OrganizationID: accessUUIDValue(body.OrganizationId), ScopeKind: string(body.ScopeKind), ProjectID: accessUUIDValue(body.ProjectId), EnvironmentID: body.EnvironmentId, ApplicationID: body.ApplicationId})
 	if !h.respondAccessMutationError(c, err) {
 		return
 	}
@@ -235,42 +219,79 @@ func (h *accessHandler) DisableAccessUser(c *gin.Context, userID uuid.UUID, para
 	c.Status(http.StatusNoContent)
 }
 
+// RevokeAccessMembership revokes one active manual Group membership.
+func (h *accessHandler) RevokeAccessMembership(c *gin.Context, membershipID uuid.UUID, params contract.RevokeAccessMembershipParams) {
+	_, user, ok := h.authn.authenticateMutation(c, string(params.XCSRFToken))
+	if !ok {
+		return
+	}
+	if !h.respondAccessMutationError(c, h.service.RevokeMembership(c.Request.Context(), accessPrincipal(user), accessMutation(c), membershipID)) {
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
+// DisableAccessRole disables one active custom Role.
+func (h *accessHandler) DisableAccessRole(c *gin.Context, roleID uuid.UUID, params contract.DisableAccessRoleParams) {
+	_, user, ok := h.authn.authenticateMutation(c, string(params.XCSRFToken))
+	if !ok {
+		return
+	}
+	if !h.respondAccessMutationError(c, h.service.DisableRole(c.Request.Context(), accessPrincipal(user), accessMutation(c), roleID)) {
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
+// RevokeAccessBinding revokes one active Role binding.
+func (h *accessHandler) RevokeAccessBinding(c *gin.Context, bindingID uuid.UUID, params contract.RevokeAccessBindingParams) {
+	_, user, ok := h.authn.authenticateMutation(c, string(params.XCSRFToken))
+	if !ok {
+		return
+	}
+	if !h.respondAccessMutationError(c, h.service.RevokeBinding(c.Request.Context(), accessPrincipal(user), accessMutation(c), bindingID)) {
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
+// RevokeAccessDeny revokes one active explicit deny policy.
+func (h *accessHandler) RevokeAccessDeny(c *gin.Context, denyID uuid.UUID, params contract.RevokeAccessDenyParams) {
+	_, user, ok := h.authn.authenticateMutation(c, string(params.XCSRFToken))
+	if !ok {
+		return
+	}
+	if !h.respondAccessMutationError(c, h.service.RevokeDeny(c.Request.Context(), accessPrincipal(user), accessMutation(c), denyID)) {
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
+type accessErrorMapping struct {
+	target        error
+	status        int
+	code, message string
+}
+
+var accessMutationErrors = []accessErrorMapping{
+	{authzapp.ErrAccessManagementNotFound, http.StatusNotFound, "ACCESS_MANAGEMENT_NOT_FOUND", "Access management resource was not found"},
+	{authzapp.ErrInvalidAccessRequest, http.StatusBadRequest, "INVALID_REQUEST", "Access management request is invalid"},
+	{authzapp.ErrSelfDisable, http.StatusConflict, "ACCESS_SELF_DISABLE_FORBIDDEN", "Administrators cannot disable their own account"},
+	{authzapp.ErrLastPlatformManager, http.StatusConflict, "ACCESS_LAST_PLATFORM_MANAGER", "The last platform-management path cannot be removed"},
+	{authzapp.ErrProtectedAccessResource, http.StatusConflict, "ACCESS_RESOURCE_PROTECTED", "The access-management resource is system managed"},
+	{authzapp.ErrAccessManagementConflict, http.StatusConflict, "ACCESS_MANAGEMENT_CONFLICT", "The access-management resource is no longer active"},
+}
+
 func (h *accessHandler) respondAccessMutationError(c *gin.Context, err error) bool {
 	if err == nil {
 		return true
 	}
-	if errors.Is(err, authzapp.ErrAccessManagementNotFound) {
-		respondError(c, http.StatusNotFound, "ACCESS_MANAGEMENT_NOT_FOUND", "Access management resource was not found")
-		return false
+	for _, mapping := range accessMutationErrors {
+		if errors.Is(err, mapping.target) {
+			respondError(c, mapping.status, mapping.code, mapping.message)
+			return false
+		}
 	}
-	respondError(c, http.StatusConflict, "ACCESS_MANAGEMENT_MUTATION_REJECTED", "Access management change was rejected")
+	respondError(c, http.StatusInternalServerError, "ACCESS_MANAGEMENT_MUTATION_FAILED", "Unable to apply the access management change")
 	return false
-}
-
-func accessPrincipal(user identity.User) authzapp.AccessPrincipal {
-	return authzapp.AccessPrincipal{UserID: user.ID, Disabled: user.Disabled}
-}
-
-func accessMutation(c *gin.Context) authzapp.AccessMutation {
-	return authzapp.AccessMutation{RequestID: c.GetHeader(requestIDHeader)}
-}
-
-func accessGroupResponse(value authzapp.AccessGroup) contract.AccessGroup {
-	return contract.AccessGroup{Id: value.ID, OwnerKind: contract.AccessGroupOwnerKind(value.OwnerKind), OwnerId: value.OwnerID, Name: value.Name, OidcViewerOnly: value.OIDCViewerOnly, Disabled: value.DisabledAt != nil}
-}
-
-func accessRoleResponse(value authzapp.AccessRole) contract.AccessRole {
-	return contract.AccessRole{Id: value.ID, OwnerKind: contract.AccessRoleOwnerKind(value.OwnerKind), OwnerId: value.OwnerID, Name: value.Name, SystemKey: value.SystemKey, Active: value.Active, Permissions: value.Permissions}
-}
-
-func accessMembershipResponse(value authzapp.AccessMembership) contract.AccessMembership {
-	return contract.AccessMembership{Id: value.ID, GroupId: value.GroupID, UserId: value.UserID, Source: contract.AccessMembershipSource(value.Source), Active: value.Active}
-}
-
-func accessBindingResponse(value authzapp.AccessBinding) contract.AccessBinding {
-	return contract.AccessBinding{Id: value.ID, GroupId: value.GroupID, RoleId: value.RoleID, OrganizationId: value.OrganizationID, ScopeKind: contract.AccessBindingScopeKind(value.ScopeKind), ProjectId: value.ProjectID, EnvironmentId: value.EnvironmentID, ApplicationId: value.ApplicationID, Active: value.Active}
-}
-
-func accessDenyResponse(value authzapp.AccessDeny) contract.AccessDeny {
-	return contract.AccessDeny{Id: value.ID, GroupId: value.GroupID, Permission: value.Permission, OrganizationId: value.OrganizationID, ScopeKind: contract.AccessDenyScopeKind(value.ScopeKind), ProjectId: value.ProjectID, EnvironmentId: value.EnvironmentID, ApplicationId: value.ApplicationID, Active: value.Active}
 }

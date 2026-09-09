@@ -1,3 +1,5 @@
+manager_password: ""
+
 runtime:
   shutdown_timeout: 30s
 

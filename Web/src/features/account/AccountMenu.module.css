@@ -1,0 +1,53 @@
+.accountTrigger {
+  height: 2.5rem;
+  padding-inline: var(--rh-space-2);
+  color: var(--rh-color-text-primary);
+  border-radius: var(--rh-radius-control);
+}
+
+.accountTrigger:hover,
+.accountTrigger:focus-visible {
+  color: var(--rh-color-text-primary) !important;
+  background: var(--rh-color-surface-elevated) !important;
+}
+
+.avatar {
+  color: var(--rh-color-primary-contrast);
+  background: var(--rh-color-primary);
+  font-weight: 650;
+}
+
+.accountUsername {
+  max-width: 12rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chevron {
+  color: var(--rh-color-text-secondary);
+  font-size: 0.625rem;
+}
+
+.themeSettings {
+  width: min(22rem, calc(100vw - 3rem));
+  padding-block: var(--rh-space-1);
+}
+
+.userId {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+@media (max-width: 47.99rem) {
+  .accountUsername,
+  .chevron {
+    display: none;
+  }
+
+  .accountTrigger {
+    width: 2.5rem;
+    padding-inline: 0;
+  }
+}

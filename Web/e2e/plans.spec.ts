@@ -99,6 +99,57 @@ test('建立 A/C 到 B 的 Plan 並綁定已發布版本', async ({ context, pag
     })
 })
 
+for (const theme of ['light', 'dark'] as const) {
+  test(`${theme} 主題 Plan Graph 使用共用 Surface`, async ({ page }) => {
+    await page.addInitScript((resolvedTheme) => {
+      localStorage.setItem('releasehub.language', 'zh-TW')
+      localStorage.setItem('releasehub.theme', resolvedTheme)
+    }, theme)
+    await mockSession(page)
+    await mockResources(page)
+    await mockWorkflows(page)
+    await page.route('**/api/v1/deployment-plans**', (route) =>
+      route.fulfill(json({ data: [], meta: meta() })),
+    )
+    await page.route('**/api/v1/deployment-bindings**', (route) =>
+      route.fulfill(json({ data: null, meta: meta() })),
+    )
+
+    await page.goto('/plans')
+    await page.getByLabel('選擇 Project').click()
+    await page.getByText('Organization A / Project A').click()
+    await page.getByRole('button', { name: '建立 Plan' }).click()
+    await page.getByRole('button', { name: '新增 Application' }).click()
+
+    const canvas = page.getByLabel('Deployment Plan 圖形編輯區')
+    const nodes = canvas.locator('.react-flow__node-default')
+    await expect(nodes.first()).toBeVisible()
+    const node = nodes.first()
+    const styles = await node.evaluate((element) => {
+      const nodeStyle = getComputedStyle(element)
+      const canvasStyle = getComputedStyle(element.closest('[aria-label]')!)
+      return {
+        color: nodeStyle.color,
+        background: nodeStyle.backgroundColor,
+        canvasBackground: canvasStyle.backgroundImage,
+      }
+    })
+    expect(styles.color).not.toBe(styles.background)
+    expect(styles.background).not.toBe('rgb(0, 0, 0)')
+    if (theme === 'dark') {
+      expect(styles.background).not.toBe('rgb(255, 255, 255)')
+      expect(styles.canvasBackground).toContain('radial-gradient')
+    } else {
+      expect(styles.canvasBackground).toBe('none')
+    }
+
+    await node.click()
+    await expect(
+      page.getByText('Application 設定', { exact: true }),
+    ).toBeVisible()
+  })
+}
+
 async function addDependency(page: Page, source: string, target: string) {
   await page.getByRole('button', { name: '新增相依關係' }).click()
   const dialog = page.getByRole('dialog', {

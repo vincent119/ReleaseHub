@@ -13,11 +13,13 @@ import (
 type SystemHandlerOptions struct {
 	Version     string
 	TenancyMode string
+	OIDCEnabled bool
 }
 
 // AuthHandlerOptions configures authentication delivery behavior.
 type AuthHandlerOptions struct {
 	Flow           authFlow
+	Local          localAuth
 	WebRedirectURL string
 	CookieSecure   bool
 	LoginStateTTL  time.Duration
@@ -38,7 +40,8 @@ type ArgoCDHandlerOptions struct {
 
 // AccessHandlerOptions supplies authorization management ports.
 type AccessHandlerOptions struct {
-	Service accessManagementService
+	Service    accessManagementService
+	LocalUsers localUserCreator
 }
 
 // WorkflowHandlerOptions supplies release workflow application ports.
@@ -87,6 +90,7 @@ type apiHandler struct {
 type systemHandler struct {
 	version     string
 	tenancyMode string
+	oidcEnabled bool
 }
 
 // NewAPIHandler composes bounded-context handlers behind the generated contract.
@@ -96,19 +100,22 @@ func NewAPIHandler(options APIOptions) contract.ServerInterface {
 		authHandler:     authn,
 		catalogHandler:  &catalogHandler{authn: authn, service: options.Catalog.Service, statusReader: options.Catalog.StatusReader},
 		argoCDHandler:   &argoCDHandler{authn: authn, onboarding: options.ArgoCD.Onboarding, candidates: options.ArgoCD.Candidates},
-		accessHandler:   &accessHandler{authn: authn, service: options.Access.Service},
+		accessHandler:   &accessHandler{authn: authn, service: options.Access.Service, localUsers: options.Access.LocalUsers},
 		workflowHandler: &workflowHandler{authn: authn, definitions: options.Workflow.Definitions},
 		planHandler:     &planHandler{authn: authn, definitions: options.Plan.Definitions, bindings: options.Plan.Bindings},
 		deploymentHandler: &deploymentHandler{authn: authn, requests: options.Deployment.Requests,
 			workflows: options.Deployment.Workflows, executions: options.Deployment.Executions,
 			history: options.Deployment.History, notifications: options.Deployment.Notifications},
-		systemHandler: &systemHandler{version: options.System.Version, tenancyMode: options.System.TenancyMode},
+		systemHandler: &systemHandler{
+			version: options.System.Version, tenancyMode: options.System.TenancyMode,
+			oidcEnabled: options.System.OIDCEnabled,
+		},
 	}
 }
 
 func newAuthHandler(options AuthHandlerOptions) *authHandler {
 	return &authHandler{
-		flow: options.Flow, webRedirectURL: options.WebRedirectURL,
+		flow: options.Flow, local: options.Local, webRedirectURL: options.WebRedirectURL,
 		cookieSecure: options.CookieSecure, loginStateTTL: options.LoginStateTTL,
 		sessionTTL: options.SessionTTL,
 	}
@@ -117,7 +124,7 @@ func newAuthHandler(options AuthHandlerOptions) *authHandler {
 func (h *systemHandler) GetSystemStatus(c *gin.Context) {
 	c.JSON(http.StatusOK, contract.SystemStatusResponse{
 		Data: contract.SystemStatus{
-			Name: "ReleaseHub", Version: h.version,
+			Name: "ReleaseHub", Version: h.version, OidcEnabled: h.oidcEnabled,
 			TenancyMode: contract.SystemStatusTenancyMode(h.normalizedTenancyMode()),
 		},
 		Meta: responseMeta(c),

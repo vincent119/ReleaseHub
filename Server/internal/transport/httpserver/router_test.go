@@ -20,6 +20,7 @@ import (
 	authzapp "github.com/vincent119/ReleaseHub/Server/internal/authorization/application"
 	catalogapp "github.com/vincent119/ReleaseHub/Server/internal/catalog/application"
 	catalog "github.com/vincent119/ReleaseHub/Server/internal/catalog/domain"
+	identityapp "github.com/vincent119/ReleaseHub/Server/internal/identity/application"
 	identity "github.com/vincent119/ReleaseHub/Server/internal/identity/domain"
 	"github.com/vincent119/ReleaseHub/Server/internal/observability"
 	"github.com/vincent119/ReleaseHub/Server/internal/transport/httpserver"
@@ -34,6 +35,84 @@ func TestAuthDefaultDenyWithoutSession(t *testing.T) {
 	}
 	if !strings.Contains(response.Body.String(), `"code":"SESSION_REQUIRED"`) {
 		t.Fatalf("unexpected response: %s", response.Body.String())
+	}
+}
+
+func TestSystemStatusReportsOIDCCapability(t *testing.T) {
+	options := testAPIOptions(&fakeAuthFlow{})
+	options.System.OIDCEnabled = true
+	router := newTestRouterFromOptions(t, options)
+	response := httptest.NewRecorder()
+
+	router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/v1/system/status", nil))
+
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"oidcEnabled":true`) {
+		t.Fatalf("system status = %d %s", response.Code, response.Body.String())
+	}
+}
+
+func TestLocalLoginSetsSessionCookiesAndRequiresPasswordChange(t *testing.T) {
+	userID := uuid.New()
+	local := &fakeLocalAuth{user: identity.User{ID: userID, Username: "admin"}, mustChange: true}
+	options := testAPIOptions(&fakeAuthFlow{})
+	options.Auth.Local = local
+	router := newTestRouterFromOptions(t, options)
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/auth/local/login", strings.NewReader(`{"username":"admin","password":"admin"}`))
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Origin", "https://releasehub.example")
+	response := httptest.NewRecorder()
+
+	router.ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"mustChangePassword":true`) {
+		t.Fatalf("local login = %d %s", response.Code, response.Body.String())
+	}
+	if local.loginCalls != 1 || len(response.Result().Cookies()) != 2 {
+		t.Fatalf("local login calls=%d cookies=%d", local.loginCalls, len(response.Result().Cookies()))
+	}
+}
+
+func TestLocalInitialPasswordBlocksProtectedRoutesUntilChanged(t *testing.T) {
+	userID := uuid.New()
+	flow := &fakeAuthFlow{session: identity.Session{ID: uuid.New(), UserID: userID, AuthenticationMethod: "local"}, user: identity.User{ID: userID, Username: "admin"}}
+	local := &fakeLocalAuth{user: flow.user, mustChange: true}
+	options := testAPIOptions(flow)
+	options.Auth.Local = local
+	router := newTestRouterFromOptions(t, options)
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/catalog/visible-applications", nil)
+	request.AddCookie(&http.Cookie{Name: "releasehub_session", Value: "session-token"})
+	response := httptest.NewRecorder()
+
+	router.ServeHTTP(response, request)
+
+	if response.Code != http.StatusForbidden || !strings.Contains(response.Body.String(), `"code":"PASSWORD_CHANGE_REQUIRED"`) {
+		t.Fatalf("forced password change = %d %s", response.Code, response.Body.String())
+	}
+}
+
+func TestChangeLocalPasswordAllowsInitialSessionAndClearsCookies(t *testing.T) {
+	userID := uuid.New()
+	flow := &fakeAuthFlow{session: identity.Session{ID: uuid.New(), UserID: userID, AuthenticationMethod: "local"}, user: identity.User{ID: userID, Username: "admin"}}
+	local := &fakeLocalAuth{user: flow.user, mustChange: true}
+	options := testAPIOptions(flow)
+	options.Auth.Local = local
+	router := newTestRouterFromOptions(t, options)
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/auth/password", strings.NewReader(`{"currentPassword":"admin","newPassword":"changed-password"}`))
+	request.AddCookie(&http.Cookie{Name: "releasehub_session", Value: "session-token"})
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Origin", "https://releasehub.example")
+	request.Header.Set("X-CSRF-Token", "csrf-token")
+	response := httptest.NewRecorder()
+
+	router.ServeHTTP(response, request)
+
+	if response.Code != http.StatusNoContent || local.changeCalls != 1 {
+		t.Fatalf("password change = %d %s calls=%d", response.Code, response.Body.String(), local.changeCalls)
+	}
+	for _, cookie := range response.Result().Cookies() {
+		if cookie.MaxAge != -1 {
+			t.Fatalf("password change cookie %s was not cleared", cookie.Name)
+		}
 	}
 }
 
@@ -194,6 +273,38 @@ func TestAccessManagementMutationRequiresCSRFAndReturnsCreatedRecord(t *testing.
 	router.ServeHTTP(response, request)
 	if response.Code != http.StatusCreated || service.mutationCalls != 1 || !strings.Contains(response.Body.String(), `"name":"operators"`) {
 		t.Fatalf("create Group = %d %s calls=%d", response.Code, response.Body.String(), service.mutationCalls)
+	}
+}
+
+func TestCreateAccessUserMapsStableValidationAndConflictErrors(t *testing.T) {
+	tests := []struct {
+		name       string
+		serviceErr error
+		status     int
+		code       string
+	}{
+		{name: "invalid", serviceErr: identityapp.ErrInvalidLocalUser, status: http.StatusBadRequest, code: "INVALID_REQUEST"},
+		{name: "conflict", serviceErr: identityapp.ErrLocalUsernameConflict, status: http.StatusConflict, code: "ACCESS_USERNAME_CONFLICT"},
+		{name: "internal", serviceErr: context.DeadlineExceeded, status: http.StatusInternalServerError, code: "ACCESS_USER_CREATE_FAILED"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			access := &fakeAccessManagementService{capabilities: authzapp.AccessCapabilities{Collections: []authzapp.AccessCollectionCapability{{Key: "users", Visible: true, CanCreate: true}}}}
+			local := &fakeLocalUserCreator{err: tt.serviceErr}
+			router := newTestRouterWithAccessAndLocal(t, &fakeAuthFlow{}, access, local)
+			request := httptest.NewRequest(http.MethodPost, "/api/v1/access/users", strings.NewReader(`{"username":"operator","initialPassword":"initial-password"}`))
+			request.AddCookie(&http.Cookie{Name: "releasehub_session", Value: "session-token"})
+			request.Header.Set("Content-Type", "application/json")
+			request.Header.Set("Origin", "https://releasehub.example")
+			request.Header.Set("X-CSRF-Token", "csrf-token")
+			response := httptest.NewRecorder()
+
+			router.ServeHTTP(response, request)
+
+			if response.Code != tt.status || !strings.Contains(response.Body.String(), `"code":"`+tt.code+`"`) {
+				t.Fatalf("create local user = %d %s", response.Code, response.Body.String())
+			}
+		})
 	}
 }
 
@@ -405,7 +516,23 @@ func newTestRouterWithAuth(t *testing.T, flow *fakeAuthFlow) (
 	*httpserver.Readiness,
 ) {
 	t.Helper()
+	return newTestRouterFromOptionsWithState(t, testAPIOptions(flow))
+}
 
+func newTestRouterFromOptions(t *testing.T, apiOptions httpserver.APIOptions) http.Handler {
+	t.Helper()
+	router, _, _, _, _ := newTestRouterFromOptionsWithState(t, apiOptions)
+	return router
+}
+
+func newTestRouterFromOptionsWithState(t *testing.T, apiOptions httpserver.APIOptions) (
+	http.Handler,
+	*observer.ObservedLogs,
+	*prometheus.Registry,
+	*tracetest.SpanRecorder,
+	*httpserver.Readiness,
+) {
+	t.Helper()
 	core, recorded := observer.New(zap.InfoLevel)
 	logger, err := observability.WithComponent(zap.New(core), observability.ComponentAPI)
 	if err != nil {
@@ -428,10 +555,6 @@ func newTestRouterWithAuth(t *testing.T, flow *fakeAuthFlow) (
 		TracerProvider: provider,
 		Readiness:      readiness,
 		MetricsPath:    "/metrics",
-	}
-	apiOptions := testAPIOptions(flow)
-	if flow != nil {
-		apiOptions.Auth.Flow = flow
 	}
 	router := httpserver.NewRouter(options, httpserver.NewAPIHandler(apiOptions))
 	return router, recorded, registry, spans, readiness
@@ -510,6 +633,10 @@ func newTestRouterWithCandidates(t *testing.T, flow *fakeAuthFlow, service *fake
 }
 
 func newTestRouterWithAccess(t *testing.T, flow *fakeAuthFlow, service *fakeAccessManagementService) http.Handler {
+	return newTestRouterWithAccessAndLocal(t, flow, service, nil)
+}
+
+func newTestRouterWithAccessAndLocal(t *testing.T, flow *fakeAuthFlow, service *fakeAccessManagementService, local *fakeLocalUserCreator) http.Handler {
 	t.Helper()
 	core, _ := observer.New(zap.InfoLevel)
 	logger, err := observability.WithComponent(zap.New(core), observability.ComponentAPI)
@@ -525,6 +652,7 @@ func newTestRouterWithAccess(t *testing.T, flow *fakeAuthFlow, service *fakeAcce
 	t.Cleanup(func() { _ = provider.Shutdown(t.Context()) })
 	options := testAPIOptions(flow)
 	options.Access.Service = service
+	options.Access.LocalUsers = local
 	return httpserver.NewRouter(httpserver.RouterOptions{Logger: logger, Registry: registry, HTTPMetrics: metrics, TracerProvider: provider, Readiness: httpserver.NewReadiness(), MetricsPath: "/metrics"}, httpserver.NewAPIHandler(options))
 }
 
@@ -536,7 +664,11 @@ func testAuthOptions(flow *fakeAuthFlow) httpserver.AuthHandlerOptions {
 	return httpserver.AuthHandlerOptions{Flow: flow, WebRedirectURL: "https://releasehub.example/", CookieSecure: true, LoginStateTTL: time.Minute, SessionTTL: time.Hour}
 }
 
-type fakeAuthFlow struct{ loggedOut, backchannelLoggedOut bool }
+type fakeAuthFlow struct {
+	loggedOut, backchannelLoggedOut bool
+	session                         identity.Session
+	user                            identity.User
+}
 
 func (*fakeAuthFlow) Begin() (string, string, error) {
 	return "login-state", "https://issuer.example/authorize", nil
@@ -544,8 +676,11 @@ func (*fakeAuthFlow) Begin() (string, string, error) {
 func (*fakeAuthFlow) Complete(context.Context, string, string, string) (identity.User, string, string, error) {
 	return identity.User{ID: uuid.New(), Username: "vincent"}, "session-token", "csrf-token", nil
 }
-func (*fakeAuthFlow) Authenticate(context.Context, string) (identity.Session, identity.User, error) {
-	return identity.Session{ID: uuid.New(), UserID: uuid.New()}, identity.User{ID: uuid.New(), Username: "vincent"}, nil
+func (f *fakeAuthFlow) Authenticate(context.Context, string) (identity.Session, identity.User, error) {
+	if f.session.ID != uuid.Nil {
+		return f.session, f.user, nil
+	}
+	return identity.Session{ID: uuid.New(), UserID: uuid.New(), AuthenticationMethod: "oidc"}, identity.User{ID: uuid.New(), Username: "vincent"}, nil
 }
 
 func (f *fakeAuthFlow) ValidateMutation(ctx context.Context, token, _ string) (identity.Session, identity.User, error) {
@@ -558,6 +693,27 @@ func (f *fakeAuthFlow) Logout(context.Context, string, string) (string, error) {
 func (f *fakeAuthFlow) BackchannelLogout(context.Context, string) error {
 	f.backchannelLoggedOut = true
 	return nil
+}
+
+type fakeLocalAuth struct {
+	user                    identity.User
+	mustChange              bool
+	loginCalls, changeCalls int
+}
+
+func (f *fakeLocalAuth) Login(context.Context, string, string) (identity.User, bool, string, string, error) {
+	f.loginCalls++
+	return f.user, f.mustChange, "local-session-token", "local-csrf-token", nil
+}
+
+func (f *fakeLocalAuth) ChangePassword(context.Context, uuid.UUID, string, string) error {
+	f.changeCalls++
+	f.mustChange = false
+	return nil
+}
+
+func (f *fakeLocalAuth) MustChangePassword(context.Context, uuid.UUID) (bool, error) {
+	return f.mustChange, nil
 }
 
 type fakeCatalogService struct {
@@ -595,6 +751,7 @@ type fakeCandidateService struct {
 
 type fakeAccessManagementService struct {
 	value         authzapp.AccessSnapshot
+	capabilities  authzapp.AccessCapabilities
 	calls         int
 	mutationCalls int
 }
@@ -602,6 +759,42 @@ type fakeAccessManagementService struct {
 func (s *fakeAccessManagementService) Load(context.Context, authzapp.AccessPrincipal) (authzapp.AccessSnapshot, error) {
 	s.calls++
 	return s.value, nil
+}
+func (s *fakeAccessManagementService) Capabilities(context.Context, authzapp.AccessPrincipal) (authzapp.AccessCapabilities, error) {
+	return s.capabilities, nil
+}
+
+type fakeLocalUserCreator struct{ err error }
+
+func (f *fakeLocalUserCreator) CreateUser(context.Context, uuid.UUID, string, string, string) (identity.User, error) {
+	if f.err != nil {
+		return identity.User{}, f.err
+	}
+	return identity.User{ID: uuid.New(), Username: "operator"}, nil
+}
+func (*fakeAccessManagementService) ListUsers(context.Context, authzapp.AccessPrincipal, string, string, string, int) (authzapp.AccessListPage[authzapp.AccessUser], error) {
+	return authzapp.AccessListPage[authzapp.AccessUser]{Items: []authzapp.AccessUser{}}, nil
+}
+func (*fakeAccessManagementService) ListGroups(context.Context, authzapp.AccessPrincipal, string, string, string, int) (authzapp.AccessListPage[authzapp.AccessGroup], error) {
+	return authzapp.AccessListPage[authzapp.AccessGroup]{Items: []authzapp.AccessGroup{}}, nil
+}
+func (*fakeAccessManagementService) ListRoles(context.Context, authzapp.AccessPrincipal, string, string, string, int) (authzapp.AccessListPage[authzapp.AccessRole], error) {
+	return authzapp.AccessListPage[authzapp.AccessRole]{Items: []authzapp.AccessRole{}}, nil
+}
+func (*fakeAccessManagementService) ListMemberships(context.Context, authzapp.AccessPrincipal, *uuid.UUID, *uuid.UUID, string, string, int) (authzapp.AccessListPage[authzapp.AccessMembership], error) {
+	return authzapp.AccessListPage[authzapp.AccessMembership]{Items: []authzapp.AccessMembership{}}, nil
+}
+func (*fakeAccessManagementService) ListBindings(context.Context, authzapp.AccessPrincipal, string, string, int) (authzapp.AccessListPage[authzapp.AccessBinding], error) {
+	return authzapp.AccessListPage[authzapp.AccessBinding]{Items: []authzapp.AccessBinding{}}, nil
+}
+func (*fakeAccessManagementService) ListDenies(context.Context, authzapp.AccessPrincipal, string, string, int) (authzapp.AccessListPage[authzapp.AccessDeny], error) {
+	return authzapp.AccessListPage[authzapp.AccessDeny]{Items: []authzapp.AccessDeny{}}, nil
+}
+func (*fakeAccessManagementService) MembershipCandidates(context.Context, authzapp.AccessPrincipal, uuid.UUID, string, int) ([]authzapp.AccessUser, error) {
+	return []authzapp.AccessUser{}, nil
+}
+func (*fakeAccessManagementService) ScopeOptions(context.Context, authzapp.AccessPrincipal, string, string) (authzapp.AccessScopeOptions, error) {
+	return authzapp.AccessScopeOptions{Groups: []authzapp.AccessGroup{}, Roles: []authzapp.AccessRole{}, Permissions: []authzapp.AccessPermission{}}, nil
 }
 
 func (s *fakeAccessManagementService) CreateGroup(_ context.Context, _ authzapp.AccessPrincipal, _ authzapp.AccessMutation, input authzapp.CreateGroupInput) (authzapp.AccessGroup, error) {
@@ -624,6 +817,18 @@ func (*fakeAccessManagementService) CreateDeny(context.Context, authzapp.AccessP
 	return authzapp.AccessDeny{}, nil
 }
 func (*fakeAccessManagementService) DisableUser(context.Context, authzapp.AccessPrincipal, authzapp.AccessMutation, uuid.UUID) error {
+	return nil
+}
+func (*fakeAccessManagementService) RevokeMembership(context.Context, authzapp.AccessPrincipal, authzapp.AccessMutation, uuid.UUID) error {
+	return nil
+}
+func (*fakeAccessManagementService) DisableRole(context.Context, authzapp.AccessPrincipal, authzapp.AccessMutation, uuid.UUID) error {
+	return nil
+}
+func (*fakeAccessManagementService) RevokeBinding(context.Context, authzapp.AccessPrincipal, authzapp.AccessMutation, uuid.UUID) error {
+	return nil
+}
+func (*fakeAccessManagementService) RevokeDeny(context.Context, authzapp.AccessPrincipal, authzapp.AccessMutation, uuid.UUID) error {
 	return nil
 }
 

@@ -28,6 +28,7 @@ test.beforeEach(async ({ context, page }) => {
   ])
   await page.addInitScript(() => {
     localStorage.setItem('releasehub.language', 'zh-TW')
+    localStorage.setItem('releasehub.theme', 'dark')
     class TestEventSource {
       onmessage = null
       addEventListener() {}

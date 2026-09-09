@@ -10,7 +10,12 @@ import { getGetSystemStatusQueryKey, useGetSystemStatus } from '@/generated/api'
 const server = setupServer(
   http.get('/api/v1/system/status', () =>
     HttpResponse.json({
-      data: { name: 'ReleaseHub', version: 'test', tenancyMode: 'single' },
+      data: {
+        name: 'ReleaseHub',
+        version: 'test',
+        tenancyMode: 'single',
+        oidcEnabled: false,
+      },
     }),
   ),
 )
@@ -34,7 +39,13 @@ describe('generated API hooks', () => {
     expect(result.current.queryKey).toEqual(getGetSystemStatusQueryKey())
     expect(result.current.data).toMatchObject({
       status: 200,
-      data: { data: { name: 'ReleaseHub', tenancyMode: 'single' } },
+      data: {
+        data: {
+          name: 'ReleaseHub',
+          tenancyMode: 'single',
+          oidcEnabled: false,
+        },
+      },
     })
   })
 })

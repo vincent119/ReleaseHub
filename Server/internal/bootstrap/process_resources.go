@@ -4,10 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	argoinfra "github.com/vincent119/ReleaseHub/Server/internal/argocd/infrastructure"
 	"github.com/vincent119/ReleaseHub/Server/internal/config"
 	"github.com/vincent119/ReleaseHub/Server/internal/infrastructure/database"
+	"github.com/vincent119/ReleaseHub/Server/internal/observability"
 	"gorm.io/gorm"
 )
 
@@ -27,11 +29,20 @@ func newProcessResources(cfg config.Config, pool config.PoolConfig, component st
 	if err != nil {
 		return nil, resources.fail(fmt.Errorf("open %s database: %w", component, err))
 	}
-	resources.argoClient, err = argoinfra.NewClient(cfg.ArgoCD)
-	if err != nil {
-		return nil, resources.fail(fmt.Errorf("create Argo CD client: %w", err))
+	if shouldCreateArgoCDClient(component, cfg.ArgoCD) {
+		resources.argoClient, err = argoinfra.NewClient(cfg.ArgoCD)
+		if err != nil {
+			return nil, resources.fail(fmt.Errorf("create Argo CD client: %w", err))
+		}
 	}
 	return resources, nil
+}
+
+func shouldCreateArgoCDClient(component string, cfg config.ArgoCDConfig) bool {
+	if component != observability.ComponentAPI {
+		return true
+	}
+	return strings.TrimSpace(cfg.Address) != "" || strings.TrimSpace(cfg.Token) != ""
 }
 
 func (r *processResources) fail(cause error) error {

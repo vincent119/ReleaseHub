@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	migrationlib "github.com/golang-migrate/migrate/v4"
+	"github.com/golang-migrate/migrate/v4/source/iofs"
 	"github.com/google/uuid"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
@@ -137,7 +139,105 @@ func TestMigrationsAndTransactionalAuditOutbox(t *testing.T) {
 		t.Fatal("disabled user should be rejected immediately")
 	}
 
+	localRepository, err := identityinfra.NewLocalAuthRepository(db)
+	if err != nil {
+		t.Fatalf("create local authentication repository: %v", err)
+	}
+	localService, err := identityapp.NewLocalAuthService(localRepository, sessionService)
+	if err != nil {
+		t.Fatalf("create local authentication service: %v", err)
+	}
+	if err := localService.Bootstrap(ctx, "admin"); err != nil {
+		t.Fatalf("bootstrap local manager: %v", err)
+	}
+	if err := localService.Bootstrap(ctx, "must-not-overwrite"); err != nil {
+		t.Fatalf("repeat local manager bootstrap: %v", err)
+	}
+	manager, mustChange, _, _, err := localService.Login(ctx, "admin", "admin")
+	if err != nil || manager.Username != "admin" || !mustChange {
+		t.Fatalf("initial manager login = %#v, mustChange=%t, error=%v", manager, mustChange, err)
+	}
+	if err := localService.ChangePassword(ctx, manager.ID, "admin", "changed-password"); err != nil {
+		t.Fatalf("change initial manager password: %v", err)
+	}
+	if _, _, _, _, err := localService.Login(ctx, "admin", "admin"); err == nil {
+		t.Fatal("initial manager password should no longer authenticate")
+	}
+	_, mustChange, _, _, err = localService.Login(ctx, "admin", "changed-password")
+	if err != nil || mustChange {
+		t.Fatalf("changed manager login mustChange=%t, error=%v", mustChange, err)
+	}
+	var managerBindings int64
+	if err := db.Raw(`SELECT count(*) FROM authorization_platform_role_bindings b
+		JOIN authorization_group_memberships m ON m.group_id = b.group_id
+		WHERE m.user_id = ? AND m.active AND b.active AND b.role_id = '00000000-0000-0000-0000-000000000100'`, manager.ID).Scan(&managerBindings).Error; err != nil || managerBindings != 1 {
+		t.Fatalf("initial manager platform binding count=%d, error=%v", managerBindings, err)
+	}
+	createdUser, err := localService.CreateUser(ctx, manager.ID, "create-local-user", "operator", "initial-password")
+	if err != nil {
+		t.Fatalf("create local user: %v", err)
+	}
+	var credential struct {
+		MustChangePassword bool
+		PasswordHash       []byte
+	}
+	if err := db.Raw(`SELECT must_change_password, password_hash FROM local_credentials WHERE user_id = ?`, createdUser.ID).Scan(&credential).Error; err != nil {
+		t.Fatalf("read created local credential: %v", err)
+	}
+	if !credential.MustChangePassword || string(credential.PasswordHash) == "initial-password" {
+		t.Fatalf("created local credential is not protected: mustChange=%t", credential.MustChangePassword)
+	}
+	var createdMemberships int64
+	if err := db.Raw(`SELECT count(*) FROM authorization_group_memberships WHERE user_id = ?`, createdUser.ID).Scan(&createdMemberships).Error; err != nil || createdMemberships != 0 {
+		t.Fatalf("new local user received automatic access: memberships=%d error=%v", createdMemberships, err)
+	}
+	_, createdMustChange, _, _, err := localService.Login(ctx, "operator", "initial-password")
+	if err != nil || !createdMustChange {
+		t.Fatalf("created local user login mustChange=%t error=%v", createdMustChange, err)
+	}
+	if _, err := localService.CreateUser(ctx, manager.ID, "duplicate-local-user", "operator", "another-password"); !errors.Is(err, identityapp.ErrLocalUsernameConflict) {
+		t.Fatalf("duplicate local username error=%v", err)
+	}
+
 	verifyAuthorizationPolicy(t, ctx, cfg, db)
+	verifyAccessAndLocalAuthenticationMigrationRollback(t, cfg, db)
+}
+
+func verifyAccessAndLocalAuthenticationMigrationRollback(t *testing.T, cfg config.DatabaseConfig, db *gorm.DB) {
+	t.Helper()
+	source, err := iofs.New(migrations.Files, ".")
+	if err != nil {
+		t.Fatalf("create migration source: %v", err)
+	}
+	migrator, err := migrationlib.NewWithSourceInstance("iofs", source, database.URL(cfg))
+	if err != nil {
+		t.Fatalf("create migrator: %v", err)
+	}
+	t.Cleanup(func() { _, _ = migrator.Close() })
+	if err := migrator.Steps(-1); err != nil {
+		t.Fatalf("roll back access lifecycle migration: %v", err)
+	}
+	var systemKeyColumns int64
+	if err := db.Raw(`SELECT count(*) FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'authorization_groups' AND column_name = 'system_key'`).Scan(&systemKeyColumns).Error; err != nil || systemKeyColumns != 0 {
+		t.Fatalf("access lifecycle migration was not removed: columns=%d error=%v", systemKeyColumns, err)
+	}
+	if err := migrator.Steps(-1); err != nil {
+		t.Fatalf("roll back local authentication migration: %v", err)
+	}
+	var removed bool
+	if err := db.Raw(`SELECT to_regclass('public.local_credentials') IS NULL`).Scan(&removed).Error; err != nil || !removed {
+		t.Fatalf("local credential table was not removed: removed=%t error=%v", removed, err)
+	}
+	if err := migrator.Steps(2); err != nil {
+		t.Fatalf("reapply local and access lifecycle migrations: %v", err)
+	}
+	var restored bool
+	if err := db.Raw(`SELECT to_regclass('public.local_credentials') IS NOT NULL`).Scan(&restored).Error; err != nil || !restored {
+		t.Fatalf("local credential table was not restored: restored=%t error=%v", restored, err)
+	}
+	if err := db.Raw(`SELECT count(*) FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'authorization_groups' AND column_name = 'system_key'`).Scan(&systemKeyColumns).Error; err != nil || systemKeyColumns != 1 {
+		t.Fatalf("access lifecycle migration was not restored: columns=%d error=%v", systemKeyColumns, err)
+	}
 }
 
 func verifyAuthorizationPolicy(t *testing.T, ctx context.Context, cfg config.DatabaseConfig, db *gorm.DB) {

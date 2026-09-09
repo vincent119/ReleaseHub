@@ -3,13 +3,16 @@ package infrastructure
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 	"gorm.io/gorm"
 
 	authzapp "github.com/vincent119/ReleaseHub/Server/internal/authorization/application"
+	authz "github.com/vincent119/ReleaseHub/Server/internal/authorization/domain"
 	"github.com/vincent119/ReleaseHub/Server/internal/infrastructure/database"
 	platform "github.com/vincent119/ReleaseHub/Server/internal/platform/domain"
 )
@@ -33,6 +36,57 @@ func (r *AccessManagementRepository) ListProjectScopes(ctx context.Context) ([]a
 	return values, nil
 }
 
+// ResolveAccessScope validates one catalog resource and returns its authorization scope.
+func (r *AccessManagementRepository) ResolveAccessScope(ctx context.Context, kind string, id uuid.UUID) (authz.Scope, error) {
+	var row struct {
+		OrganizationID uuid.UUID
+		ProjectID      uuid.UUID
+		EnvironmentID  uuid.UUID
+	}
+	switch kind {
+	case "project":
+		if err := r.db.WithContext(ctx).Raw(`SELECT organization_id, id AS project_id FROM projects WHERE id = ? AND active`, id).Scan(&row).Error; err != nil {
+			return authz.Scope{}, err
+		}
+		return authz.NewProjectScope(row.OrganizationID, row.ProjectID)
+	case "environment":
+		if err := r.db.WithContext(ctx).Raw(`SELECT organization_id, project_id, id AS environment_id FROM environments WHERE id = ? AND active`, id).Scan(&row).Error; err != nil {
+			return authz.Scope{}, err
+		}
+		return authz.NewEnvironmentScope(row.OrganizationID, row.ProjectID, row.EnvironmentID)
+	case "application":
+		if err := r.db.WithContext(ctx).Raw(`SELECT organization_id, project_id, environment_id FROM applications WHERE id = ? AND active`, id).Scan(&row).Error; err != nil {
+			return authz.Scope{}, err
+		}
+		return authz.NewApplicationScope(row.OrganizationID, row.ProjectID, row.EnvironmentID, id)
+	default:
+		return authz.Scope{}, gorm.ErrRecordNotFound
+	}
+}
+
+// FindMembershipCandidates returns minimal identities and excludes disabled or existing members.
+func (r *AccessManagementRepository) FindMembershipCandidates(ctx context.Context, groupID uuid.UUID, query string, exact bool, limit int) ([]authzapp.AccessUser, error) {
+	predicate := `lower(users.username) LIKE lower(?) || '%'`
+	if exact {
+		predicate = `lower(users.username) = lower(?)`
+	}
+	values := []authzapp.AccessUser{}
+	err := r.db.WithContext(ctx).Raw(`
+SELECT users.id, users.username, users.disabled_at
+FROM users
+WHERE users.disabled_at IS NULL AND `+predicate+`
+  AND NOT EXISTS (
+    SELECT 1 FROM authorization_group_memberships memberships
+    WHERE memberships.group_id = ? AND memberships.user_id = users.id AND memberships.active
+  )
+ORDER BY lower(users.username), users.id
+LIMIT ?`, query, groupID, limit).Scan(&values).Error
+	if err != nil {
+		return nil, fmt.Errorf("find Group membership candidates: %w", err)
+	}
+	return values, nil
+}
+
 func (r *AccessManagementRepository) LoadAccessSnapshot(ctx context.Context) (authzapp.AccessSnapshot, error) {
 	value := authzapp.AccessSnapshot{Users: []authzapp.AccessUser{}, Groups: []authzapp.AccessGroup{}, Roles: []authzapp.AccessRole{}, Permissions: []authzapp.AccessPermission{}, Memberships: []authzapp.AccessMembership{}, Bindings: []authzapp.AccessBinding{}, Denies: []authzapp.AccessDeny{}}
 	queries := []struct {
@@ -41,10 +95,17 @@ func (r *AccessManagementRepository) LoadAccessSnapshot(ctx context.Context) (au
 		target any
 	}{
 		{"users", `SELECT id, username, disabled_at FROM users ORDER BY lower(username), id`, &value.Users},
-		{"groups", `SELECT id, owner_kind, owner_id, name, oidc_viewer_only, disabled_at FROM authorization_groups ORDER BY owner_kind, lower(name), id`, &value.Groups},
+		{"groups", `SELECT id, owner_kind, owner_id, name, system_key, oidc_viewer_only, disabled_at FROM authorization_groups ORDER BY owner_kind, lower(name), id`, &value.Groups},
 		{"permissions", `SELECT key, platform_only, project_role_delegable FROM authorization_permissions ORDER BY key`, &value.Permissions},
 		{"memberships", `SELECT id, group_id, user_id, source, active FROM authorization_group_memberships ORDER BY group_id, user_id, id`, &value.Memberships},
-		{"bindings", `SELECT id, group_id, role_id, organization_id, scope_kind, project_id, environment_id, application_id, active FROM authorization_group_role_bindings ORDER BY organization_id, project_id, scope_kind, id`, &value.Bindings},
+		{"bindings", `SELECT id, group_id, role_id, organization_id, scope_kind, project_id, environment_id, application_id, active
+FROM authorization_group_role_bindings
+UNION ALL
+SELECT id, group_id, role_id, '00000000-0000-0000-0000-000000000000'::uuid AS organization_id,
+       'platform' AS scope_kind, '00000000-0000-0000-0000-000000000000'::uuid AS project_id,
+       NULL::uuid AS environment_id, NULL::uuid AS application_id, active
+FROM authorization_platform_role_bindings
+ORDER BY scope_kind, organization_id, project_id, id`, &value.Bindings},
 		{"deny policies", `SELECT id, group_id, permission_key AS permission, organization_id, scope_kind, project_id, environment_id, application_id, active FROM authorization_deny_policies ORDER BY organization_id, project_id, scope_kind, id`, &value.Denies},
 	}
 	for _, query := range queries {
@@ -110,7 +171,7 @@ func (r *AccessManagementRepository) DisableGroup(ctx context.Context, mutation 
 	if err != nil {
 		return err
 	}
-	return r.mutate(ctx, mutation, organizationID, "authorization_group", groupID, "authorization.group.disabled", map[string]any{}, func(tx *gorm.DB) error {
+	return r.mutateProtected(ctx, mutation, organizationID, "authorization_group", groupID, "authorization.group.disabled", map[string]any{}, func(tx *gorm.DB) error {
 		result := tx.WithContext(ctx).Exec(`UPDATE authorization_groups SET disabled_at = now(), updated_at = now() WHERE id = ? AND disabled_at IS NULL`, groupID)
 		if result.Error != nil {
 			return result.Error
@@ -165,6 +226,15 @@ func (r *AccessManagementRepository) AddMembership(ctx context.Context, mutation
 // CreateBinding creates one active Role binding.
 func (r *AccessManagementRepository) CreateBinding(ctx context.Context, mutation authzapp.AccessMutation, input authzapp.CreateBindingInput) (authzapp.AccessBinding, error) {
 	value := authzapp.AccessBinding{ID: uuid.New(), GroupID: input.GroupID, RoleID: input.RoleID, OrganizationID: input.OrganizationID, ScopeKind: input.ScopeKind, ProjectID: input.ProjectID, EnvironmentID: input.EnvironmentID, ApplicationID: input.ApplicationID, Active: true}
+	if input.ScopeKind == "platform" {
+		err := r.mutate(ctx, mutation, nil, "authorization_platform_role_binding", value.ID, "authorization.platform_role_binding.created", map[string]any{"groupId": input.GroupID.String(), "roleId": input.RoleID.String(), "scopeKind": input.ScopeKind}, func(tx *gorm.DB) error {
+			return tx.WithContext(ctx).Exec(`INSERT INTO authorization_platform_role_bindings (id, group_id, role_id) VALUES (?, ?, ?)`, value.ID, value.GroupID, value.RoleID).Error
+		})
+		if err != nil {
+			return authzapp.AccessBinding{}, fmt.Errorf("create platform Role binding: %w", err)
+		}
+		return value, nil
+	}
 	err := r.mutate(ctx, mutation, &input.OrganizationID, "authorization_group_role_binding", value.ID, "authorization.role_binding.created", map[string]any{"groupId": input.GroupID.String(), "roleId": input.RoleID.String(), "scopeKind": input.ScopeKind}, func(tx *gorm.DB) error {
 		return tx.WithContext(ctx).Exec(`INSERT INTO authorization_group_role_bindings (id, group_id, role_id, organization_id, scope_kind, project_id, environment_id, application_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, value.ID, value.GroupID, value.RoleID, value.OrganizationID, value.ScopeKind, value.ProjectID, value.EnvironmentID, value.ApplicationID).Error
 	})
@@ -188,7 +258,7 @@ func (r *AccessManagementRepository) CreateDeny(ctx context.Context, mutation au
 
 // DisableUser locally disables an account and revokes every active browser session atomically.
 func (r *AccessManagementRepository) DisableUser(ctx context.Context, mutation authzapp.AccessMutation, userID uuid.UUID) error {
-	return r.mutate(ctx, mutation, nil, "user", userID, "identity.user.disabled", map[string]any{}, func(tx *gorm.DB) error {
+	return r.mutateProtected(ctx, mutation, nil, "user", userID, "identity.user.disabled", map[string]any{}, func(tx *gorm.DB) error {
 		result := tx.WithContext(ctx).Exec(`UPDATE users SET disabled_at = now(), updated_at = now() WHERE id = ? AND disabled_at IS NULL`, userID)
 		if result.Error != nil {
 			return result.Error
@@ -200,7 +270,67 @@ func (r *AccessManagementRepository) DisableUser(ctx context.Context, mutation a
 	})
 }
 
+// RevokeMembership deactivates one manual membership without deleting history.
+func (r *AccessManagementRepository) RevokeMembership(ctx context.Context, mutation authzapp.AccessMutation, membershipID uuid.UUID) error {
+	organizationID, err := r.organizationForMembership(ctx, membershipID)
+	if err != nil {
+		return err
+	}
+	return r.mutateProtected(ctx, mutation, organizationID, "authorization_group_membership", membershipID, "authorization.group_membership.revoked", map[string]any{}, func(tx *gorm.DB) error {
+		result := tx.WithContext(ctx).Exec(`UPDATE authorization_group_memberships SET active = false, updated_at = now() WHERE id = ? AND source = 'manual' AND active`, membershipID)
+		return affectedExactlyOne(result)
+	})
+}
+
+// DisableRole deactivates one custom Role without deleting its permission history.
+func (r *AccessManagementRepository) DisableRole(ctx context.Context, mutation authzapp.AccessMutation, roleID uuid.UUID) error {
+	organizationID, err := r.organizationForRole(ctx, roleID)
+	if err != nil {
+		return err
+	}
+	return r.mutateProtected(ctx, mutation, organizationID, "authorization_role", roleID, "authorization.role.disabled", map[string]any{}, func(tx *gorm.DB) error {
+		result := tx.WithContext(ctx).Exec(`UPDATE authorization_roles SET active = false, updated_at = now() WHERE id = ? AND system_key IS NULL AND active`, roleID)
+		return affectedExactlyOne(result)
+	})
+}
+
+// RevokeBinding deactivates one Project-descendant Role binding.
+func (r *AccessManagementRepository) RevokeBinding(ctx context.Context, mutation authzapp.AccessMutation, bindingID uuid.UUID) error {
+	organizationID, platformBinding, err := r.bindingLocation(ctx, bindingID)
+	if err != nil {
+		return err
+	}
+	resourceType, eventType, table := "authorization_group_role_binding", "authorization.role_binding.revoked", "authorization_group_role_bindings"
+	if platformBinding {
+		resourceType, eventType, table = "authorization_platform_role_binding", "authorization.platform_role_binding.revoked", "authorization_platform_role_bindings"
+	}
+	return r.mutateProtected(ctx, mutation, organizationID, resourceType, bindingID, eventType, map[string]any{}, func(tx *gorm.DB) error {
+		result := tx.WithContext(ctx).Table(table).Where("id = ? AND active", bindingID).Updates(map[string]any{"active": false, "updated_at": time.Now().UTC()})
+		return affectedExactlyOne(result)
+	})
+}
+
+// RevokeDeny deactivates one explicit deny policy.
+func (r *AccessManagementRepository) RevokeDeny(ctx context.Context, mutation authzapp.AccessMutation, denyID uuid.UUID) error {
+	organizationID, err := r.organizationForDeny(ctx, denyID)
+	if err != nil {
+		return err
+	}
+	return r.mutate(ctx, mutation, organizationID, "authorization_deny_policy", denyID, "authorization.deny_policy.revoked", map[string]any{}, func(tx *gorm.DB) error {
+		result := tx.WithContext(ctx).Exec(`UPDATE authorization_deny_policies SET active = false, updated_at = now() WHERE id = ? AND active`, denyID)
+		return affectedExactlyOne(result)
+	})
+}
+
 func (r *AccessManagementRepository) mutate(ctx context.Context, mutation authzapp.AccessMutation, organizationID *uuid.UUID, resourceType string, resourceID uuid.UUID, eventType string, metadata map[string]any, work func(*gorm.DB) error) error {
+	return r.mutateWithGuard(ctx, mutation, organizationID, resourceType, resourceID, eventType, metadata, false, work)
+}
+
+func (r *AccessManagementRepository) mutateProtected(ctx context.Context, mutation authzapp.AccessMutation, organizationID *uuid.UUID, resourceType string, resourceID uuid.UUID, eventType string, metadata map[string]any, work func(*gorm.DB) error) error {
+	return r.mutateWithGuard(ctx, mutation, organizationID, resourceType, resourceID, eventType, metadata, true, work)
+}
+
+func (r *AccessManagementRepository) mutateWithGuard(ctx context.Context, mutation authzapp.AccessMutation, organizationID *uuid.UUID, resourceType string, resourceID uuid.UUID, eventType string, metadata map[string]any, protectContinuity bool, work func(*gorm.DB) error) error {
 	now := time.Now().UTC()
 	payload, err := json.Marshal(metadata)
 	if err != nil {
@@ -210,15 +340,63 @@ func (r *AccessManagementRepository) mutate(ctx context.Context, mutation authza
 	if err != nil {
 		return fmt.Errorf("create access management event: %w", err)
 	}
-	return database.WithinTransaction(ctx, r.db, func(tx *gorm.DB) error {
+	err = database.WithinTransaction(ctx, r.db, func(tx *gorm.DB) error {
+		if protectContinuity {
+			if err := tx.WithContext(ctx).Exec(`SELECT pg_advisory_xact_lock(?)`, int64(5931311082169046361)).Error; err != nil {
+				return fmt.Errorf("lock platform management continuity: %w", err)
+			}
+		}
 		if err := work(tx); err != nil {
 			return err
+		}
+		if protectContinuity {
+			var paths int64
+			err := tx.WithContext(ctx).Raw(`
+SELECT count(DISTINCT users.id)
+FROM users
+JOIN authorization_group_memberships memberships ON memberships.user_id = users.id AND memberships.active
+JOIN authorization_groups groups ON groups.id = memberships.group_id AND groups.disabled_at IS NULL
+JOIN authorization_platform_role_bindings bindings ON bindings.group_id = groups.id AND bindings.active
+JOIN authorization_roles roles ON roles.id = bindings.role_id AND roles.active
+JOIN authorization_role_permissions permissions ON permissions.role_id = roles.id AND permissions.permission_key = 'platform.manage'
+WHERE users.disabled_at IS NULL`).Scan(&paths).Error
+			if err != nil {
+				return fmt.Errorf("count effective platform managers: %w", err)
+			}
+			if paths == 0 {
+				return authzapp.ErrLastPlatformManager
+			}
 		}
 		if err := database.AppendAudit(ctx, tx, database.AuditRecord{OccurredAt: now, ActorID: &mutation.ActorID, OrganizationID: organizationID, Action: eventType, ResourceType: resourceType, ResourceID: resourceID.String(), RequestID: mutation.RequestID, Metadata: metadata}); err != nil {
 			return err
 		}
 		return database.AppendOutbox(ctx, tx, event)
 	})
+	return classifyAccessMutationError(err)
+}
+
+func classifyAccessMutationError(err error) error {
+	if err == nil || errors.Is(err, authzapp.ErrAccessManagementConflict) || errors.Is(err, authzapp.ErrLastPlatformManager) {
+		return err
+	}
+	var databaseError *pgconn.PgError
+	if errors.As(err, &databaseError) {
+		switch databaseError.Code {
+		case "23503", "23505", "23514":
+			return fmt.Errorf("%w: %v", authzapp.ErrAccessManagementConflict, err)
+		}
+	}
+	return err
+}
+
+func affectedExactlyOne(result *gorm.DB) error {
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected != 1 {
+		return authzapp.ErrAccessManagementConflict
+	}
+	return nil
 }
 
 func (r *AccessManagementRepository) organizationForOwner(ctx context.Context, ownerKind string, ownerID *uuid.UUID) (*uuid.UUID, error) {
@@ -263,4 +441,46 @@ func (r *AccessManagementRepository) organizationForGroup(ctx context.Context, g
 		return nil, gorm.ErrRecordNotFound
 	}
 	return r.organizationForOwner(ctx, owner.Kind, owner.ID)
+}
+
+func (r *AccessManagementRepository) organizationForMembership(ctx context.Context, membershipID uuid.UUID) (*uuid.UUID, error) {
+	var groupID uuid.UUID
+	if err := r.db.WithContext(ctx).Raw(`SELECT group_id FROM authorization_group_memberships WHERE id = ?`, membershipID).Scan(&groupID).Error; err != nil || groupID == uuid.Nil {
+		return nil, gorm.ErrRecordNotFound
+	}
+	return r.organizationForGroup(ctx, groupID)
+}
+
+func (r *AccessManagementRepository) organizationForRole(ctx context.Context, roleID uuid.UUID) (*uuid.UUID, error) {
+	var owner struct {
+		Kind string
+		ID   *uuid.UUID
+	}
+	if err := r.db.WithContext(ctx).Raw(`SELECT owner_kind AS kind, owner_id AS id FROM authorization_roles WHERE id = ?`, roleID).Scan(&owner).Error; err != nil || owner.Kind == "" {
+		return nil, gorm.ErrRecordNotFound
+	}
+	return r.organizationForOwner(ctx, owner.Kind, owner.ID)
+}
+
+func (r *AccessManagementRepository) bindingLocation(ctx context.Context, bindingID uuid.UUID) (*uuid.UUID, bool, error) {
+	var organizationID uuid.UUID
+	if err := r.db.WithContext(ctx).Raw(`SELECT organization_id FROM authorization_group_role_bindings WHERE id = ?`, bindingID).Scan(&organizationID).Error; err != nil {
+		return nil, false, err
+	}
+	if organizationID != uuid.Nil {
+		return &organizationID, false, nil
+	}
+	var count int64
+	if err := r.db.WithContext(ctx).Table("authorization_platform_role_bindings").Where("id = ?", bindingID).Count(&count).Error; err != nil || count != 1 {
+		return nil, false, gorm.ErrRecordNotFound
+	}
+	return nil, true, nil
+}
+
+func (r *AccessManagementRepository) organizationForDeny(ctx context.Context, denyID uuid.UUID) (*uuid.UUID, error) {
+	var organizationID uuid.UUID
+	if err := r.db.WithContext(ctx).Raw(`SELECT organization_id FROM authorization_deny_policies WHERE id = ?`, denyID).Scan(&organizationID).Error; err != nil || organizationID == uuid.Nil {
+		return nil, gorm.ErrRecordNotFound
+	}
+	return &organizationID, nil
 }

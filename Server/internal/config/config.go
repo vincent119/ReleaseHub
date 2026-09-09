@@ -20,20 +20,21 @@ const (
 
 // Config is the validated configuration snapshot after source precedence is applied.
 type Config struct {
-	Runtime       RuntimeConfig       `mapstructure:"runtime" json:"runtime"`
-	API           APIConfig           `mapstructure:"api" json:"api"`
-	Worker        WorkerConfig        `mapstructure:"worker" json:"worker"`
-	Database      DatabaseConfig      `mapstructure:"database" json:"database"`
-	Redis         RedisConfig         `mapstructure:"redis" json:"redis"`
-	Log           LogConfig           `mapstructure:"log" json:"log"`
-	Observability ObservabilityConfig `mapstructure:"observability" json:"observability"`
-	OIDC          OIDCConfig          `mapstructure:"oidc" json:"oidc"`
-	ArgoCD        ArgoCDConfig        `mapstructure:"argocd" json:"argocd"`
-	AWS           AWSConfig           `mapstructure:"aws" json:"aws"`
-	Session       SessionConfig       `mapstructure:"session" json:"session"`
-	Identity      IdentityConfig      `mapstructure:"identity" json:"identity"`
-	Notifications NotificationConfig  `mapstructure:"notifications" json:"notifications"`
-	Tenancy       TenancyConfig       `mapstructure:"tenancy" json:"tenancy"`
+	ManagerPassword string              `mapstructure:"manager_password" json:"managerPassword"`
+	Runtime         RuntimeConfig       `mapstructure:"runtime" json:"runtime"`
+	API             APIConfig           `mapstructure:"api" json:"api"`
+	Worker          WorkerConfig        `mapstructure:"worker" json:"worker"`
+	Database        DatabaseConfig      `mapstructure:"database" json:"database"`
+	Redis           RedisConfig         `mapstructure:"redis" json:"redis"`
+	Log             LogConfig           `mapstructure:"log" json:"log"`
+	Observability   ObservabilityConfig `mapstructure:"observability" json:"observability"`
+	OIDC            OIDCConfig          `mapstructure:"oidc" json:"oidc"`
+	ArgoCD          ArgoCDConfig        `mapstructure:"argocd" json:"argocd"`
+	AWS             AWSConfig           `mapstructure:"aws" json:"aws"`
+	Session         SessionConfig       `mapstructure:"session" json:"session"`
+	Identity        IdentityConfig      `mapstructure:"identity" json:"identity"`
+	Notifications   NotificationConfig  `mapstructure:"notifications" json:"notifications"`
+	Tenancy         TenancyConfig       `mapstructure:"tenancy" json:"tenancy"`
 }
 
 type RuntimeConfig struct {
@@ -357,6 +358,7 @@ func (c Config) Validate() error {
 // String returns a configuration summary that is safe to write to logs.
 func (c Config) String() string {
 	redacted := c
+	redacted.ManagerPassword = redact(c.ManagerPassword)
 	redacted.Database.Password = redact(c.Database.Password)
 	redacted.Redis.Password = redact(c.Redis.Password)
 	redacted.OIDC.ClientSecret = redact(c.OIDC.ClientSecret)
@@ -441,6 +443,7 @@ func setPoolDefaults(v *viper.Viper, prefix string, cfg PoolConfig) {
 
 func bindEnvironment(v *viper.Viper) error {
 	for _, key := range []string{
+		"manager_password",
 		"api.address", "log.level", "worker.deployment_poll_interval", "worker.job_lease_duration",
 		"worker.job_retry_delay", "worker.application_lock_duration", "worker.max_parallel_deployments",
 		"notifications.retention", "notifications.projection_interval",

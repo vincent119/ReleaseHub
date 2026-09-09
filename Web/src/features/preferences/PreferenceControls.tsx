@@ -11,7 +11,7 @@ export function PreferenceControls() {
   const { preference, setPreference } = useThemePreference()
 
   return (
-    <Space direction="vertical" size="middle">
+    <Space orientation="vertical" size="middle">
       <div>
         <Typography.Text strong>
           {t('preferences.language.label')}

@@ -56,7 +56,7 @@ func RunAPI(cfg config.Config, version string) (result error) {
 
 func validateAPIConfig(cfg config.Config) error {
 	if strings.TrimSpace(cfg.OIDC.WebRedirectURL) == "" {
-		return fmt.Errorf("OIDC web redirect URL is required")
+		return fmt.Errorf("web redirect URL is required")
 	}
 	return nil
 }

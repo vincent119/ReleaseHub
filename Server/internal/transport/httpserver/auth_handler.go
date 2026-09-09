@@ -24,6 +24,7 @@ type authFlow interface {
 
 type authHandler struct {
 	flow           authFlow
+	local          localAuth
 	webRedirectURL string
 	cookieSecure   bool
 	loginStateTTL  time.Duration
@@ -31,6 +32,22 @@ type authHandler struct {
 }
 
 func (h *authHandler) authenticateMutation(c *gin.Context, csrfToken string) (identity.Session, identity.User, bool) {
+	session, user, ok := h.authenticateMutationForPasswordChange(c, csrfToken)
+	if ok && h.local != nil && session.AuthenticationMethod == "local" {
+		mustChange, err := h.local.MustChangePassword(c.Request.Context(), user.ID)
+		if err != nil {
+			respondError(c, http.StatusInternalServerError, "SESSION_STATE_UNAVAILABLE", "Authentication state is unavailable")
+			return identity.Session{}, identity.User{}, false
+		}
+		if mustChange {
+			respondError(c, http.StatusForbidden, "PASSWORD_CHANGE_REQUIRED", "The initial password must be changed")
+			return identity.Session{}, identity.User{}, false
+		}
+	}
+	return session, user, ok
+}
+
+func (h *authHandler) authenticateMutationForPasswordChange(c *gin.Context, csrfToken string) (identity.Session, identity.User, bool) {
 	if !h.mutationOriginAllowed(c) {
 		return identity.Session{}, identity.User{}, false
 	}
@@ -124,11 +141,20 @@ func (h *authHandler) setSessionCookies(c *gin.Context, sessionToken, csrfToken 
 
 func (h *authHandler) GetAuthSession(c *gin.Context) {
 	c.Header("Cache-Control", "no-store")
-	_, user, ok := h.authenticate(c)
+	session, user, ok := h.authenticateAllowPasswordChange(c)
 	if !ok {
 		return
 	}
-	c.JSON(http.StatusOK, contract.AuthSessionResponse{Data: contract.AuthSession{UserId: user.ID, Username: user.Username}, Meta: responseMeta(c)})
+	mustChange := false
+	if h.local != nil && session.AuthenticationMethod == "local" {
+		var err error
+		mustChange, err = h.local.MustChangePassword(c.Request.Context(), user.ID)
+		if err != nil {
+			respondError(c, http.StatusInternalServerError, "SESSION_STATE_UNAVAILABLE", "Authentication state is unavailable")
+			return
+		}
+	}
+	c.JSON(http.StatusOK, contract.AuthSessionResponse{Data: contract.AuthSession{UserId: user.ID, Username: user.Username, MustChangePassword: mustChange}, Meta: responseMeta(c)})
 }
 
 func (h *authHandler) LogoutAuthSession(c *gin.Context, params contract.LogoutAuthSessionParams) {
@@ -170,6 +196,23 @@ func logoutResult(redirectURL string) contract.LogoutResult {
 }
 
 func (h *authHandler) authenticate(c *gin.Context) (identity.Session, identity.User, bool) {
+	session, user, ok := h.authenticateAllowPasswordChange(c)
+	if ok && h.local != nil && session.AuthenticationMethod == "local" {
+		mustChange, err := h.local.MustChangePassword(c.Request.Context(), user.ID)
+		if err != nil {
+			respondError(c, http.StatusInternalServerError, "SESSION_STATE_UNAVAILABLE", "Authentication state is unavailable")
+			return identity.Session{}, identity.User{}, false
+		}
+		if !mustChange {
+			return session, user, true
+		}
+		respondError(c, http.StatusForbidden, "PASSWORD_CHANGE_REQUIRED", "The initial password must be changed")
+		return identity.Session{}, identity.User{}, false
+	}
+	return session, user, ok
+}
+
+func (h *authHandler) authenticateAllowPasswordChange(c *gin.Context) (identity.Session, identity.User, bool) {
 	if h.flow == nil {
 		respondError(c, http.StatusUnauthorized, "SESSION_REQUIRED", "Authentication is required")
 		return identity.Session{}, identity.User{}, false
@@ -233,3 +276,4 @@ func sameOrigin(request *http.Request, target string) bool {
 }
 
 var _ authFlow = (*identityapp.AuthFlow)(nil)
+var _ localAuth = (*identityapp.LocalAuthService)(nil)

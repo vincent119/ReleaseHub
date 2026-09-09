@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" fill="none">
+  <defs>
+    <linearGradient id="panel" x1="72" y1="56" x2="444" y2="464" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#151A3A"/>
+      <stop offset="0.62" stop-color="#1D244A"/>
+      <stop offset="1" stop-color="#302044"/>
+    </linearGradient>
+    <linearGradient id="flow" x1="132" y1="125" x2="377" y2="391" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#67E8F9"/>
+      <stop offset="0.58" stop-color="#22D3EE"/>
+      <stop offset="1" stop-color="#818CF8"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0" cy="0" r="1" gradientTransform="translate(256 254) rotate(90) scale(214)" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#67E8F9" stop-opacity="0.16"/>
+      <stop offset="1" stop-color="#818CF8" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="shadow" x="8" y="12" width="496" height="508" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="18" stdDeviation="18" flood-color="#020617" flood-opacity="0.42"/>
+    </filter>
+    <filter id="hubGlow" x="164" y="171" width="184" height="184" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="12"/>
+    </filter>
+  </defs>
+
+  <g filter="url(#shadow)">
+    <rect x="32" y="28" width="448" height="448" rx="112" fill="url(#panel)"/>
+    <rect x="34" y="30" width="444" height="444" rx="110" stroke="#818CF8" stroke-opacity="0.45" stroke-width="4"/>
+    <rect x="32" y="28" width="448" height="448" rx="112" fill="url(#glow)"/>
+  </g>
+
+  <g opacity="0.96" stroke="url(#flow)" stroke-width="18" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M136 143V185C136 203 150 217 168 217H201"/>
+    <path d="M376 143V185C376 203 362 217 344 217H311"/>
+    <path d="M256 125V189"/>
+    <path d="M256 319V374"/>
+  </g>
+
+  <circle cx="256" cy="263" r="80" fill="#67E8F9" fill-opacity="0.18" filter="url(#hubGlow)"/>
+
+  <g fill="#151A3A" stroke="#67E8F9" stroke-width="14">
+    <rect x="105" y="112" width="62" height="62" rx="20"/>
+    <rect x="225" y="94" width="62" height="62" rx="20"/>
+    <rect x="345" y="112" width="62" height="62" rx="20"/>
+  </g>
+
+  <path d="M256 190L319 226V300L256 336L193 300V226L256 190Z" fill="#111735" stroke="url(#flow)" stroke-width="18" stroke-linejoin="round"/>
+  <path d="M230 273L256 247L282 273M256 249V297" stroke="#02C874" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <rect x="211" y="370" width="90" height="32" rx="16" fill="#818CF8"/>
+  <circle cx="136" cy="143" r="8" fill="#F5FBFF"/>
+  <circle cx="256" cy="125" r="8" fill="#F5FBFF"/>
+  <circle cx="376" cy="143" r="8" fill="#F5FBFF"/>
+</svg>

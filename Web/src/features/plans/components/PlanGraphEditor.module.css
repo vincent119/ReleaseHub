@@ -4,27 +4,93 @@
   grid-template-rows: auto minmax(32rem, 1fr);
   min-height: 38rem;
   overflow: hidden;
-  border: 1px solid var(--ant-color-border-secondary);
-  border-radius: var(--ant-border-radius-lg);
+  background: var(--rh-color-surface);
+  border: 1px solid var(--rh-color-border);
+  border-radius: var(--rh-radius-lg);
+  box-shadow: var(--rh-shadow-card);
 }
 
 .toolbar {
   grid-column: 1 / -1;
   padding: var(--rh-space-3);
-  background: var(--ant-color-bg-container);
-  border-bottom: 1px solid var(--ant-color-border-secondary);
+  background: var(--rh-color-surface-elevated);
+  border-bottom: 1px solid var(--rh-color-border);
 }
 
 .canvas {
   min-width: 0;
-  background: var(--ant-color-bg-layout);
+  background-color: var(--rh-color-page);
+  background-image: var(--rh-ambient-page);
+  background-position: center;
+}
+
+.canvas :global(.react-flow__background-pattern) {
+  fill: color-mix(in srgb, var(--rh-color-primary) 34%, transparent);
+}
+
+.canvas :global(.react-flow__node-default) {
+  color: var(--rh-color-text-primary);
+  background: var(--rh-color-surface-elevated);
+  border: 1px solid var(--rh-color-border-strong);
+  border-top: 3px solid var(--rh-color-primary);
+  border-radius: var(--rh-radius-lg);
+  box-shadow: var(--rh-shadow-card);
+}
+
+.canvas :global(.react-flow__node-default.selected) {
+  border-color: var(--rh-color-primary);
+  box-shadow:
+    0 0 0 3px var(--rh-color-focus-soft),
+    var(--rh-shadow-floating);
+}
+
+.canvas :global(.react-flow__handle) {
+  background: var(--rh-color-primary);
+  border-color: var(--rh-color-surface-elevated);
+}
+
+.canvas :global(.react-flow__edge-path) {
+  stroke: color-mix(
+    in srgb,
+    var(--rh-color-primary) 58%,
+    var(--rh-color-text-secondary)
+  );
+  stroke-width: 1.5;
+}
+
+.canvas :global(.react-flow__edge.selected .react-flow__edge-path) {
+  stroke: var(--rh-color-primary);
+  stroke-width: 2;
+}
+
+.canvas :global(.react-flow__controls),
+.canvas :global(.react-flow__minimap) {
+  overflow: hidden;
+  background: var(--rh-color-surface-elevated);
+  border: 1px solid var(--rh-color-border);
+  border-radius: var(--rh-radius-md);
+  box-shadow: var(--rh-shadow-floating);
+}
+
+.canvas :global(.react-flow__controls-button) {
+  color: var(--rh-color-text-primary);
+  background: var(--rh-color-surface-elevated);
+  border-bottom-color: var(--rh-color-border);
+}
+
+.canvas :global(.react-flow__controls-button:hover) {
+  color: var(--rh-color-primary);
+}
+
+.canvas :global(.react-flow__controls-button svg) {
+  fill: currentColor;
 }
 
 .inspector {
   padding: var(--rh-space-4);
   overflow: auto;
-  background: var(--ant-color-bg-container);
-  border-left: 1px solid var(--ant-color-border-secondary);
+  background: var(--rh-color-surface);
+  border-left: 1px solid var(--rh-color-border);
 }
 
 @media (max-width: 960px) {
@@ -34,7 +100,7 @@
   }
 
   .inspector {
-    border-top: 1px solid var(--ant-color-border-secondary);
+    border-top: 1px solid var(--rh-color-border);
     border-left: 0;
   }
 }

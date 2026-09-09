@@ -7,7 +7,7 @@ import (
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
-	semconv "go.opentelemetry.io/otel/semconv/v1.39.0"
+	semconv "go.opentelemetry.io/otel/semconv/v1.43.0"
 
 	"github.com/vincent119/ReleaseHub/Server/internal/config"
 )
@@ -18,16 +18,9 @@ func NewTracerProvider(
 	cfg config.TracingConfig,
 	component string,
 ) (*sdktrace.TracerProvider, error) {
-	res, err := resource.Merge(
-		resource.Default(),
-		resource.NewWithAttributes(
-			semconv.SchemaURL,
-			semconv.ServiceName("releasehub-"+component),
-			semconv.ServiceNamespace("releasehub"),
-		),
-	)
+	res, err := newResource(component)
 	if err != nil {
-		return nil, fmt.Errorf("create OpenTelemetry resource: %w", err)
+		return nil, err
 	}
 
 	options := []sdktrace.TracerProviderOption{
@@ -49,4 +42,19 @@ func NewTracerProvider(
 		)
 	}
 	return sdktrace.NewTracerProvider(options...), nil
+}
+
+func newResource(component string) (*resource.Resource, error) {
+	res, err := resource.Merge(
+		resource.Default(),
+		resource.NewWithAttributes(
+			semconv.SchemaURL,
+			semconv.ServiceName("releasehub-"+component),
+			semconv.ServiceNamespace("releasehub"),
+		),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("create OpenTelemetry resource: %w", err)
+	}
+	return res, nil
 }

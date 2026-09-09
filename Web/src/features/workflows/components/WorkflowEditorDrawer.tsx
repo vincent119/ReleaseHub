@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 import type { ReleaseWorkflowDocument } from '@/generated/model'
 
 import { WorkflowGraphEditor } from './WorkflowGraphEditor'
+import styles from './WorkflowEditorDrawer.module.css'
 
 export interface WorkflowEditorValue {
   name: string
@@ -41,8 +42,9 @@ export function WorkflowEditorDrawer({
   return (
     <Drawer
       open={open}
-      width="min(96vw, 92rem)"
+      size="100%"
       title={title}
+      rootClassName={styles.drawer}
       destroyOnHidden
       onClose={onClose}
       extra={
@@ -59,30 +61,50 @@ export function WorkflowEditorDrawer({
         </Space>
       }
     >
-      <Form
-        form={form}
-        layout="vertical"
-        initialValues={{ name: initial.name, description: initial.description }}
-      >
-        <Form.Item
-          name="name"
-          label={t('workflows.fields.workflowName')}
-          rules={[{ required: true, message: t('workflows.validation.name') }]}
+      <div className={styles.content}>
+        <Form
+          form={form}
+          layout="vertical"
+          className={styles.metadata}
+          initialValues={{
+            name: initial.name,
+            description: initial.description,
+          }}
         >
-          <Input maxLength={128} />
-        </Form.Item>
-        <Form.Item name="description" label={t('workflows.fields.description')}>
-          <Input.TextArea
-            maxLength={4096}
-            autoSize={{ minRows: 2, maxRows: 5 }}
+          <Form.Item
+            name="name"
+            label={t('workflows.fields.workflowName')}
+            rules={[
+              { required: true, message: t('workflows.validation.name') },
+            ]}
+          >
+            <Input maxLength={128} />
+          </Form.Item>
+          <Form.Item
+            name="description"
+            label={t('workflows.fields.description')}
+          >
+            <Input.TextArea
+              maxLength={4096}
+              autoSize={{ minRows: 1, maxRows: 3 }}
+            />
+          </Form.Item>
+        </Form>
+        {validation && (
+          <Alert
+            className={styles.validation}
+            type="warning"
+            showIcon
+            title={validation}
           />
-        </Form.Item>
-      </Form>
-      {validation && <Alert type="warning" showIcon message={validation} />}
-      <WorkflowGraphEditor
-        initialDocument={initial.document}
-        onChange={setDocument}
-      />
+        )}
+        <div className={styles.workspace}>
+          <WorkflowGraphEditor
+            initialDocument={initial.document}
+            onChange={setDocument}
+          />
+        </div>
+      </div>
     </Drawer>
   )
 }

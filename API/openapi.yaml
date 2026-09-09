@@ -2,54 +2,103 @@ openapi: 3.0.3
 info:
   title: ReleaseHub API
   version: 1.0.0
-  description: ReleaseHub 前後端共用的 HTTP API 契約。
+  description: Shared HTTP API contract for the ReleaseHub frontend and backend.
 servers:
   - url: /
 tags:
   - name: System
-    description: 平台基本資訊。
+    description: Platform system information.
   - name: Auth
-    description: OIDC 登入與 BFF Session。
+    description: Local and OIDC login with BFF sessions.
   - name: Catalog
-    description: 受權的 ReleaseHub 資源目錄。
+    description: Authorized ReleaseHub resource catalog.
   - name: ArgoCD
-    description: Argo CD discovery 與 onboarding 管理。
+    description: Argo CD discovery and onboarding management.
   - name: Access
-    description: Group、Role、Scope 與 Deny 管理。
+    description: Group, Role, Scope, and Deny management.
   - name: DeploymentRequests
-    description: Production Deployment Request、immutable Version 與審核操作。
+    description: Production Deployment Requests, immutable Versions, and review operations.
   - name: ReleaseWorkflows
-    description: Release Workflow 定義、版本與生命週期。
+    description: Release Workflow definitions, versions, and lifecycle.
   - name: DeploymentPlans
-    description: Deployment Plan DAG、版本與 Environment binding。
+    description: Deployment Plan DAGs, versions, and Environment bindings.
   - name: Deployments
-    description: Deployment execution、retry、terminate、unlock 與歷史。
+    description: Deployment execution, retry, terminate, unlock, and history.
   - name: Notifications
-    description: 站內通知、已讀狀態與 SSE event stream。
+    description: In-app notifications, read state, and the SSE event stream.
 paths:
+  /api/v1/access/capabilities:
+    get:
+      operationId: getAccessCapabilities
+      summary: Get server-owned Access collection capabilities
+      tags: [Access]
+      security: [{ sessionCookie: [] }]
+      responses:
+        "200": { description: Access collection capabilities, content: { application/json: { schema: { $ref: "#/components/schemas/AccessCapabilitiesResponse" } } } }
+        "404": { description: The caller has no manageable Access scope. }
+  /api/v1/access/users:
+    get:
+      operationId: listAccessUsers
+      summary: List manageable users
+      tags: [Access]
+      security: [{ sessionCookie: [] }]
+      parameters:
+        - { name: search, in: query, schema: { type: string, maxLength: 128 } }
+        - { $ref: "#/components/parameters/AccessStatus" }
+        - { $ref: "#/components/parameters/Cursor" }
+        - { $ref: "#/components/parameters/Limit" }
+      responses:
+        "200": { description: One user page, content: { application/json: { schema: { $ref: "#/components/schemas/AccessUserListResponse" } } } }
+        "404": { description: The caller has no manageable Access scope. }
+    post:
+      operationId: createAccessUser
+      summary: Create a local user with a first-login password change requirement
+      tags: [Access]
+      security: [{ sessionCookie: [] }]
+      parameters: [{ $ref: "#/components/parameters/CsrfToken" }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/CreateAccessUserRequest" } } }
+      responses:
+        "201": { description: The local user was created, content: { application/json: { schema: { $ref: "#/components/schemas/AccessUserResponse" } } } }
+        "404": { description: The caller lacks platform-management permission. }
+        "409": { description: The username already exists. }
   /api/v1/access/snapshot:
     get:
       operationId: getAccessManagementSnapshot
-      summary: 取得目前使用者可管理的存取控制資料
+      summary: Get access-control data manageable by the current user
       tags: [Access]
       security:
         - sessionCookie: []
       responses:
         "200":
-          description: 平台管理者取得全部資料；Project 管理者只取得可管理 scope 的資料。
+          description: Platform administrators receive all data; Project managers receive only data within manageable scopes.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/AccessManagementSnapshotResponse"
         "401":
-          description: 未登入或 Session 已失效。
+          description: The user is unauthenticated or the session has expired.
 
         "404":
-          description: Access management 不存在或呼叫者無管理權限。
+          description: Access-management data is unavailable or the caller lacks management permission.
   /api/v1/access/groups:
+    get:
+      operationId: listAccessGroups
+      summary: List manageable Groups
+      tags: [Access]
+      security: [{ sessionCookie: [] }]
+      parameters:
+        - { name: search, in: query, schema: { type: string, maxLength: 128 } }
+        - { $ref: "#/components/parameters/AccessStatus" }
+        - { $ref: "#/components/parameters/Cursor" }
+        - { $ref: "#/components/parameters/Limit" }
+      responses:
+        "200": { description: One Group page, content: { application/json: { schema: { $ref: "#/components/schemas/AccessGroupListResponse" } } } }
+        "404": { description: The caller has no manageable Access scope. }
     post:
       operationId: createAccessGroup
-      summary: 建立 Group
+      summary: Create a Group
       tags: [Access]
       security: [{ sessionCookie: [] }]
       parameters: [{ $ref: "#/components/parameters/CsrfToken" }]
@@ -57,26 +106,26 @@ paths:
         required: true
         content: { application/json: { schema: { $ref: "#/components/schemas/CreateAccessGroupRequest" } } }
       responses:
-        "201": { description: Group 已建立, content: { application/json: { schema: { $ref: "#/components/schemas/AccessGroupResponse" } } } }
-        "404": { description: Owner 不存在或呼叫者無管理權限。 }
-        "409": { description: 名稱衝突或資料狀態不允許建立。 }
+        "201": { description: The Group was created, content: { application/json: { schema: { $ref: "#/components/schemas/AccessGroupResponse" } } } }
+        "404": { description: The owner does not exist or the caller lacks management permission. }
+        "409": { description: The name conflicts or the current data state does not permit creation. }
   /api/v1/access/groups/{groupId}/disable:
     post:
       operationId: disableAccessGroup
-      summary: 停用 Group 並撤銷其有效 policy
+      summary: Disable a Group and revoke its active policies
       tags: [Access]
       security: [{ sessionCookie: [] }]
       parameters:
         - { name: groupId, in: path, required: true, schema: { type: string, format: uuid } }
         - { $ref: "#/components/parameters/CsrfToken" }
       responses:
-        "204": { description: Group 已停用。 }
-        "404": { description: Group 不存在或呼叫者無管理權限。 }
-        "409": { description: Group 已停用或資料狀態不允許操作。 }
+        "204": { description: The Group was disabled. }
+        "404": { description: The Group does not exist or the caller lacks management permission. }
+        "409": { description: The Group is already disabled or the current data state does not permit the operation. }
   /api/v1/access/groups/{groupId}/memberships:
     post:
       operationId: createAccessMembership
-      summary: 將使用者加入 Group
+      summary: Add a user to a Group
       tags: [Access]
       security: [{ sessionCookie: [] }]
       parameters:
@@ -86,13 +135,51 @@ paths:
         required: true
         content: { application/json: { schema: { $ref: "#/components/schemas/CreateAccessMembershipRequest" } } }
       responses:
-        "201": { description: Membership 已建立, content: { application/json: { schema: { $ref: "#/components/schemas/AccessMembershipResponse" } } } }
-        "404": { description: Group 或使用者不存在，或呼叫者無管理權限。 }
-        "409": { description: Membership 已存在或資料狀態不允許建立。 }
+        "201": { description: The Membership was created, content: { application/json: { schema: { $ref: "#/components/schemas/AccessMembershipResponse" } } } }
+        "404": { description: "The Group or user does not exist, or the caller lacks management permission." }
+        "409": { description: The Membership already exists or the current data state does not permit creation. }
+  /api/v1/access/groups/{groupId}/membership-candidates:
+    get:
+      operationId: listAccessMembershipCandidates
+      summary: Find minimal user identities eligible for one manageable Group
+      tags: [Access]
+      security: [{ sessionCookie: [] }]
+      parameters:
+        - { name: groupId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: query, in: query, required: true, schema: { type: string, minLength: 1, maxLength: 128 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 20, default: 20 } }
+      responses:
+        "200": { description: Eligible minimal user identities, content: { application/json: { schema: { $ref: "#/components/schemas/AccessUserCandidatesResponse" } } } }
+        "404": { description: The Group does not exist or the caller lacks management permission. }
+  /api/v1/access/scopes/{scopeKind}/{scopeId}/options:
+    get:
+      operationId: getAccessScopeOptions
+      summary: Get legal Group, Role, and Permission options for one selected scope
+      tags: [Access]
+      security: [{ sessionCookie: [] }]
+      parameters:
+        - { name: scopeKind, in: path, required: true, schema: { type: string, enum: [platform, project, environment, application] } }
+        - { name: scopeId, in: path, required: true, schema: { type: string, minLength: 1 } }
+      responses:
+        "200": { description: Legal options for the selected scope, content: { application/json: { schema: { $ref: "#/components/schemas/AccessScopeOptionsResponse" } } } }
+        "404": { description: The scope does not exist or the caller lacks management permission. }
   /api/v1/access/roles:
+    get:
+      operationId: listAccessRoles
+      summary: List manageable Roles
+      tags: [Access]
+      security: [{ sessionCookie: [] }]
+      parameters:
+        - { name: search, in: query, schema: { type: string, maxLength: 128 } }
+        - { $ref: "#/components/parameters/AccessStatus" }
+        - { $ref: "#/components/parameters/Cursor" }
+        - { $ref: "#/components/parameters/Limit" }
+      responses:
+        "200": { description: One Role page, content: { application/json: { schema: { $ref: "#/components/schemas/AccessRoleListResponse" } } } }
+        "404": { description: The caller has no manageable Access scope. }
     post:
       operationId: createAccessRole
-      summary: 建立自訂 Role
+      summary: Create a custom Role
       tags: [Access]
       security: [{ sessionCookie: [] }]
       parameters: [{ $ref: "#/components/parameters/CsrfToken" }]
@@ -100,13 +187,25 @@ paths:
         required: true
         content: { application/json: { schema: { $ref: "#/components/schemas/CreateAccessRoleRequest" } } }
       responses:
-        "201": { description: Role 已建立, content: { application/json: { schema: { $ref: "#/components/schemas/AccessRoleResponse" } } } }
-        "404": { description: Owner 或 permission 不存在，或呼叫者無管理權限。 }
-        "409": { description: 名稱衝突或資料狀態不允許建立。 }
+        "201": { description: The Role was created, content: { application/json: { schema: { $ref: "#/components/schemas/AccessRoleResponse" } } } }
+        "404": { description: "The owner or permission does not exist, or the caller lacks management permission." }
+        "409": { description: The name conflicts or the current data state does not permit creation. }
   /api/v1/access/bindings:
+    get:
+      operationId: listAccessBindings
+      summary: List manageable Role bindings
+      tags: [Access]
+      security: [{ sessionCookie: [] }]
+      parameters:
+        - { $ref: "#/components/parameters/AccessStatus" }
+        - { $ref: "#/components/parameters/Cursor" }
+        - { $ref: "#/components/parameters/Limit" }
+      responses:
+        "200": { description: One Role binding page, content: { application/json: { schema: { $ref: "#/components/schemas/AccessBindingListResponse" } } } }
+        "404": { description: The caller has no manageable Access scope. }
     post:
       operationId: createAccessBinding
-      summary: 建立 Group、Role 與 scope 綁定
+      summary: Bind a Group and Role to a scope
       tags: [Access]
       security: [{ sessionCookie: [] }]
       parameters: [{ $ref: "#/components/parameters/CsrfToken" }]
@@ -114,13 +213,25 @@ paths:
         required: true
         content: { application/json: { schema: { $ref: "#/components/schemas/CreateAccessBindingRequest" } } }
       responses:
-        "201": { description: Role binding 已建立, content: { application/json: { schema: { $ref: "#/components/schemas/AccessBindingResponse" } } } }
-        "404": { description: Group、Role 或 scope 不存在，或呼叫者無管理權限。 }
-        "409": { description: Binding 衝突或資料狀態不允許建立。 }
+        "201": { description: The Role binding was created, content: { application/json: { schema: { $ref: "#/components/schemas/AccessBindingResponse" } } } }
+        "404": { description: "The Group, Role, or scope does not exist, or the caller lacks management permission." }
+        "409": { description: The binding conflicts or the current data state does not permit creation. }
   /api/v1/access/denies:
+    get:
+      operationId: listAccessDenies
+      summary: List manageable explicit Deny policies
+      tags: [Access]
+      security: [{ sessionCookie: [] }]
+      parameters:
+        - { $ref: "#/components/parameters/AccessStatus" }
+        - { $ref: "#/components/parameters/Cursor" }
+        - { $ref: "#/components/parameters/Limit" }
+      responses:
+        "200": { description: One Deny policy page, content: { application/json: { schema: { $ref: "#/components/schemas/AccessDenyListResponse" } } } }
+        "404": { description: The caller has no manageable Access scope. }
     post:
       operationId: createAccessDeny
-      summary: 建立明確拒絕 policy
+      summary: Create an explicit Deny policy
       tags: [Access]
       security: [{ sessionCookie: [] }]
       parameters: [{ $ref: "#/components/parameters/CsrfToken" }]
@@ -128,62 +239,129 @@ paths:
         required: true
         content: { application/json: { schema: { $ref: "#/components/schemas/CreateAccessDenyRequest" } } }
       responses:
-        "201": { description: Deny policy 已建立, content: { application/json: { schema: { $ref: "#/components/schemas/AccessDenyResponse" } } } }
-        "404": { description: Group、permission 或 scope 不存在，或呼叫者無管理權限。 }
-        "409": { description: Deny policy 衝突或資料狀態不允許建立。 }
+        "201": { description: The Deny policy was created, content: { application/json: { schema: { $ref: "#/components/schemas/AccessDenyResponse" } } } }
+        "404": { description: "The Group, permission, or scope does not exist, or the caller lacks management permission." }
+        "409": { description: The Deny policy conflicts or the current data state does not permit creation. }
   /api/v1/access/users/{userId}/disable:
     post:
       operationId: disableAccessUser
-      summary: 本地停用使用者並撤銷所有 Session
+      summary: Disable a local user and revoke all sessions
       tags: [Access]
       security: [{ sessionCookie: [] }]
       parameters:
         - { name: userId, in: path, required: true, schema: { type: string, format: uuid } }
         - { $ref: "#/components/parameters/CsrfToken" }
       responses:
-        "204": { description: 使用者已停用且 Session 已撤銷。 }
-        "404": { description: 使用者不存在或呼叫者無平台管理權限。 }
-        "409": { description: 使用者已停用或資料狀態不允許操作。 }
+        "204": { description: The user was disabled and all sessions were revoked. }
+        "404": { description: The user does not exist or the caller lacks platform-management permission. }
+        "409": { description: The user is already disabled or the current data state does not permit the operation. }
+  /api/v1/access/memberships/{membershipId}/revoke:
+    post:
+      operationId: revokeAccessMembership
+      summary: Revoke an active manual Group membership
+      tags: [Access]
+      security: [{ sessionCookie: [] }]
+      parameters:
+        - { name: membershipId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { $ref: "#/components/parameters/CsrfToken" }
+      responses:
+        "204": { description: The Membership was revoked. }
+        "404": { description: The Membership does not exist or the caller lacks management permission. }
+        "409": { description: "The Membership is inactive, externally managed, or protected by platform continuity." }
+  /api/v1/access/memberships:
+    get:
+      operationId: listAccessMemberships
+      summary: List manageable Group memberships
+      tags: [Access]
+      security: [{ sessionCookie: [] }]
+      parameters:
+        - { name: groupId, in: query, schema: { type: string, format: uuid } }
+        - { name: userId, in: query, schema: { type: string, format: uuid } }
+        - { $ref: "#/components/parameters/AccessStatus" }
+        - { $ref: "#/components/parameters/Cursor" }
+        - { $ref: "#/components/parameters/Limit" }
+      responses:
+        "200": { description: One Membership page, content: { application/json: { schema: { $ref: "#/components/schemas/AccessMembershipListResponse" } } } }
+        "404": { description: The caller has no manageable Access scope. }
+  /api/v1/access/roles/{roleId}/disable:
+    post:
+      operationId: disableAccessRole
+      summary: Disable an active custom Role
+      tags: [Access]
+      security: [{ sessionCookie: [] }]
+      parameters:
+        - { name: roleId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { $ref: "#/components/parameters/CsrfToken" }
+      responses:
+        "204": { description: The custom Role was disabled. }
+        "404": { description: The Role does not exist or the caller lacks management permission. }
+        "409": { description: "The Role is inactive, system-owned, or protected by platform continuity." }
+  /api/v1/access/bindings/{bindingId}/revoke:
+    post:
+      operationId: revokeAccessBinding
+      summary: Revoke an active Role binding
+      tags: [Access]
+      security: [{ sessionCookie: [] }]
+      parameters:
+        - { name: bindingId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { $ref: "#/components/parameters/CsrfToken" }
+      responses:
+        "204": { description: The Role binding was revoked. }
+        "404": { description: The Role binding does not exist or the caller lacks management permission. }
+        "409": { description: The Role binding is inactive or protected by platform continuity. }
+  /api/v1/access/denies/{denyId}/revoke:
+    post:
+      operationId: revokeAccessDeny
+      summary: Revoke an active explicit Deny policy
+      tags: [Access]
+      security: [{ sessionCookie: [] }]
+      parameters:
+        - { name: denyId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { $ref: "#/components/parameters/CsrfToken" }
+      responses:
+        "204": { description: The Deny policy was revoked. }
+        "404": { description: The Deny policy does not exist or the caller lacks management permission. }
+        "409": { description: The Deny policy is already inactive. }
   /api/v1/argocd/candidates:
     get:
       operationId: listArgoCDCandidates
-      summary: 列出目前存在的 Argo CD onboarding candidates
+      summary: List current Argo CD onboarding candidates
       tags: [ArgoCD]
       security:
         - sessionCookie: []
       responses:
         "200":
-          description: 僅限具 platform-only candidate view 權限的使用者。
+          description: Only users with the platform-only candidate-view permission are allowed.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ArgoCDCandidateListResponse"
         "401":
-          description: 未登入或 Session 已失效。
+          description: The user is unauthenticated or the session has expired.
         "404":
-          description: Candidate queue 不存在或呼叫者無權查看。
+          description: The Candidate queue is unavailable or the caller lacks view permission.
   /api/v1/argocd/candidate-assignment-scopes:
     get:
       operationId: listArgoCDCandidateAssignmentScopes
-      summary: 列出 Candidate 可指派的 production scope
+      summary: List production scopes available for Candidate assignment
       tags: [ArgoCD]
       security:
         - sessionCookie: []
       responses:
         "200":
-          description: 僅回傳 active Organization、Project 與 production Environment 組合。
+          description: Returns only active Organization, Project, and production Environment combinations.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ArgoCDCandidateAssignmentScopeListResponse"
         "401":
-          description: 未登入或 Session 已失效。
+          description: The user is unauthenticated or the session has expired.
         "404":
-          description: Candidate assignment scope 不存在或呼叫者無權查看。
+          description: The Candidate assignment scope is unavailable or the caller lacks view permission.
   /api/v1/argocd/candidates/{candidateId}/assignment:
     post:
       operationId: assignArgoCDCandidate
-      summary: 將 Candidate 指派至 ReleaseHub Application scope
+      summary: Assign a Candidate to a ReleaseHub Application scope
       tags: [ArgoCD]
       security:
         - sessionCookie: []
@@ -198,31 +376,31 @@ paths:
               $ref: "#/components/schemas/ArgoCDCandidateAssignmentRequest"
       responses:
         "201":
-          description: 已建立並連結 Candidate 的 Catalog Application。
+          description: The Catalog Application was created and linked to the Candidate.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/CatalogApplicationResponse"
         "404":
-          description: Candidate queue 不存在或呼叫者無權操作。
+          description: The Candidate queue is unavailable or the caller lacks operation permission.
         "409":
-          description: Candidate version 過期、已指派、source 不相符或目標不是有效 production Environment。
+          description: The Candidate version expired, was already assigned, has a mismatched source, or targets an invalid production Environment.
   /api/v1/catalog/visible-applications:
     get:
       operationId: listVisibleCatalogApplications
-      summary: 列出目前使用者可查看的 Applications
+      summary: List Applications visible to the current user
       tags: [Catalog]
       security:
         - sessionCookie: []
       responses:
         "200":
-          description: 僅回傳呼叫者具 resource.view 權限的 active Applications。
+          description: Returns only active Applications for which the caller has resource.view permission.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/CatalogApplicationListResponse"
         "401":
-          description: 未登入或 Session 已失效。
+          description: The user is unauthenticated or the session has expired.
           content:
             application/json:
               schema:
@@ -230,23 +408,23 @@ paths:
   /api/v1/catalog/resource-tree:
     get:
       operationId: getCatalogResourceTree
-      summary: 取得目前使用者可見的資源階層
+      summary: Get the resource hierarchy visible to the current user
       tags: [Catalog]
       security:
         - sessionCookie: []
       responses:
         "200":
-          description: 平台管理者取得全部 active 資源；其他使用者僅取得授權範圍與必要祖先。
+          description: Platform administrators receive all active resources; other users receive authorized scopes and required ancestors only.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/CatalogResourceTreeResponse"
         "401":
-          description: 未登入或 Session 已失效。
+          description: The user is unauthenticated or the session has expired.
   /api/v1/catalog/organizations:
     post:
       operationId: createCatalogOrganization
-      summary: 建立 Organization
+      summary: Create an Organization
       tags: [Catalog]
       security: [{ sessionCookie: [] }]
       parameters: [{ $ref: "#/components/parameters/CsrfToken" }]
@@ -254,13 +432,13 @@ paths:
         required: true
         content: { application/json: { schema: { $ref: "#/components/schemas/CreateNamedResourceRequest" } } }
       responses:
-        "201": { description: Organization 已建立, content: { application/json: { schema: { $ref: "#/components/schemas/CatalogOrganizationResponse" } } } }
-        "404": { description: 呼叫者沒有平台管理權限。 }
-        "409": { description: 名稱衝突或資料狀態不允許建立。 }
+        "201": { description: The Organization was created, content: { application/json: { schema: { $ref: "#/components/schemas/CatalogOrganizationResponse" } } } }
+        "404": { description: The caller lacks platform-management permission. }
+        "409": { description: The name conflicts or the current data state does not permit creation. }
   /api/v1/catalog/organizations/{organizationId}/projects:
     post:
       operationId: createCatalogProject
-      summary: 建立 Project
+      summary: Create a Project
       tags: [Catalog]
       security: [{ sessionCookie: [] }]
       parameters:
@@ -270,13 +448,13 @@ paths:
         required: true
         content: { application/json: { schema: { $ref: "#/components/schemas/CreateNamedResourceRequest" } } }
       responses:
-        "201": { description: Project 已建立, content: { application/json: { schema: { $ref: "#/components/schemas/CatalogProjectResponse" } } } }
-        "404": { description: Organization 不存在或呼叫者沒有管理權限。 }
-        "409": { description: 名稱衝突或資料狀態不允許建立。 }
+        "201": { description: The Project was created, content: { application/json: { schema: { $ref: "#/components/schemas/CatalogProjectResponse" } } } }
+        "404": { description: The Organization does not exist or the caller lacks management permission. }
+        "409": { description: The name conflicts or the current data state does not permit creation. }
   /api/v1/catalog/organizations/{organizationId}/projects/{projectId}/environments:
     post:
       operationId: createCatalogEnvironment
-      summary: 建立 Environment
+      summary: Create an Environment
       tags: [Catalog]
       security: [{ sessionCookie: [] }]
       parameters:
@@ -287,13 +465,13 @@ paths:
         required: true
         content: { application/json: { schema: { $ref: "#/components/schemas/CreateEnvironmentRequest" } } }
       responses:
-        "201": { description: Environment 已建立, content: { application/json: { schema: { $ref: "#/components/schemas/CatalogEnvironmentResponse" } } } }
-        "404": { description: Project 不存在或呼叫者沒有管理權限。 }
-        "409": { description: 名稱衝突或資料狀態不允許建立。 }
+        "201": { description: The Environment was created, content: { application/json: { schema: { $ref: "#/components/schemas/CatalogEnvironmentResponse" } } } }
+        "404": { description: The Project does not exist or the caller lacks management permission. }
+        "409": { description: The name conflicts or the current data state does not permit creation. }
   /api/v1/catalog/organizations/{organizationId}/projects/{projectId}/environment-label-mappings:
     post:
       operationId: createCatalogEnvironmentLabelMapping
-      summary: 建立 Argo CD label 至 Environment mapping
+      summary: Create an Argo CD label-to-Environment mapping
       tags: [Catalog]
       security: [{ sessionCookie: [] }]
       parameters:
@@ -304,13 +482,13 @@ paths:
         required: true
         content: { application/json: { schema: { $ref: "#/components/schemas/CreateEnvironmentLabelMappingRequest" } } }
       responses:
-        "201": { description: Environment label mapping 已建立, content: { application/json: { schema: { $ref: "#/components/schemas/CatalogEnvironmentLabelMappingResponse" } } } }
-        "404": { description: Project 不存在或呼叫者沒有管理權限。 }
-        "409": { description: Mapping 衝突或資料狀態不允許建立。 }
+        "201": { description: The Environment label mapping was created, content: { application/json: { schema: { $ref: "#/components/schemas/CatalogEnvironmentLabelMappingResponse" } } } }
+        "404": { description: The Project does not exist or the caller lacks management permission. }
+        "409": { description: The mapping conflicts or the current data state does not permit creation. }
   /api/v1/catalog/applications:
     get:
       operationId: listCatalogApplications
-      summary: 列出 Environment 中受權的 Applications
+      summary: List authorized Applications in an Environment
       tags: [Catalog]
       security:
         - sessionCookie: []
@@ -320,19 +498,19 @@ paths:
         - $ref: "#/components/parameters/EnvironmentId"
       responses:
         "200":
-          description: 僅回傳呼叫者於指定 Environment 有查看權限的 Applications；無權限時為空清單。
+          description: Returns Applications the caller can view in the specified Environment; returns an empty list when none are authorized.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/CatalogApplicationListResponse"
         "401":
-          description: 未登入或 Session 已失效。
+          description: The user is unauthenticated or the session has expired.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
         "400":
-          description: 資源識別格式無效。
+          description: The resource identifier format is invalid.
           content:
             application/json:
               schema:
@@ -340,7 +518,7 @@ paths:
   /api/v1/catalog/applications/{applicationId}:
     get:
       operationId: getCatalogApplication
-      summary: 取得受權的單一 Application
+      summary: Get one authorized Application
       tags: [Catalog]
       security:
         - sessionCookie: []
@@ -354,13 +532,13 @@ paths:
               schema:
                 $ref: "#/components/schemas/CatalogApplicationResponse"
         "401":
-          description: 未登入或 Session 已失效。
+          description: The user is unauthenticated or the session has expired.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
         "404":
-          description: Application 不存在或呼叫者無權查看。
+          description: The Application does not exist or the caller lacks view permission.
           content:
             application/json:
               schema:
@@ -368,7 +546,7 @@ paths:
   /api/v1/catalog/applications/{applicationId}/status:
     get:
       operationId: getCatalogApplicationStatus
-      summary: 取得受權 Application 的 Argo CD 與 onboarding 狀態
+      summary: Get Argo CD and onboarding state for an authorized Application
       tags: [Catalog]
       security:
         - sessionCookie: []
@@ -376,19 +554,19 @@ paths:
         - $ref: "#/components/parameters/ApplicationId"
       responses:
         "200":
-          description: 最近一次 reconciliation 與 onboarding 狀態。
+          description: The latest reconciliation and onboarding state.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/CatalogApplicationStatusResponse"
         "401":
-          description: 未登入或 Session 已失效。
+          description: The user is unauthenticated or the session has expired.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
         "404":
-          description: Application 不存在或呼叫者無權查看。
+          description: The Application does not exist or the caller lacks view permission.
           content:
             application/json:
               schema:
@@ -396,7 +574,7 @@ paths:
   /api/v1/catalog/applications/{applicationId}/onboarding/dry-run:
     post:
       operationId: dryRunApplicationOnboarding
-      summary: 驗證 Application onboarding 條件
+      summary: Validate Application onboarding prerequisites
       tags: [Catalog]
       security:
         - sessionCookie: []
@@ -405,17 +583,17 @@ paths:
         - $ref: "#/components/parameters/CsrfToken"
       responses:
         "200":
-          description: 已保存的 dry-run 結果。
+          description: The persisted dry-run result.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/OnboardingResponse"
         "404":
-          description: Application 不存在或呼叫者無權操作。
+          description: The Application does not exist or the caller lacks operation permission.
   /api/v1/catalog/applications/{applicationId}/onboarding/confirm:
     post:
       operationId: confirmApplicationOnboarding
-      summary: 確認 onboarding 並關閉 automated sync
+      summary: Confirm onboarding and disable automated sync
       tags: [Catalog]
       security:
         - sessionCookie: []
@@ -431,19 +609,19 @@ paths:
               $ref: "#/components/schemas/OnboardingConfirmRequest"
       responses:
         "200":
-          description: 已完成或可安全重播的 onboarding 結果。
+          description: The completed or safely replayable onboarding result.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/OnboardingResponse"
         "202":
-          description: 原確認命令仍在執行或等待 Worker 復原。
+          description: The original confirmation command is still running or waiting for Worker recovery.
         "409":
-          description: onboarding version 已過期或 Idempotency-Key 被不同請求重用。
+          description: The onboarding version expired or the Idempotency-Key was reused for a different request.
   /api/v1/deployment-requests:
     get:
       operationId: listDeploymentRequests
-      summary: 列出目前使用者可查看的 Deployment Request
+      summary: List Deployment Requests visible to the current user
       tags:
         - DeploymentRequests
       security:
@@ -456,19 +634,19 @@ paths:
         - $ref: "#/components/parameters/EnvironmentId"
       responses:
         "200":
-          description: 依建立時間反向排序的 Deployment Request。
+          description: Deployment Requests ordered by creation time descending.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/DeploymentRequestListResponse"
         "401":
-          description: 未登入或 Session 已失效。
+          description: The user is unauthenticated or the session has expired.
         "404":
-          description: Scope 不存在或呼叫者無權查看。
+          description: The Scope does not exist or the caller lacks view permission.
   /api/v1/deployment-requests/{requestId}:
     get:
       operationId: getDeploymentRequest
-      summary: 取得 Deployment Request、Version 與目前流程快照
+      summary: Get a Deployment Request, Version, and current workflow snapshot
       tags:
         - DeploymentRequests
       security:
@@ -477,19 +655,19 @@ paths:
         - $ref: "#/components/parameters/RequestId"
       responses:
         "200":
-          description: Deployment Request 詳細資料。
+          description: Deployment Request details.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/DeploymentRequestDetailResponse"
         "401":
-          description: 未登入或 Session 已失效。
+          description: The user is unauthenticated or the session has expired.
         "404":
-          description: Request 不存在或呼叫者無權查看。
+          description: The Request does not exist or the caller lacks view permission.
   /api/v1/deployment-requests/{requestId}/versions/{requestVersionId}:
     patch:
       operationId: updateDeploymentRequestVersionMetadata
-      summary: 以新 Version 更新受審的選填資料
+      summary: Update reviewed optional data through a new Version
       tags:
         - DeploymentRequests
       security:
@@ -506,21 +684,21 @@ paths:
               $ref: "#/components/schemas/UpdateDeploymentRequestVersionRequest"
       responses:
         "200":
-          description: 已建立新的 immutable Version。
+          description: A new immutable Version was created.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/DeploymentRequestVersionResponse"
         "401":
-          description: 未登入或 Session 已失效。
+          description: The user is unauthenticated or the session has expired.
         "404":
-          description: Request Version 不存在或呼叫者無權操作。
+          description: The Request Version does not exist or the caller lacks operation permission.
         "409":
-          description: expectedVersion 過期或 Version 狀態不允許修改。
+          description: The expectedVersion is stale or the Version state does not permit modification.
   /api/v1/deployment-requests/{requestId}/versions/{requestVersionId}/reviews/{reviewTaskId}/decisions:
     post:
       operationId: decideDeploymentReview
-      summary: 核准或拒絕 Deployment Request review task
+      summary: Approve or reject a Deployment Request review task
       tags:
         - DeploymentRequests
       security:
@@ -539,23 +717,23 @@ paths:
               $ref: "#/components/schemas/DeploymentReviewDecisionRequest"
       responses:
         "200":
-          description: Review decision 已保存並重新計算 workflow state。
+          description: The review decision was persisted and the workflow state was recalculated.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/DeploymentRequestVersionResponse"
         "401":
-          description: 未登入或 Session 已失效。
+          description: The user is unauthenticated or the session has expired.
         "404":
-          description: Review task 不存在或呼叫者無權操作。
+          description: The review task does not exist or the caller lacks operation permission.
         "409":
-          description: Idempotency-Key 衝突、Version 已失效或 task 已關閉。
+          description: The Idempotency-Key conflicts, the Version is invalid, or the task is closed.
         "422":
-          description: Review decision 不符合 Workflow policy。
+          description: The review decision violates the Workflow policy.
   /api/v1/deployment-requests/{requestId}/versions/{requestVersionId}/reviews/{reviewTaskId}/reassignments:
     post:
       operationId: reassignDeploymentReview
-      summary: 重新指派等待中的 Deployment Request review task
+      summary: Reassign a pending Deployment Request review task
       tags:
         - DeploymentRequests
       security:
@@ -574,23 +752,23 @@ paths:
               $ref: "#/components/schemas/DeploymentReviewReassignmentRequest"
       responses:
         "200":
-          description: Review task 已重新指派並保存稽核紀錄。
+          description: The review task was reassigned and an audit record was persisted.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/DeploymentRequestVersionResponse"
         "401":
-          description: 未登入或 Session 已失效。
+          description: The user is unauthenticated or the session has expired.
         "404":
-          description: Review task 不存在或呼叫者無權操作。
+          description: The review task does not exist or the caller lacks operation permission.
         "409":
-          description: Idempotency-Key 衝突、Version 已失效或 task 已關閉。
+          description: The Idempotency-Key conflicts, the Version is invalid, or the task is closed.
         "422":
-          description: 新指派或原因不符合 Workflow policy。
+          description: The new assignment or reason violates the Workflow policy.
   /api/v1/deployment-requests/{requestId}/versions/{requestVersionId}/transitions:
     post:
       operationId: transitionDeploymentRequest
-      summary: 執行 Workflow 允許的 transition
+      summary: Execute a transition allowed by the Workflow
       tags:
         - DeploymentRequests
       security:
@@ -608,23 +786,23 @@ paths:
               $ref: "#/components/schemas/DeploymentTransitionRequest"
       responses:
         "202":
-          description: Transition 已接受；若產生 deployment intent，將由 Worker 非同步執行。
+          description: The transition was accepted. Worker executes any resulting deployment intent asynchronously.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/DeploymentRequestVersionResponse"
         "401":
-          description: 未登入或 Session 已失效。
+          description: The user is unauthenticated or the session has expired.
         "404":
-          description: Request Version 不存在或呼叫者無權操作。
+          description: The Request Version does not exist or the caller lacks operation permission.
         "409":
-          description: Idempotency-Key、optimistic version 或目前狀態衝突。
+          description: The Idempotency-Key, optimistic version, or current state conflicts.
         "422":
-          description: Workflow 不允許此 transition。
+          description: The Workflow does not permit this transition.
   /api/v1/deployment-requests/{requestId}/versions/{requestVersionId}/retry:
     post:
       operationId: retryDeploymentRequest
-      summary: 依 Workflow 與 Plan 重試指定失敗 Application
+      summary: Retry selected failed Applications according to the Workflow and Plan
       tags:
         - Deployments
       security:
@@ -642,23 +820,23 @@ paths:
               $ref: "#/components/schemas/DeploymentRetryRequest"
       responses:
         "202":
-          description: Retry execution 已排入 queue。
+          description: The retry execution was queued.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/DeploymentExecutionResponse"
         "401":
-          description: 未登入或 Session 已失效。
+          description: The user is unauthenticated or the session has expired.
         "404":
-          description: Request Version 不存在或呼叫者無權操作。
+          description: The Request Version does not exist or the caller lacks operation permission.
         "409":
-          description: Idempotency-Key、操作鎖或 execution 狀態衝突。
+          description: The Idempotency-Key, operation lock, or execution state conflicts.
         "422":
-          description: Workflow／Plan 不允許 retry，或選到非失敗 Application。
+          description: The Workflow or Plan does not permit retry, or a non-failed Application was selected.
   /api/v1/deployment-requests/{requestId}/versions/{requestVersionId}/terminate:
     post:
       operationId: terminateDeploymentRequest
-      summary: 依 Workflow 終止未收斂的 deployment execution
+      summary: Terminate an unconverged deployment execution according to the Workflow
       tags:
         - Deployments
       security:
@@ -676,23 +854,23 @@ paths:
               $ref: "#/components/schemas/DeploymentTerminateRequest"
       responses:
         "202":
-          description: Terminate intent 已接受。
+          description: The terminate intent was accepted.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/DeploymentExecutionResponse"
         "401":
-          description: 未登入或 Session 已失效。
+          description: The user is unauthenticated or the session has expired.
         "404":
-          description: Execution 不存在或呼叫者無權操作。
+          description: The Execution does not exist or the caller lacks operation permission.
         "409":
-          description: Idempotency-Key 或 execution 狀態衝突。
+          description: The Idempotency-Key or execution state conflicts.
         "422":
-          description: Workflow 不允許 terminate。
+          description: The Workflow does not permit terminate.
   /api/v1/deployment-requests/{requestId}/versions/{requestVersionId}/unlock:
     post:
       operationId: unlockDeploymentRequest
-      summary: 核對實際狀態後人工解除 Application operation lock
+      summary: Manually release Application operation locks after actual-state verification
       tags:
         - Deployments
       security:
@@ -710,39 +888,39 @@ paths:
               $ref: "#/components/schemas/DeploymentUnlockRequest"
       responses:
         "202":
-          description: Unlock reconciliation 已接受。
+          description: The unlock reconciliation was accepted.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/DeploymentExecutionResponse"
         "401":
-          description: 未登入或 Session 已失效。
+          description: The user is unauthenticated or the session has expired.
         "404":
-          description: Execution 不存在或呼叫者無權操作。
+          description: The Execution does not exist or the caller lacks operation permission.
         "409":
-          description: Idempotency-Key 或 actual state 不一致。
+          description: The Idempotency-Key conflicts or the actual state does not match.
         "422":
-          description: 未填理由、未確認全部 Application 或狀態不允許解鎖。
+          description: A reason is missing, not all Applications were confirmed, or the state does not permit unlock.
   /api/v1/release-workflows:
     get:
       operationId: listReleaseWorkflows
-      summary: 列出 Release Workflow 與版本
+      summary: List Release Workflows and versions
       tags:
         - ReleaseWorkflows
       security:
         - sessionCookie: []
       responses:
         "200":
-          description: 可查看的 Workflow 定義。
+          description: Visible Workflow definitions.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ReleaseWorkflowListResponse"
         "401":
-          description: 未登入或 Session 已失效。
+          description: The user is unauthenticated or the session has expired.
     post:
       operationId: createReleaseWorkflow
-      summary: 建立 Release Workflow 與第一個 Draft Version
+      summary: Create a Release Workflow and its first Draft Version
       tags:
         - ReleaseWorkflows
       security:
@@ -757,19 +935,19 @@ paths:
               $ref: "#/components/schemas/CreateReleaseWorkflowRequest"
       responses:
         "201":
-          description: Workflow 與 Draft Version 已建立。
+          description: The Workflow and Draft Version were created.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ReleaseWorkflowResponse"
         "401":
-          description: 未登入或 Session 已失效。
+          description: The user is unauthenticated or the session has expired.
         "409":
-          description: Workflow 名稱衝突。
+          description: The Workflow name conflicts.
   /api/v1/release-workflows/{workflowId}/versions:
     post:
       operationId: createReleaseWorkflowVersion
-      summary: 建立下一個 Release Workflow Draft Version
+      summary: Create the next Release Workflow Draft Version
       tags:
         - ReleaseWorkflows
       security:
@@ -785,21 +963,21 @@ paths:
               $ref: "#/components/schemas/CreateReleaseWorkflowVersionRequest"
       responses:
         "201":
-          description: Draft Version 已建立。
+          description: The Draft Version was created.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ReleaseWorkflowVersionResponse"
         "401":
-          description: 未登入或 Session 已失效。
+          description: The user is unauthenticated or the session has expired.
         "404":
-          description: Workflow 不存在或呼叫者無權操作。
+          description: The Workflow does not exist or the caller lacks operation permission.
         "409":
-          description: expectedVersion 過期或已有衝突 Draft。
+          description: The expectedVersion is stale or a conflicting Draft already exists.
   /api/v1/release-workflows/{workflowId}/versions/{workflowVersionId}/lifecycle:
     post:
       operationId: changeReleaseWorkflowVersionLifecycle
-      summary: 發布或停用 Release Workflow Version
+      summary: Publish or disable a Release Workflow Version
       tags:
         - ReleaseWorkflows
       security:
@@ -816,23 +994,23 @@ paths:
               $ref: "#/components/schemas/DefinitionLifecycleRequest"
       responses:
         "200":
-          description: Workflow Version lifecycle 已變更。
+          description: The Workflow Version lifecycle was changed.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ReleaseWorkflowVersionResponse"
         "401":
-          description: 未登入或 Session 已失效。
+          description: The user is unauthenticated or the session has expired.
         "404":
-          description: Workflow Version 不存在或呼叫者無權操作。
+          description: The Workflow Version does not exist or the caller lacks operation permission.
         "409":
-          description: expectedVersion 過期或 lifecycle transition 不合法。
+          description: The expectedVersion is stale or the lifecycle transition is invalid.
         "422":
-          description: Workflow document 無法解析或執行。
+          description: The Workflow document cannot be parsed or executed.
   /api/v1/deployment-plans:
     get:
       operationId: listDeploymentPlans
-      summary: 列出可查看的 Deployment Plan 與版本
+      summary: List visible Deployment Plans and versions
       tags:
         - DeploymentPlans
       security:
@@ -841,18 +1019,18 @@ paths:
         - $ref: "#/components/parameters/ProjectId"
       responses:
         "200":
-          description: 可查看的 Deployment Plan。
+          description: Visible Deployment Plans.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/DeploymentPlanListResponse"
         "401":
-          description: 未登入或 Session 已失效。
+          description: The user is unauthenticated or the session has expired.
         "404":
-          description: Project 不存在或呼叫者無權查看。
+          description: The Project does not exist or the caller lacks view permission.
     post:
       operationId: createDeploymentPlan
-      summary: 建立 Deployment Plan 與第一個 Draft Version
+      summary: Create a Deployment Plan and its first Draft Version
       tags:
         - DeploymentPlans
       security:
@@ -867,19 +1045,19 @@ paths:
               $ref: "#/components/schemas/CreateDeploymentPlanRequest"
       responses:
         "201":
-          description: Plan 與 Draft Version 已建立。
+          description: The Plan and Draft Version were created.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/DeploymentPlanResponse"
         "401":
-          description: 未登入或 Session 已失效。
+          description: The user is unauthenticated or the session has expired.
         "409":
-          description: Plan 名稱衝突。
+          description: The Plan name conflicts.
   /api/v1/deployment-plans/{planId}/versions:
     post:
       operationId: createDeploymentPlanVersion
-      summary: 建立下一個 Deployment Plan Draft Version
+      summary: Create the next Deployment Plan Draft Version
       tags:
         - DeploymentPlans
       security:
@@ -895,21 +1073,21 @@ paths:
               $ref: "#/components/schemas/CreateDeploymentPlanVersionRequest"
       responses:
         "201":
-          description: Draft Version 已建立。
+          description: The Draft Version was created.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/DeploymentPlanVersionResponse"
         "401":
-          description: 未登入或 Session 已失效。
+          description: The user is unauthenticated or the session has expired.
         "404":
-          description: Plan 不存在或呼叫者無權操作。
+          description: The Plan does not exist or the caller lacks operation permission.
         "409":
-          description: expectedVersion 過期或已有衝突 Draft。
+          description: The expectedVersion is stale or a conflicting Draft already exists.
   /api/v1/deployment-plans/{planId}/versions/{planVersionId}/lifecycle:
     post:
       operationId: changeDeploymentPlanVersionLifecycle
-      summary: 發布或停用 Deployment Plan Version
+      summary: Publish or disable a Deployment Plan Version
       tags:
         - DeploymentPlans
       security:
@@ -926,23 +1104,23 @@ paths:
               $ref: "#/components/schemas/DefinitionLifecycleRequest"
       responses:
         "200":
-          description: Plan Version lifecycle 已變更。
+          description: The Plan Version lifecycle was changed.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/DeploymentPlanVersionResponse"
         "401":
-          description: 未登入或 Session 已失效。
+          description: The user is unauthenticated or the session has expired.
         "404":
-          description: Plan Version 不存在或呼叫者無權操作。
+          description: The Plan Version does not exist or the caller lacks operation permission.
         "409":
-          description: expectedVersion 過期或 lifecycle transition 不合法。
+          description: The expectedVersion is stale or the lifecycle transition is invalid.
         "422":
-          description: Plan document 包含 cycle 或無法執行。
+          description: The Plan document contains a cycle or cannot be executed.
   /api/v1/deployment-bindings:
     get:
       operationId: getDeploymentBinding
-      summary: 取得 Environment 現行的 Workflow 與 Plan Version binding
+      summary: Get the current Workflow and Plan Version binding for an Environment
       tags:
         - DeploymentPlans
       security:
@@ -953,18 +1131,18 @@ paths:
         - $ref: "#/components/parameters/EnvironmentId"
       responses:
         "200":
-          description: Environment 現行 binding；尚未綁定時 data 為 null。
+          description: The current Environment binding; data is null when no binding exists.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/DeploymentBindingResponse"
         "401":
-          description: 未登入或 Session 已失效。
+          description: The user is unauthenticated or the session has expired.
         "404":
-          description: Scope 不存在或呼叫者無權查看。
+          description: The Scope does not exist or the caller lacks view permission.
     post:
       operationId: bindDeploymentDefinitions
-      summary: 綁定 Environment 使用的 Workflow 與 Plan Version
+      summary: Bind an Environment to Workflow and Plan Versions
       tags:
         - DeploymentPlans
       security:
@@ -979,21 +1157,21 @@ paths:
               $ref: "#/components/schemas/BindDeploymentDefinitionsRequest"
       responses:
         "200":
-          description: Environment binding 已建立或切換。
+          description: The Environment binding was created or changed.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/DeploymentBindingResponse"
         "401":
-          description: 未登入或 Session 已失效。
+          description: The user is unauthenticated or the session has expired.
         "404":
-          description: Scope、Workflow 或 Plan Version 不存在，或呼叫者無權操作。
+          description: The Scope, Workflow, or Plan Version does not exist, or the caller lacks operation permission.
         "409":
-          description: expectedVersion 過期或 Version 未發布。
+          description: The expectedVersion is stale or the Version is not published.
   /api/v1/deployment-executions/{executionId}:
     get:
       operationId: getDeploymentExecution
-      summary: 取得 Deployment execution 與各 Application 狀態
+      summary: Get a Deployment execution and its Application states
       tags:
         - Deployments
       security:
@@ -1002,19 +1180,19 @@ paths:
         - $ref: "#/components/parameters/ExecutionId"
       responses:
         "200":
-          description: Deployment execution 詳細狀態。
+          description: Detailed Deployment execution state.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/DeploymentExecutionResponse"
         "401":
-          description: 未登入或 Session 已失效。
+          description: The user is unauthenticated or the session has expired.
         "404":
-          description: Execution 不存在或呼叫者無權查看。
+          description: The Execution does not exist or the caller lacks view permission.
   /api/v1/deployment-history:
     get:
       operationId: listDeploymentHistory
-      summary: 列出可供 Forward Rollback 判斷的成功部署歷史
+      summary: List successful deployment history eligible for Forward Rollback evaluation
       tags:
         - Deployments
       security:
@@ -1026,19 +1204,19 @@ paths:
         - $ref: "#/components/parameters/EnvironmentId"
       responses:
         "200":
-          description: 完整成功且仍可查看的部署歷史。
+          description: Fully successful deployment history still visible to the caller.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/DeploymentHistoryListResponse"
         "401":
-          description: 未登入或 Session 已失效。
+          description: The user is unauthenticated or the session has expired.
         "404":
-          description: Scope 不存在或呼叫者無權查看。
+          description: The Scope does not exist or the caller lacks view permission.
   /api/v1/notifications:
     get:
       operationId: listNotifications
-      summary: 列出目前使用者保存期限內的站內通知
+      summary: List retained in-app notifications for the current user
       tags:
         - Notifications
       security:
@@ -1048,21 +1226,21 @@ paths:
         - $ref: "#/components/parameters/Limit"
       responses:
         "200":
-          description: 通知內容已依當下權限過濾或遮蔽。
+          description: Notification content is filtered or redacted using current permissions.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/NotificationListResponse"
         "401":
-          description: 未登入或 Session 已失效。
+          description: The user is unauthenticated or the session has expired.
         "400":
-          description: 分頁參數無效。
+          description: The pagination parameters are invalid.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
         default:
-          description: 無法讀取通知。
+          description: Notifications could not be read.
           content:
             application/json:
               schema:
@@ -1070,7 +1248,7 @@ paths:
   /api/v1/notifications/{notificationId}/read:
     post:
       operationId: markNotificationRead
-      summary: 將一筆通知標記為已讀
+      summary: Mark one notification as read
       tags:
         - Notifications
       security:
@@ -1080,15 +1258,15 @@ paths:
         - $ref: "#/components/parameters/CsrfToken"
       responses:
         "204":
-          description: 通知已標記為已讀。
+          description: The notification was marked as read.
         "401":
-          description: 未登入或 Session 已失效。
+          description: The user is unauthenticated or the session has expired.
         "404":
-          description: 通知不存在或不屬於目前使用者。
+          description: The notification does not exist or does not belong to the current user.
         "403":
-          description: CSRF、來源或目前權限驗證失敗。
+          description: CSRF, origin, or current-permission validation failed.
         default:
-          description: 無法更新通知。
+          description: The notification could not be updated.
           content:
             application/json:
               schema:
@@ -1096,7 +1274,7 @@ paths:
   /api/v1/notifications/read-all:
     post:
       operationId: markAllNotificationsRead
-      summary: 將目前可見通知全部標記為已讀
+      summary: Mark all currently visible notifications as read
       tags:
         - Notifications
       security:
@@ -1105,13 +1283,13 @@ paths:
         - $ref: "#/components/parameters/CsrfToken"
       responses:
         "204":
-          description: 目前可見通知已全部標記為已讀。
+          description: All currently visible notifications were marked as read.
         "401":
-          description: 未登入或 Session 已失效。
+          description: The user is unauthenticated or the session has expired.
         "403":
-          description: CSRF 或來源驗證失敗。
+          description: CSRF or origin validation failed.
         default:
-          description: 無法更新通知。
+          description: The notification could not be updated.
           content:
             application/json:
               schema:
@@ -1119,7 +1297,7 @@ paths:
   /api/v1/notifications/events:
     get:
       operationId: streamNotificationEvents
-      summary: 訂閱通知事件並以 Last-Event-ID 恢復
+      summary: Subscribe to notification events and resume with Last-Event-ID
       tags:
         - Notifications
       security:
@@ -1133,35 +1311,35 @@ paths:
             format: uuid
       responses:
         "200":
-          description: Event 僅包含 event ID 與 type，Client 必須重新讀取受權資料。
+          description: Events contain only the event ID and type; the Client must refetch authorized data.
           content:
             text/event-stream:
               schema:
                 type: string
         "401":
-          description: 未登入或 Session 已失效。
+          description: The user is unauthenticated or the session has expired.
   /api/v1/auth/login:
     get:
       operationId: beginAuthLogin
-      summary: 開始 OIDC 登入
+      summary: Start OIDC login
       security: []
       tags: [Auth]
       responses:
         "302":
-          description: 導向 OIDC provider。
+          description: Redirects to the OIDC provider.
           headers:
             Location:
               schema:
                 type: string
                 format: uri
         "4XX":
-          description: 登入設定或請求無效。
+          description: The login configuration or request is invalid.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
         default:
-          description: 無法開始登入。
+          description: Login could not be started.
           content:
             application/json:
               schema:
@@ -1169,7 +1347,7 @@ paths:
   /api/v1/auth/callback:
     get:
       operationId: completeAuthCallback
-      summary: 完成 OIDC callback
+      summary: Complete the OIDC callback
       security: []
       tags: [Auth]
       parameters:
@@ -1187,19 +1365,79 @@ paths:
             minLength: 1
       responses:
         "302":
-          description: 建立 BFF Session 後導回 Web。
+          description: Creates a BFF Session and redirects to the Web application.
           headers:
             Location:
               schema:
                 type: string
         "4XX":
-          description: Callback 參數或登入狀態無效。
+          description: The callback parameters or login state are invalid.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
         default:
-          description: Callback 驗證失敗。
+          description: Callback validation failed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/v1/auth/local/login:
+    post:
+      operationId: loginLocal
+      summary: Sign in with a local account
+      security: []
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LocalLoginRequest"
+      responses:
+        "200":
+          description: Creates a local BFF Session.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthSessionResponse"
+        "401":
+          description: The credentials are invalid.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/v1/auth/password:
+    post:
+      operationId: changeLocalPassword
+      summary: Change the local account password
+      tags: [Auth]
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: X-CSRF-Token
+          in: header
+          required: true
+          schema:
+            type: string
+            minLength: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChangePasswordRequest"
+      responses:
+        "204":
+          description: The password was changed and active Sessions were revoked.
+        "400":
+          description: The current password is invalid or the new password does not meet the local policy.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Authentication is required.
           content:
             application/json:
               schema:
@@ -1207,19 +1445,19 @@ paths:
   /api/v1/auth/session:
     get:
       operationId: getAuthSession
-      summary: 取得目前 BFF Session
+      summary: Get the current BFF Session
       tags: [Auth]
       security:
         - sessionCookie: []
       responses:
         "200":
-          description: Session 有效。
+          description: The Session is valid.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/AuthSessionResponse"
         "401":
-          description: 未登入或 Session 已失效。
+          description: The user is unauthenticated or the session has expired.
           content:
             application/json:
               schema:
@@ -1227,7 +1465,7 @@ paths:
   /api/v1/auth/logout:
     post:
       operationId: logoutAuthSession
-      summary: 撤銷目前 BFF Session
+      summary: Revoke the current BFF Session
       tags: [Auth]
       security:
         - sessionCookie: []
@@ -1240,13 +1478,13 @@ paths:
             minLength: 1
       responses:
         "200":
-          description: 本地 Session 已撤銷。
+          description: The local Session was revoked.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/LogoutResponse"
         "401":
-          description: Session 無效。
+          description: The Session is invalid.
           content:
             application/json:
               schema:
@@ -1254,7 +1492,7 @@ paths:
   /api/v1/auth/backchannel-logout:
     post:
       operationId: backchannelLogout
-      summary: 接收 OIDC back-channel logout
+      summary: Receive OIDC back-channel logout
       security: []
       tags: [Auth]
       requestBody:
@@ -1265,15 +1503,15 @@ paths:
               $ref: "#/components/schemas/BackchannelLogoutRequest"
       responses:
         "204":
-          description: 對應的本地 Session 已撤銷。
+          description: The corresponding local Sessions were revoked.
         "4XX":
-          description: Logout token 無效。
+          description: The logout token is invalid.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
-          description: CSRF 驗證失敗。
+          description: CSRF validation failed.
           content:
             application/json:
               schema:
@@ -1281,25 +1519,25 @@ paths:
   /api/v1/system/status:
     get:
       operationId: getSystemStatus
-      summary: 取得平台基本資訊
+      summary: Get platform system information
       security: []
       tags:
         - System
       responses:
         "200":
-          description: 平台可回應請求。
+          description: The platform can serve requests.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/SystemStatusResponse"
         "4XX":
-          description: 請求格式或授權不符合契約。
+          description: The request format or authorization does not satisfy the contract.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
         default:
-          description: 無法處理請求。
+          description: The request could not be processed.
           content:
             application/json:
               schema:
@@ -1372,6 +1610,14 @@ components:
         minimum: 1
         maximum: 100
         default: 20
+    AccessStatus:
+      name: status
+      in: query
+      required: false
+      schema:
+        type: string
+        enum: [all, active, inactive]
+        default: all
     RequestId:
       name: requestId
       in: path
@@ -1523,24 +1769,27 @@ components:
         meta: { $ref: "#/components/schemas/ResponseMeta" }
     AccessUser:
       type: object
-      required: [id, username, disabled]
+      required: [id, username, disabled, allowedActions]
       properties:
         id: { type: string, format: uuid }
         username: { type: string, minLength: 1 }
         disabled: { type: boolean }
+        allowedActions: { type: array, items: { $ref: "#/components/schemas/AccessAction" } }
     AccessGroup:
       type: object
-      required: [id, ownerKind, name, oidcViewerOnly, disabled]
+      required: [id, ownerKind, name, oidcViewerOnly, disabled, allowedActions]
       properties:
         id: { type: string, format: uuid }
         ownerKind: { type: string, enum: [platform, organization, project] }
         ownerId: { type: string, format: uuid, nullable: true }
         name: { type: string, minLength: 1 }
+        systemKey: { type: string, nullable: true }
         oidcViewerOnly: { type: boolean }
         disabled: { type: boolean }
+        allowedActions: { type: array, items: { $ref: "#/components/schemas/AccessAction" } }
     AccessRole:
       type: object
-      required: [id, ownerKind, name, active, permissions]
+      required: [id, ownerKind, name, active, permissions, allowedActions]
       properties:
         id: { type: string, format: uuid }
         ownerKind: { type: string, enum: [platform, project] }
@@ -1551,6 +1800,7 @@ components:
         permissions:
           type: array
           items: { type: string }
+        allowedActions: { type: array, items: { $ref: "#/components/schemas/AccessAction" } }
     AccessPermission:
       type: object
       required: [key, platformOnly, projectRoleDelegable]
@@ -1560,32 +1810,39 @@ components:
         projectRoleDelegable: { type: boolean }
     AccessMembership:
       type: object
-      required: [id, groupId, userId, source, active]
+      required: [id, groupId, groupName, userId, username, source, active, allowedActions]
       properties:
         id: { type: string, format: uuid }
         groupId: { type: string, format: uuid }
+        groupName: { type: string }
         userId: { type: string, format: uuid }
+        username: { type: string }
         source: { type: string, enum: [manual, oidc] }
         active: { type: boolean }
+        allowedActions: { type: array, items: { $ref: "#/components/schemas/AccessAction" } }
     AccessBinding:
       type: object
-      required: [id, groupId, roleId, organizationId, scopeKind, projectId, active]
+      required: [id, groupId, groupName, roleId, roleName, scopeKind, active, allowedActions]
       properties:
         id: { type: string, format: uuid }
         groupId: { type: string, format: uuid }
+        groupName: { type: string }
         roleId: { type: string, format: uuid }
-        organizationId: { type: string, format: uuid }
-        scopeKind: { type: string, enum: [project, environment, application] }
-        projectId: { type: string, format: uuid }
+        roleName: { type: string }
+        organizationId: { type: string, format: uuid, nullable: true }
+        scopeKind: { type: string, enum: [platform, project, environment, application] }
+        projectId: { type: string, format: uuid, nullable: true }
         environmentId: { type: string, format: uuid, nullable: true }
         applicationId: { type: string, format: uuid, nullable: true }
         active: { type: boolean }
+        allowedActions: { type: array, items: { $ref: "#/components/schemas/AccessAction" } }
     AccessDeny:
       type: object
-      required: [id, groupId, permission, organizationId, scopeKind, projectId, active]
+      required: [id, groupId, groupName, permission, organizationId, scopeKind, projectId, active, allowedActions]
       properties:
         id: { type: string, format: uuid }
         groupId: { type: string, format: uuid }
+        groupName: { type: string }
         permission: { type: string }
         organizationId: { type: string, format: uuid }
         scopeKind: { type: string, enum: [project, environment, application] }
@@ -1593,6 +1850,84 @@ components:
         environmentId: { type: string, format: uuid, nullable: true }
         applicationId: { type: string, format: uuid, nullable: true }
         active: { type: boolean }
+        allowedActions: { type: array, items: { $ref: "#/components/schemas/AccessAction" } }
+    AccessAction:
+      type: string
+      enum: [disable, addMember, viewMemberships, revoke]
+    AccessCollectionCapability:
+      type: object
+      required: [key, visible, canCreate]
+      properties:
+        key: { type: string, enum: [users, groups, roles, memberships, bindings, denies] }
+        visible: { type: boolean }
+        canCreate: { type: boolean }
+    AccessCapabilities:
+      type: object
+      required: [collections, permissions]
+      properties:
+        collections: { type: array, items: { $ref: "#/components/schemas/AccessCollectionCapability" } }
+        permissions: { type: array, items: { $ref: "#/components/schemas/AccessPermission" } }
+    AccessCapabilitiesResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data: { $ref: "#/components/schemas/AccessCapabilities" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+    AccessUserListResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data: { type: array, items: { $ref: "#/components/schemas/AccessUser" } }
+        meta: { $ref: "#/components/schemas/CursorPageMeta" }
+    AccessGroupListResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data: { type: array, items: { $ref: "#/components/schemas/AccessGroup" } }
+        meta: { $ref: "#/components/schemas/CursorPageMeta" }
+    AccessRoleListResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data: { type: array, items: { $ref: "#/components/schemas/AccessRole" } }
+        meta: { $ref: "#/components/schemas/CursorPageMeta" }
+    AccessMembershipListResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data: { type: array, items: { $ref: "#/components/schemas/AccessMembership" } }
+        meta: { $ref: "#/components/schemas/CursorPageMeta" }
+    AccessBindingListResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data: { type: array, items: { $ref: "#/components/schemas/AccessBinding" } }
+        meta: { $ref: "#/components/schemas/CursorPageMeta" }
+    AccessDenyListResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data: { type: array, items: { $ref: "#/components/schemas/AccessDeny" } }
+        meta: { $ref: "#/components/schemas/CursorPageMeta" }
+    AccessUserCandidatesResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data: { type: array, items: { $ref: "#/components/schemas/AccessUser" } }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+    AccessScopeOptions:
+      type: object
+      required: [groups, roles, permissions]
+      properties:
+        groups: { type: array, items: { $ref: "#/components/schemas/AccessGroup" } }
+        roles: { type: array, items: { $ref: "#/components/schemas/AccessRole" } }
+        permissions: { type: array, items: { $ref: "#/components/schemas/AccessPermission" } }
+    AccessScopeOptionsResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data: { $ref: "#/components/schemas/AccessScopeOptions" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
     AccessManagementSnapshot:
       type: object
       required: [canManagePlatform, managedProjectIds, users, groups, roles, permissions, memberships, bindings, denies]
@@ -1620,6 +1955,18 @@ components:
         ownerId: { type: string, format: uuid, nullable: true }
         name: { type: string, minLength: 1, maxLength: 128 }
         oidcViewerOnly: { type: boolean }
+    CreateAccessUserRequest:
+      type: object
+      required: [username, initialPassword]
+      properties:
+        username: { type: string, minLength: 1, maxLength: 128, pattern: "^[^\\s]+$" }
+        initialPassword: { type: string, minLength: 8, maxLength: 72, format: password }
+    AccessUserResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data: { $ref: "#/components/schemas/AccessUser" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
     CreateAccessRoleRequest:
       type: object
       required: [ownerKind, name, permissions]
@@ -1635,11 +1982,11 @@ components:
         userId: { type: string, format: uuid }
     AccessScopeInput:
       type: object
-      required: [organizationId, projectId, scopeKind]
+      required: [scopeKind]
       properties:
-        organizationId: { type: string, format: uuid }
-        projectId: { type: string, format: uuid }
-        scopeKind: { type: string, enum: [project, environment, application] }
+        organizationId: { type: string, format: uuid, nullable: true }
+        projectId: { type: string, format: uuid, nullable: true }
+        scopeKind: { type: string, enum: [platform, project, environment, application] }
         environmentId: { type: string, format: uuid, nullable: true }
         applicationId: { type: string, format: uuid, nullable: true }
     CreateAccessBindingRequest:
@@ -1781,6 +2128,7 @@ components:
         - name
         - version
         - tenancyMode
+        - oidcEnabled
       properties:
         name:
           type: string
@@ -1791,6 +2139,9 @@ components:
         tenancyMode:
           type: string
           enum: [single, multi]
+        oidcEnabled:
+          type: boolean
+          description: Indicates whether the OIDC login flow is available in this API runtime.
     SystemStatusResponse:
       type: object
       required:
@@ -1803,7 +2154,7 @@ components:
           $ref: "#/components/schemas/ResponseMeta"
     AuthSession:
       type: object
-      required: [userId, username]
+      required: [userId, username, mustChangePassword]
       properties:
         userId:
           type: string
@@ -1811,6 +2162,8 @@ components:
         username:
           type: string
           minLength: 1
+        mustChangePassword:
+          type: boolean
     CatalogApplication:
       type: object
       required:
@@ -1994,6 +2347,32 @@ components:
         logout_token:
           type: string
           minLength: 1
+    LocalLoginRequest:
+      type: object
+      additionalProperties: false
+      required: [username, password]
+      properties:
+        username:
+          type: string
+          minLength: 1
+          maxLength: 128
+        password:
+          type: string
+          minLength: 1
+          maxLength: 72
+    ChangePasswordRequest:
+      type: object
+      additionalProperties: false
+      required: [currentPassword, newPassword]
+      properties:
+        currentPassword:
+          type: string
+          minLength: 1
+          maxLength: 72
+        newPassword:
+          type: string
+          minLength: 8
+          maxLength: 72
     AuthSessionResponse:
       type: object
       required: [data, meta]

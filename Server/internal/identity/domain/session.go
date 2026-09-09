@@ -20,6 +20,7 @@ type Session struct {
 	IdleExpiresAt          time.Time
 	AbsoluteExpiresAt      time.Time
 	RevokedAt              *time.Time
+	AuthenticationMethod   string
 }
 
 // ActiveAt reports whether the session is valid at the supplied time.
