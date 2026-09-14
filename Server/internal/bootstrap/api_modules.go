@@ -9,8 +9,6 @@ import (
 	argoinfra "github.com/vincent119/ReleaseHub/Server/internal/argocd/infrastructure"
 	authzapp "github.com/vincent119/ReleaseHub/Server/internal/authorization/application"
 	authzinfra "github.com/vincent119/ReleaseHub/Server/internal/authorization/infrastructure"
-	catalogapp "github.com/vincent119/ReleaseHub/Server/internal/catalog/application"
-	cataloginfra "github.com/vincent119/ReleaseHub/Server/internal/catalog/infrastructure"
 	"github.com/vincent119/ReleaseHub/Server/internal/config"
 	deployapp "github.com/vincent119/ReleaseHub/Server/internal/deployment/application"
 	deployinfra "github.com/vincent119/ReleaseHub/Server/internal/deployment/infrastructure"
@@ -139,7 +137,7 @@ func buildCoreHandlerParts(dependencies apiHandlerDependencies) (apiHandlerParts
 	if err != nil {
 		return apiHandlerParts{}, err
 	}
-	catalog, err := newCatalogHandlerOptions(dependencies.resources.db, dependencies.policy)
+	catalog, err := newCatalogHandlerOptions(dependencies.resources.db, dependencies.policy, dependencies.cfg.Tenancy.DefaultOrganizationID)
 	if err != nil {
 		return apiHandlerParts{}, err
 	}
@@ -190,19 +188,6 @@ func newWorkflowHandlerOptions(db *gorm.DB, policy *authzinfra.PolicyEngine) (ht
 	}
 	service, err := deployapp.NewWorkflowDefinitionService(repository, policy, deployapp.SystemWorkflowClock{})
 	return httpserver.WorkflowHandlerOptions{Definitions: service}, err
-}
-
-func newCatalogHandlerOptions(db *gorm.DB, policy *authzinfra.PolicyEngine) (httpserver.CatalogHandlerOptions, error) {
-	repository, err := cataloginfra.NewCatalogRepository(db)
-	if err != nil {
-		return httpserver.CatalogHandlerOptions{}, err
-	}
-	service, err := catalogapp.NewService(repository, policy)
-	if err != nil {
-		return httpserver.CatalogHandlerOptions{}, err
-	}
-	status, err := argoinfra.NewStatusRepository(db)
-	return httpserver.CatalogHandlerOptions{Service: service, StatusReader: status}, err
 }
 
 func newArgoCDHandlerOptions(db *gorm.DB, client *argoinfra.Client, policy *authzinfra.PolicyEngine) (httpserver.ArgoCDHandlerOptions, error) {

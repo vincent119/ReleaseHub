@@ -1,9 +1,27 @@
 package httpserver
 
 import (
+	deployapp "github.com/vincent119/ReleaseHub/Server/internal/deployment/application"
 	deploydomain "github.com/vincent119/ReleaseHub/Server/internal/deployment/domain"
 	contract "github.com/vincent119/ReleaseHub/Server/internal/transport/openapi"
 )
+
+func workflowReviewOptionsResponse(value deployapp.WorkflowReviewOptions) contract.ReleaseWorkflowReviewOptions {
+	users := make([]contract.ReleaseWorkflowReviewUserOption, 0, len(value.Users))
+	for _, item := range value.Users {
+		users = append(users, contract.ReleaseWorkflowReviewUserOption{
+			Id: item.ID, Username: item.Username, Assignable: item.Assignable,
+		})
+	}
+	roles := make([]contract.ReleaseWorkflowReviewRoleOption, 0, len(value.Roles))
+	for _, item := range value.Roles {
+		roles = append(roles, contract.ReleaseWorkflowReviewRoleOption{
+			Id: item.ID, Name: item.Name, OwnerKind: contract.ReleaseWorkflowReviewRoleOptionOwnerKind(item.OwnerKind),
+			OwnerId: item.OwnerID, Assignable: item.Assignable,
+		})
+	}
+	return contract.ReleaseWorkflowReviewOptions{Users: users, Roles: roles}
+}
 
 func workflowResponses(values []deploydomain.ReleaseWorkflow) []contract.ReleaseWorkflow {
 	result := make([]contract.ReleaseWorkflow, 0, len(values))

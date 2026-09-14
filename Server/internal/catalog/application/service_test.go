@@ -19,7 +19,7 @@ func TestTenantResourceIsolation(t *testing.T) {
 	applicationA := catalogApplication(organizationA, projectA, environmentA, "admin")
 	applicationB := catalogApplication(organizationB, projectB, environmentB, "admin")
 	repository := &repositoryStub{applications: map[uuid.UUID]domain.Application{applicationA.ID: applicationA, applicationB.ID: applicationB}}
-	service, err := application.NewService(repository, authorizerStub{allowedOrganizationID: organizationA})
+	service, err := application.NewService(repository, authorizerStub{allowedOrganizationID: organizationA}, organizationA)
 	if err != nil {
 		t.Fatalf("create catalog service: %v", err)
 	}
@@ -44,7 +44,7 @@ func TestVisibleApplicationsFiltersEachApplicationScope(t *testing.T) {
 	organizationID, projectID, environmentID := uuid.New(), uuid.New(), uuid.New()
 	visible := catalogApplication(organizationID, projectID, environmentID, "api")
 	hidden := catalogApplication(uuid.New(), uuid.New(), uuid.New(), "admin")
-	service, err := application.NewService(&repositoryStub{applications: map[uuid.UUID]domain.Application{visible.ID: visible, hidden.ID: hidden}}, authorizerStub{allowedOrganizationID: organizationID})
+	service, err := application.NewService(&repositoryStub{applications: map[uuid.UUID]domain.Application{visible.ID: visible, hidden.ID: hidden}}, authorizerStub{allowedOrganizationID: organizationID}, organizationID)
 	if err != nil {
 		t.Fatalf("create catalog service: %v", err)
 	}
@@ -66,7 +66,7 @@ func TestResourceTreeIncludesOnlyAuthorizedAncestors(t *testing.T) {
 		environments:  []domain.Environment{{ID: environmentA, OrganizationID: organizationA, ProjectID: projectA, Name: "production", Active: true}, {ID: environmentB, OrganizationID: organizationB, ProjectID: projectB, Name: "production", Active: true}},
 		applications:  map[uuid.UUID]domain.Application{applicationA.ID: applicationA, applicationB.ID: applicationB},
 	}
-	service, err := application.NewService(repository, authorizerStub{allowedOrganizationID: organizationA})
+	service, err := application.NewService(repository, authorizerStub{allowedOrganizationID: organizationA}, organizationA)
 	if err != nil {
 		t.Fatalf("create catalog service: %v", err)
 	}
@@ -78,12 +78,15 @@ func TestResourceTreeIncludesOnlyAuthorizedAncestors(t *testing.T) {
 	if len(tree.Organizations) != 1 || tree.Organizations[0].Organization.ID != organizationA || len(tree.Organizations[0].Projects) != 1 || len(tree.Organizations[0].Projects[0].Environments) != 1 {
 		t.Fatalf("resource tree leaked or omitted ancestors: %#v", tree)
 	}
+	if !tree.Organizations[0].IsDefault || tree.Organizations[0].CanRename {
+		t.Fatalf("resource tree default capabilities = %#v", tree.Organizations[0])
+	}
 }
 
 func TestProjectManagerCreatesEnvironmentWithAuditedActor(t *testing.T) {
 	organizationID, projectID := uuid.New(), uuid.New()
 	repository := &repositoryStub{applications: map[uuid.UUID]domain.Application{}}
-	service, err := application.NewService(repository, authorizerStub{allowedOrganizationID: organizationID})
+	service, err := application.NewService(repository, authorizerStub{allowedOrganizationID: organizationID}, organizationID)
 	if err != nil {
 		t.Fatalf("create catalog service: %v", err)
 	}
@@ -97,13 +100,73 @@ func TestProjectManagerCreatesEnvironmentWithAuditedActor(t *testing.T) {
 	}
 }
 
+func TestRenameDefaultOrganizationPreservesIdentity(t *testing.T) {
+	organizationID := uuid.New()
+	repository := &repositoryStub{
+		organizations: []domain.Organization{{ID: organizationID, Name: "default", Active: true, Version: 3}},
+		applications:  map[uuid.UUID]domain.Application{},
+	}
+	service, err := application.NewService(repository, authorizerStub{platformAllowed: true}, organizationID)
+	if err != nil {
+		t.Fatalf("create catalog service: %v", err)
+	}
+	principal := application.Principal{UserID: uuid.New()}
+
+	renamed, err := service.RenameOrganization(context.Background(), principal, application.Mutation{RequestID: "rename-default"}, organizationID, " Platform ", 3)
+	if err != nil {
+		t.Fatalf("rename default Organization: %v", err)
+	}
+	if renamed.ID != organizationID || renamed.Name != "Platform" || renamed.Version != 4 || repository.organizationRenames != 1 {
+		t.Fatalf("renamed Organization = %#v, calls = %d", renamed, repository.organizationRenames)
+	}
+	if repository.lastMutation.ActorID == nil || *repository.lastMutation.ActorID != principal.UserID {
+		t.Fatalf("rename actor = %#v", repository.lastMutation.ActorID)
+	}
+
+	tree, err := service.ListResourceTree(context.Background(), principal)
+	if err != nil || len(tree.Organizations) != 1 || !tree.Organizations[0].IsDefault || !tree.Organizations[0].CanRename {
+		t.Fatalf("renamed default tree = %#v, %v", tree, err)
+	}
+}
+
+func TestRenameOrganizationRejectsUnauthorizedInvalidAndStaleRequests(t *testing.T) {
+	organizationID := uuid.New()
+	base := domain.Organization{ID: organizationID, Name: "default", Active: true, Version: 2}
+	tests := []struct {
+		name       string
+		authorizer authorizerStub
+		newName    string
+		version    uint64
+		wantError  error
+	}{
+		{name: "unauthorized", newName: "Workspace", version: 2, wantError: application.ErrResourceNotFound},
+		{name: "blank name", authorizer: authorizerStub{platformAllowed: true}, newName: " ", version: 2, wantError: application.ErrInvalidResource},
+		{name: "missing version", authorizer: authorizerStub{platformAllowed: true}, newName: "Workspace", wantError: application.ErrInvalidResource},
+		{name: "stale version", authorizer: authorizerStub{platformAllowed: true}, newName: "Workspace", version: 1, wantError: application.ErrResourceConflict},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			repository := &repositoryStub{organizations: []domain.Organization{base}, applications: map[uuid.UUID]domain.Application{}}
+			service, err := application.NewService(repository, test.authorizer, organizationID)
+			if err != nil {
+				t.Fatalf("create catalog service: %v", err)
+			}
+			_, err = service.RenameOrganization(context.Background(), application.Principal{UserID: uuid.New()}, application.Mutation{}, organizationID, test.newName, test.version)
+			if !errors.Is(err, test.wantError) || repository.organizationRenames != 0 {
+				t.Fatalf("rename error = %v, calls = %d", err, repository.organizationRenames)
+			}
+		})
+	}
+}
+
 type repositoryStub struct {
-	organizations      []domain.Organization
-	projects           []domain.Project
-	environments       []domain.Environment
-	applications       map[uuid.UUID]domain.Application
-	environmentCreates int
-	lastMutation       application.Mutation
+	organizations       []domain.Organization
+	projects            []domain.Project
+	environments        []domain.Environment
+	applications        map[uuid.UUID]domain.Application
+	environmentCreates  int
+	organizationRenames int
+	lastMutation        application.Mutation
 }
 
 func (r *repositoryStub) ListActiveOrganizations(context.Context) ([]domain.Organization, error) {
@@ -134,6 +197,25 @@ func (*repositoryStub) CreateApplication(context.Context, application.Mutation, 
 func (*repositoryStub) CreateEnvironmentLabelMapping(context.Context, application.Mutation, domain.EnvironmentLabelMapping) error {
 	return nil
 }
+func (r *repositoryStub) FindOrganization(_ context.Context, id uuid.UUID) (domain.Organization, error) {
+	for _, value := range r.organizations {
+		if value.ID == id && value.Active {
+			return value, nil
+		}
+	}
+	return domain.Organization{}, errors.New("not found")
+}
+func (r *repositoryStub) RenameOrganization(_ context.Context, mutation application.Mutation, current, renamed domain.Organization) error {
+	r.organizationRenames++
+	r.lastMutation = mutation
+	for index := range r.organizations {
+		if r.organizations[index].ID == current.ID {
+			r.organizations[index] = renamed
+			return nil
+		}
+	}
+	return application.ErrResourceConflict
+}
 func (r *repositoryStub) FindApplication(_ context.Context, id uuid.UUID) (domain.Application, error) {
 	value, ok := r.applications[id]
 	if !ok {
@@ -161,9 +243,15 @@ func (*repositoryStub) ResolveEnvironmentLabel(context.Context, uuid.UUID, uuid.
 	return domain.Environment{}, nil
 }
 
-type authorizerStub struct{ allowedOrganizationID uuid.UUID }
+type authorizerStub struct {
+	allowedOrganizationID uuid.UUID
+	platformAllowed       bool
+}
 
 func (a authorizerStub) Authorize(_ context.Context, request authz.AuthorizationRequest) (bool, error) {
+	if request.Scope.Kind == authz.ScopePlatform {
+		return a.platformAllowed, nil
+	}
 	return request.Scope.OrganizationID == a.allowedOrganizationID, nil
 }
 

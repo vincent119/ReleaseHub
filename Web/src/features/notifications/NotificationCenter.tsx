@@ -8,7 +8,6 @@ import {
   Space,
   Tag,
   Typography,
-  message,
 } from 'antd'
 import { useState } from 'react'
 import { Link } from 'react-router'
@@ -20,11 +19,13 @@ import {
   useListNotifications,
 } from '@/generated/api'
 import type { Notification } from '@/generated/model'
+import { useFeedback } from '@/shared/feedback/useFeedback'
 
 import { useNotificationEvents } from './useNotificationEvents'
 
 export function NotificationCenter() {
   const { t } = useTranslation()
+  const feedback = useFeedback()
   const [open, setOpen] = useState(false)
   const notifications = useListNotifications({ limit: 100 })
   const values =
@@ -38,13 +39,13 @@ export function NotificationCenter() {
       mutationOptions(),
     )
     if (response.status !== 204)
-      return void message.error(t('notifications.mutation.error'))
+      return void feedback.error(t('notifications.mutation.error'))
     await notifications.refetch()
   }
   const markAll = async () => {
     const response = await markAllNotificationsRead(mutationOptions())
     if (response.status !== 204)
-      return void message.error(t('notifications.mutation.error'))
+      return void feedback.error(t('notifications.mutation.error'))
     await notifications.refetch()
   }
   return (

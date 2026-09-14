@@ -1,6 +1,13 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react'
+import { App as AntdApp } from 'antd'
 import { I18nextProvider } from 'react-i18next'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { DeploymentPlan, ReleaseWorkflow } from '@/generated/model'
 import i18n from '@/shared/i18n/config'
@@ -41,17 +48,21 @@ describe('DeploymentBindingPanel', () => {
     })
   })
 
+  afterEach(cleanup)
+
   it('switches published definitions with the current optimistic version', async () => {
     render(
-      <I18nextProvider i18n={i18n}>
-        <DeploymentBindingPanel
-          organizationId="organization-1"
-          projectId="project-1"
-          environmentId="environment-1"
-          workflows={[workflow()]}
-          plans={[plan()]}
-        />
-      </I18nextProvider>,
+      <AntdApp>
+        <I18nextProvider i18n={i18n}>
+          <DeploymentBindingPanel
+            organizationId="organization-1"
+            projectId="project-1"
+            environmentId="environment-1"
+            workflows={[workflow()]}
+            plans={[plan()]}
+          />
+        </I18nextProvider>
+      </AntdApp>,
     )
     fireEvent.click(screen.getByRole('button', { name: '儲存 Binding' }))
     await waitFor(() =>

@@ -4,10 +4,12 @@ package infrastructure
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 	"gorm.io/gorm"
 
 	"github.com/vincent119/ReleaseHub/Server/internal/catalog/application"
@@ -33,6 +35,55 @@ func NewCatalogRepository(db *gorm.DB) (*CatalogRepository, error) {
 func (r *CatalogRepository) CreateOrganization(ctx context.Context, mutation application.Mutation, value catalog.Organization) error {
 	model := organizationModel{ID: value.ID, Name: value.Name, Active: value.Active, Version: value.Version}
 	return r.create(ctx, mutation, &value.ID, "organization", value.ID, "catalog.organization.created", model)
+}
+
+// FindOrganization loads one active tenant boundary for an authorized command.
+func (r *CatalogRepository) FindOrganization(ctx context.Context, organizationID uuid.UUID) (catalog.Organization, error) {
+	var model organizationModel
+	if err := r.db.WithContext(ctx).Where("id = ? AND active", organizationID).Take(&model).Error; err != nil {
+		return catalog.Organization{}, fmt.Errorf("find Organization: %w", err)
+	}
+	return model.domain(), nil
+}
+
+// RenameOrganization updates one versioned display name with its audit and outbox records.
+func (r *CatalogRepository) RenameOrganization(ctx context.Context, mutation application.Mutation, current, renamed catalog.Organization) error {
+	now := time.Now().UTC()
+	payload, err := json.Marshal(map[string]any{
+		"resourceId": renamed.ID.String(), "oldName": current.Name, "newName": renamed.Name,
+		"version": renamed.Version,
+	})
+	if err != nil {
+		return fmt.Errorf("marshal Organization rename event: %w", err)
+	}
+	event, err := platform.NewEvent("catalog.organization.renamed", "organization", renamed.ID.String(), payload, now)
+	if err != nil {
+		return fmt.Errorf("create Organization rename event: %w", err)
+	}
+	err = database.WithinTransaction(ctx, r.db, func(tx *gorm.DB) error {
+		result := tx.WithContext(ctx).Model(&organizationModel{}).
+			Where("id = ? AND version = ? AND active", current.ID, current.Version).
+			Updates(map[string]any{"name": renamed.Name, "version": renamed.Version, "updated_at": now})
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected != 1 {
+			return application.ErrResourceConflict
+		}
+		if err := database.AppendAudit(ctx, tx, database.AuditRecord{
+			OccurredAt: now, ActorID: mutation.ActorID, OrganizationID: &renamed.ID,
+			Action: "organization.rename", ResourceType: "organization", ResourceID: renamed.ID.String(),
+			RequestID: mutation.RequestID,
+			Metadata: map[string]any{
+				"oldName": current.Name, "newName": renamed.Name,
+				"fromVersion": current.Version, "toVersion": renamed.Version,
+			},
+		}); err != nil {
+			return err
+		}
+		return database.AppendOutbox(ctx, tx, event)
+	})
+	return classifyCatalogMutationError(err)
 }
 
 func (r *CatalogRepository) CreateProject(ctx context.Context, mutation application.Mutation, value catalog.Project) error {
@@ -181,6 +232,9 @@ type organizationModel struct {
 }
 
 func (organizationModel) TableName() string { return "organizations" }
+func (m organizationModel) domain() catalog.Organization {
+	return catalog.Organization{ID: m.ID, Name: m.Name, Active: m.Active, Version: m.Version}
+}
 
 type projectModel struct {
 	ID             uuid.UUID `gorm:"type:uuid;primaryKey"`
@@ -246,3 +300,17 @@ type environmentLabelMappingModel struct {
 }
 
 func (environmentLabelMappingModel) TableName() string { return "environment_label_mappings" }
+
+func classifyCatalogMutationError(err error) error {
+	if err == nil || errors.Is(err, application.ErrResourceConflict) {
+		return err
+	}
+	var databaseError *pgconn.PgError
+	if errors.As(err, &databaseError) {
+		switch databaseError.Code {
+		case "23505", "23514":
+			return fmt.Errorf("%w: %v", application.ErrResourceConflict, err)
+		}
+	}
+	return err
+}

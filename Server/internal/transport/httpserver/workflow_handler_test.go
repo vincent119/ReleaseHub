@@ -35,6 +35,21 @@ func TestReleaseWorkflowRoutesUseInjectedService(t *testing.T) {
 	}
 }
 
+func TestReleaseWorkflowReviewOptionsUseInjectedService(t *testing.T) {
+	userID, roleID := uuid.New(), uuid.New()
+	service := &fakeWorkflowDefinitionService{reviewOptions: deployapp.WorkflowReviewOptions{
+		Users: []deployapp.WorkflowReviewUserOption{{ID: userID, Username: "reviewer", Assignable: true}},
+		Roles: []deployapp.WorkflowReviewRoleOption{{ID: roleID, Name: "release_approver", OwnerKind: "platform", Assignable: true}},
+	}}
+	router := newTestRouterWithWorkflow(t, &fakeAuthFlow{}, service)
+	request := workflowMutationRequest(http.MethodGet, "/api/v1/release-workflows/review-options", "")
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"username":"reviewer"`) || !strings.Contains(response.Body.String(), `"name":"release_approver"`) {
+		t.Fatalf("review options = %d %s", response.Code, response.Body.String())
+	}
+}
+
 func TestReleaseWorkflowLifecycleMapsDomainValidation(t *testing.T) {
 	service := &fakeWorkflowDefinitionService{changeError: deployapp.ErrWorkflowInvalid}
 	router := newTestRouterWithWorkflow(t, &fakeAuthFlow{}, service)
@@ -64,6 +79,60 @@ func TestReleaseWorkflowUnexpectedMutationFailureIsInternalError(t *testing.T) {
 	router.ServeHTTP(response, request)
 	if response.Code != http.StatusInternalServerError || !strings.Contains(response.Body.String(), `"code":"WORKFLOW_MUTATION_FAILED"`) {
 		t.Fatalf("unexpected workflow failure = %d %s", response.Code, response.Body.String())
+	}
+}
+
+func TestDeleteReleaseWorkflowReturnsNoContent(t *testing.T) {
+	workflowID := uuid.New()
+	service := &fakeWorkflowDefinitionService{}
+	router := newTestRouterWithWorkflow(t, &fakeAuthFlow{}, service)
+	request := workflowMutationRequest(http.MethodDelete, "/api/v1/release-workflows/"+workflowID.String()+"?expectedVersion=2", "")
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+	if response.Code != http.StatusNoContent {
+		t.Fatalf("delete workflow = %d %s", response.Code, response.Body.String())
+	}
+	if service.deleted.WorkflowID != workflowID || service.deleted.ExpectedVersion != 2 {
+		t.Fatalf("delete input = %#v", service.deleted)
+	}
+}
+
+func TestDeleteReleaseWorkflowMapsConflictAndInvalidQuery(t *testing.T) {
+	workflowID := uuid.NewString()
+	service := &fakeWorkflowDefinitionService{deleteError: deployapp.ErrWorkflowConflict}
+	router := newTestRouterWithWorkflow(t, &fakeAuthFlow{}, service)
+
+	conflict := httptest.NewRecorder()
+	router.ServeHTTP(conflict, workflowMutationRequest(http.MethodDelete, "/api/v1/release-workflows/"+workflowID+"?expectedVersion=1", ""))
+	if conflict.Code != http.StatusConflict || !strings.Contains(conflict.Body.String(), `"code":"WORKFLOW_CONFLICT"`) {
+		t.Fatalf("delete conflict = %d %s", conflict.Code, conflict.Body.String())
+	}
+
+	invalid := httptest.NewRecorder()
+	router.ServeHTTP(invalid, workflowMutationRequest(http.MethodDelete, "/api/v1/release-workflows/"+workflowID+"?expectedVersion=0", ""))
+	if invalid.Code != http.StatusBadRequest {
+		t.Fatalf("invalid expected version = %d %s", invalid.Code, invalid.Body.String())
+	}
+}
+
+func TestDeleteReleaseWorkflowPreservesAuthenticationAndHiddenAuthorization(t *testing.T) {
+	workflowID := uuid.NewString()
+	service := &fakeWorkflowDefinitionService{deleteError: deployapp.ErrWorkflowForbidden}
+	router := newTestRouterWithWorkflow(t, &fakeAuthFlow{}, service)
+
+	forbidden := httptest.NewRecorder()
+	router.ServeHTTP(forbidden, workflowMutationRequest(http.MethodDelete, "/api/v1/release-workflows/"+workflowID+"?expectedVersion=1", ""))
+	if forbidden.Code != http.StatusNotFound || !strings.Contains(forbidden.Body.String(), `"code":"WORKFLOW_NOT_FOUND"`) {
+		t.Fatalf("hidden delete authorization = %d %s", forbidden.Code, forbidden.Body.String())
+	}
+
+	unauthenticatedRequest := httptest.NewRequest(http.MethodDelete, "/api/v1/release-workflows/"+workflowID+"?expectedVersion=1", nil)
+	unauthenticatedRequest.Header.Set("X-CSRF-Token", "csrf-token")
+	unauthenticatedRequest.Header.Set("Origin", "https://releasehub.example")
+	unauthenticated := httptest.NewRecorder()
+	router.ServeHTTP(unauthenticated, unauthenticatedRequest)
+	if unauthenticated.Code != http.StatusUnauthorized {
+		t.Fatalf("unauthenticated delete = %d %s", unauthenticated.Code, unauthenticated.Body.String())
 	}
 }
 
@@ -120,13 +189,20 @@ func workflowRequestBody() string {
 }
 
 type fakeWorkflowDefinitionService struct {
-	created     deployapp.CreateWorkflowInput
-	createError error
-	changeError error
+	created       deployapp.CreateWorkflowInput
+	deleted       deployapp.DeleteWorkflowInput
+	createError   error
+	changeError   error
+	deleteError   error
+	reviewOptions deployapp.WorkflowReviewOptions
 }
 
 func (s *fakeWorkflowDefinitionService) List(context.Context, deployapp.WorkflowPrincipal) ([]deploydomain.ReleaseWorkflow, error) {
 	return []deploydomain.ReleaseWorkflow{}, nil
+}
+
+func (s *fakeWorkflowDefinitionService) ReviewOptions(context.Context, deployapp.WorkflowPrincipal) (deployapp.WorkflowReviewOptions, error) {
+	return s.reviewOptions, nil
 }
 
 func (s *fakeWorkflowDefinitionService) Create(_ context.Context, principal deployapp.WorkflowPrincipal, input deployapp.CreateWorkflowInput) (deploydomain.ReleaseWorkflow, error) {
@@ -149,6 +225,11 @@ func (*fakeWorkflowDefinitionService) CreateVersion(_ context.Context, _ deploya
 
 func (s *fakeWorkflowDefinitionService) ChangeLifecycle(_ context.Context, _ deployapp.WorkflowPrincipal, _ deployapp.ChangeWorkflowLifecycleInput) (deploydomain.ReleaseWorkflowVersion, error) {
 	return deploydomain.ReleaseWorkflowVersion{}, s.changeError
+}
+
+func (s *fakeWorkflowDefinitionService) Delete(_ context.Context, _ deployapp.WorkflowPrincipal, input deployapp.DeleteWorkflowInput) error {
+	s.deleted = input
+	return s.deleteError
 }
 
 func workflowHandlerTestTime() time.Time {

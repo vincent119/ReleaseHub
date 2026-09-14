@@ -2,12 +2,16 @@
 package domain
 
 import (
+	"errors"
 	"fmt"
 	"path"
 	"strings"
 
 	"github.com/google/uuid"
 )
+
+// ErrDefaultOrganizationProtected rejects permanent removal of the configured tenant root.
+var ErrDefaultOrganizationProtected = errors.New("default Organization is protected")
 
 // EnvironmentType classifies an Environment independently from its display name.
 type EnvironmentType string
@@ -93,6 +97,33 @@ func NewOrganization(name string) (Organization, error) {
 		return Organization{}, err
 	}
 	return Organization{ID: uuid.New(), Name: name, Active: true, Version: 1}, nil
+}
+
+// Rename returns a new Organization version without changing its stable identity or lifecycle.
+func (o Organization) Rename(name string) (Organization, error) {
+	if o.ID == uuid.Nil || !o.Active || o.Version == 0 {
+		return Organization{}, fmt.Errorf("active versioned Organization is required")
+	}
+	name, err := validateName("organization name", name)
+	if err != nil {
+		return Organization{}, err
+	}
+	o.Name = name
+	o.Version++
+	return o, nil
+}
+
+// IsDefault reports whether this Organization is the configured permanent tenant root.
+func (o Organization) IsDefault(defaultOrganizationID uuid.UUID) bool {
+	return defaultOrganizationID != uuid.Nil && o.ID == defaultOrganizationID
+}
+
+// ValidateDeletion enforces the permanent default Organization boundary for future lifecycle commands.
+func (o Organization) ValidateDeletion(defaultOrganizationID uuid.UUID) error {
+	if o.IsDefault(defaultOrganizationID) {
+		return ErrDefaultOrganizationProtected
+	}
+	return nil
 }
 
 // NewProject creates a validated active Project inside an Organization.

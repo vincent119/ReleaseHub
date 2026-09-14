@@ -41,6 +41,15 @@ func createWorkflowVersionInput(c *gin.Context, workflowID uuid.UUID) (deployapp
 	}, nil
 }
 
+func deleteWorkflowInput(c *gin.Context, workflowID uuid.UUID, expectedVersion contract.ExpectedWorkflowVersion) (deployapp.DeleteWorkflowInput, error) {
+	if expectedVersion < 1 {
+		return deployapp.DeleteWorkflowInput{}, errors.New("workflow deletion request is invalid")
+	}
+	return deployapp.DeleteWorkflowInput{
+		WorkflowID: workflowID, ExpectedVersion: uint64(expectedVersion), RequestID: c.GetHeader(requestIDHeader),
+	}, nil
+}
+
 func changeWorkflowLifecycleInput(c *gin.Context, workflowID, versionID uuid.UUID) (deployapp.ChangeWorkflowLifecycleInput, error) {
 	var body contract.DefinitionLifecycleRequest
 	if err := c.ShouldBindJSON(&body); err != nil || body.ExpectedVersion < 1 {

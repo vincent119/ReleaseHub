@@ -44,6 +44,25 @@ func TestResourceCatalogTenantBoundariesAndMappings(t *testing.T) {
 	organizationB := mustOrganization(t, "tenant-b")
 	mustCreate(t, repository.CreateOrganization(ctx, mutation, organizationA))
 	mustCreate(t, repository.CreateOrganization(ctx, mutation, organizationB))
+	renamedOrganizationA, err := organizationA.Rename("tenant-a-renamed")
+	if err != nil {
+		t.Fatalf("rename Organization domain value: %v", err)
+	}
+	mustCreate(t, repository.RenameOrganization(ctx, mutation, organizationA, renamedOrganizationA))
+	persistedOrganizationA, err := repository.FindOrganization(ctx, organizationA.ID)
+	if err != nil || persistedOrganizationA.Name != "tenant-a-renamed" || persistedOrganizationA.Version != 2 || persistedOrganizationA.ID != organizationA.ID {
+		t.Fatalf("renamed Organization = %#v, %v", persistedOrganizationA, err)
+	}
+	if err := repository.RenameOrganization(ctx, mutation, organizationA, renamedOrganizationA); !errors.Is(err, application.ErrResourceConflict) {
+		t.Fatalf("stale Organization rename should conflict: %v", err)
+	}
+	duplicateName, err := persistedOrganizationA.Rename("tenant-b")
+	if err != nil {
+		t.Fatalf("build duplicate Organization name: %v", err)
+	}
+	if err := repository.RenameOrganization(ctx, mutation, persistedOrganizationA, duplicateName); !errors.Is(err, application.ErrResourceConflict) {
+		t.Fatalf("duplicate Organization rename should conflict: %v", err)
+	}
 	projectA := mustProject(t, organizationA.ID, "payment")
 	projectB := mustProject(t, organizationB.ID, "payment")
 	mustCreate(t, repository.CreateProject(ctx, mutation, projectA))
@@ -81,7 +100,7 @@ func TestResourceCatalogTenantBoundariesAndMappings(t *testing.T) {
 		t.Fatal("Kubernetes label mapping should remain case-sensitive")
 	}
 
-	service, err := application.NewService(repository, catalogAuthorizer{organizationID: organizationA.ID})
+	service, err := application.NewService(repository, catalogAuthorizer{organizationID: organizationA.ID}, uuid.MustParse("00000000-0000-0000-0000-000000000001"))
 	if err != nil {
 		t.Fatalf("create catalog service: %v", err)
 	}
@@ -96,8 +115,8 @@ func TestResourceCatalogTenantBoundariesAndMappings(t *testing.T) {
 		t.Fatalf("cross-tenant list should be empty: %#v %v", values, err)
 	}
 
-	assertCount(t, db, "audit_logs", 10)
-	assertCount(t, db, "outbox_events", 10)
+	assertCount(t, db, "audit_logs", 11)
+	assertCount(t, db, "outbox_events", 11)
 }
 
 func mustOrganization(t *testing.T, name string) catalog.Organization {

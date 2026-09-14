@@ -5,10 +5,10 @@
  * Shared HTTP API contract for the ReleaseHub frontend and backend.
  * OpenAPI spec version: 1.0.0
  */
-import type { AccessUser } from './accessUser';
-import type { ResponseMeta } from './responseMeta';
+import type { AccessUserCandidate } from './accessUserCandidate';
+import type { CursorPageMeta } from './cursorPageMeta';
 
 export interface AccessUserCandidatesResponse {
-  data: AccessUser[];
-  meta: ResponseMeta;
+  data: AccessUserCandidate[];
+  meta: CursorPageMeta;
 }

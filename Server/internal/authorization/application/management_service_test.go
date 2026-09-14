@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -162,22 +163,55 @@ func TestAccessUserPaginationUsesStableRowCursor(t *testing.T) {
 	}
 }
 
-func TestDelegatedMembershipCandidateLookupRequiresExactUsername(t *testing.T) {
+func TestMembershipCandidatesAllowEmptySearchAndContinueWithCursor(t *testing.T) {
 	projectID, groupID := uuid.New(), uuid.New()
+	first, second, third := uuid.New(), uuid.New(), uuid.New()
 	repository := &accessRepositoryStub{
-		scopes:   []ProjectScope{{OrganizationID: uuid.New(), ProjectID: projectID}},
-		snapshot: AccessSnapshot{Groups: []AccessGroup{{ID: groupID, OwnerKind: "project", OwnerID: &projectID, Name: "operators"}}},
+		scopes:           []ProjectScope{{OrganizationID: uuid.New(), ProjectID: projectID}},
+		snapshot:         AccessSnapshot{Groups: []AccessGroup{{ID: groupID, OwnerKind: "project", OwnerID: &projectID, Name: "operators"}}},
+		candidateResults: []AccessUser{{ID: first, Username: "alpha"}, {ID: second, Username: "bravo"}, {ID: third, Username: "charlie"}},
 	}
 	service, err := NewAccessManagementService(repository, &accessAuthorizerStub{allowedProjectID: projectID})
 	if err != nil {
 		t.Fatalf("create access management service: %v", err)
 	}
 
-	if _, err := service.MembershipCandidates(context.Background(), AccessPrincipal{UserID: uuid.New()}, groupID, "operator", 20); err != nil {
-		t.Fatalf("find delegated membership candidate: %v", err)
+	page, err := service.MembershipCandidates(context.Background(), AccessPrincipal{UserID: uuid.New()}, groupID, "", "", 2)
+	if err != nil {
+		t.Fatalf("list initial membership candidates: %v", err)
 	}
-	if !repository.candidateExact || repository.candidateQuery != "operator" {
-		t.Fatalf("delegated candidate lookup exact=%t query=%q", repository.candidateExact, repository.candidateQuery)
+	if len(page.Items) != 2 || page.Items[0].ID != first || page.Items[1].ID != second || !page.HasMore || page.NextCursor == "" {
+		t.Fatalf("initial candidate page = %#v", page)
+	}
+	next, err := service.MembershipCandidates(context.Background(), AccessPrincipal{UserID: uuid.New()}, groupID, "", page.NextCursor, 2)
+	if err != nil {
+		t.Fatalf("list next membership candidates: %v", err)
+	}
+	if len(next.Items) != 1 || next.Items[0].ID != third || next.HasMore || next.NextCursor != "" {
+		t.Fatalf("next candidate page = %#v", next)
+	}
+	if repository.candidateQuery != "" || repository.candidateLimit != 3 {
+		t.Fatalf("candidate query=%q limit=%d", repository.candidateQuery, repository.candidateLimit)
+	}
+}
+
+func TestMembershipCandidatesRejectCursorFromAnotherSearch(t *testing.T) {
+	projectID, groupID := uuid.New(), uuid.New()
+	repository := &accessRepositoryStub{
+		scopes:           []ProjectScope{{OrganizationID: uuid.New(), ProjectID: projectID}},
+		snapshot:         AccessSnapshot{Groups: []AccessGroup{{ID: groupID, OwnerKind: "project", OwnerID: &projectID, Name: "operators"}}},
+		candidateResults: []AccessUser{{ID: uuid.New(), Username: "alpha"}, {ID: uuid.New(), Username: "alpine"}},
+	}
+	service, err := NewAccessManagementService(repository, &accessAuthorizerStub{allowedProjectID: projectID})
+	if err != nil {
+		t.Fatalf("create access management service: %v", err)
+	}
+	page, err := service.MembershipCandidates(context.Background(), AccessPrincipal{UserID: uuid.New()}, groupID, "al", "", 1)
+	if err != nil {
+		t.Fatalf("list searched membership candidates: %v", err)
+	}
+	if _, err := service.MembershipCandidates(context.Background(), AccessPrincipal{UserID: uuid.New()}, groupID, "be", page.NextCursor, 1); !errors.Is(err, ErrInvalidAccessRequest) {
+		t.Fatalf("cursor reuse error = %v", err)
 	}
 }
 
@@ -205,8 +239,9 @@ type accessRepositoryStub struct {
 	scopes           []ProjectScope
 	snapshot         AccessSnapshot
 	disableUserCalls int
-	candidateExact   bool
 	candidateQuery   string
+	candidateLimit   int
+	candidateResults []AccessUser
 }
 
 func (s *accessRepositoryStub) ListProjectScopes(context.Context) ([]ProjectScope, error) {
@@ -217,10 +252,20 @@ func (s *accessRepositoryStub) ResolveAccessScope(context.Context, string, uuid.
 	return authz.Scope{}, nil
 }
 
-func (s *accessRepositoryStub) FindMembershipCandidates(_ context.Context, _ uuid.UUID, query string, exact bool, _ int) ([]AccessUser, error) {
-	s.candidateExact = exact
+func (s *accessRepositoryStub) FindMembershipCandidates(_ context.Context, _ uuid.UUID, query string, after *MembershipCandidateCursor, limit int) ([]AccessUser, error) {
 	s.candidateQuery = query
-	return []AccessUser{}, nil
+	s.candidateLimit = limit
+	start := 0
+	if after != nil {
+		for index, item := range s.candidateResults {
+			if strings.EqualFold(item.Username, after.Username) && item.ID == after.UserID {
+				start = index + 1
+				break
+			}
+		}
+	}
+	end := min(start+limit, len(s.candidateResults))
+	return append([]AccessUser(nil), s.candidateResults[start:end]...), nil
 }
 
 func (s *accessRepositoryStub) LoadAccessSnapshot(context.Context) (AccessSnapshot, error) {

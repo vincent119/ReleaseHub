@@ -20,6 +20,7 @@ type applicationStatusReader interface {
 
 type catalogService interface {
 	CreateOrganization(context.Context, catalogapp.Principal, catalogapp.Mutation, string) (catalog.Organization, error)
+	RenameOrganization(context.Context, catalogapp.Principal, catalogapp.Mutation, uuid.UUID, string, uint64) (catalog.Organization, error)
 	CreateProject(context.Context, catalogapp.Principal, catalogapp.Mutation, uuid.UUID, string) (catalog.Project, error)
 	CreateEnvironment(context.Context, catalogapp.Principal, catalogapp.Mutation, uuid.UUID, uuid.UUID, string, catalog.EnvironmentType) (catalog.Environment, error)
 	CreateEnvironmentLabelMapping(context.Context, catalogapp.Principal, catalogapp.Mutation, uuid.UUID, uuid.UUID, uuid.UUID, string, string) (catalog.EnvironmentLabelMapping, error)
@@ -115,6 +116,14 @@ func (h *catalogHandler) respondCatalogMutationError(c *gin.Context, err error) 
 		respondError(c, http.StatusNotFound, "RESOURCE_NOT_FOUND", "Resource was not found")
 		return false
 	}
+	if errors.Is(err, catalogapp.ErrInvalidResource) {
+		respondError(c, http.StatusBadRequest, "INVALID_REQUEST", "Resource request is invalid")
+		return false
+	}
+	if errors.Is(err, catalogapp.ErrResourceConflict) {
+		respondError(c, http.StatusConflict, "RESOURCE_MUTATION_CONFLICT", "Resource changed concurrently or conflicts with catalog data")
+		return false
+	}
 	respondError(c, http.StatusConflict, "RESOURCE_MUTATION_REJECTED", "Resource change was rejected")
 	return false
 }
@@ -141,7 +150,8 @@ func organizationNodes(values []catalogapp.OrganizationNode) []contract.CatalogO
 	result := make([]contract.CatalogOrganizationNode, 0, len(values))
 	for _, value := range values {
 		result = append(result, contract.CatalogOrganizationNode{
-			Id: value.Organization.ID, Name: value.Organization.Name,
+			Id: value.Organization.ID, Name: value.Organization.Name, Version: int64(value.Organization.Version),
+			IsDefault: value.IsDefault, CanRename: value.CanRename,
 			CanCreateProject: value.CanCreateProject, Projects: projectNodes(value.Projects),
 		})
 	}

@@ -1,18 +1,10 @@
-import {
-  Button,
-  Card,
-  Descriptions,
-  Form,
-  Input,
-  Modal,
-  Tag,
-  message,
-} from 'antd'
+import { Button, Card, Descriptions, Form, Input, Modal, Tag } from 'antd'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { updateDeploymentRequestVersionMetadata } from '@/generated/api'
 import type { DeploymentRequestVersion } from '@/generated/model'
+import { useFeedback } from '@/shared/feedback/useFeedback'
 
 import { requestStatusColor, requestStatusLabel } from '../model/presentation'
 
@@ -29,6 +21,7 @@ interface MetadataForm {
 
 export function RequestOverview({ request, onUpdated }: Props) {
   const { t } = useTranslation()
+  const feedback = useFeedback()
   const [editing, setEditing] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [form] = Form.useForm<MetadataForm>()
@@ -48,12 +41,12 @@ export function RequestOverview({ request, onUpdated }: Props) {
       if (response.status === 200) {
         setEditing(false)
         await onUpdated()
-        message.success(t('requestDetail.metadata.saved'))
+        feedback.success(t('requestDetail.metadata.saved'))
       } else {
-        message.error(t('requestDetail.metadata.rejected'))
+        feedback.error(t('requestDetail.metadata.rejected'))
       }
     } catch {
-      message.error(t('requestDetail.metadata.error'))
+      feedback.error(t('requestDetail.metadata.error'))
     } finally {
       setSubmitting(false)
     }

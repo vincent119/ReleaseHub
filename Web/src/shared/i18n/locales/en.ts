@@ -7,6 +7,12 @@ export const en = {
       expand: 'Expand sidebar',
     },
   },
+  feedback: {
+    successTitle: 'Success',
+    infoTitle: 'Information',
+    warningTitle: 'Warning',
+    errorTitle: 'Action failed',
+  },
   navigation: {
     overview: 'Overview',
     resources: 'Resources',
@@ -103,6 +109,7 @@ export const en = {
     loading: 'Loading resources',
     empty: 'There are no resources you may view.',
     organization: 'Organization',
+    workspace: 'Workspace',
     project: 'Project',
     noProjects: 'There are no visible Projects.',
     noEnvironments: 'There are no visible Environments.',
@@ -117,13 +124,17 @@ export const en = {
       createProject: 'Create Project',
       createEnvironment: 'Create Environment',
       createMapping: 'Add label mapping',
+      renameWorkspace: 'Rename workspace',
+      renameOrganization: 'Rename Organization',
     },
     modal: {
       organization: 'Create Organization',
       project: 'Create Project',
       environment: 'Create Environment',
       mapping: 'Add Environment label mapping',
+      rename: 'Rename',
       submit: 'Create',
+      save: 'Save',
       cancel: 'Cancel',
     },
     fields: {
@@ -140,6 +151,8 @@ export const en = {
     },
     mutation: {
       success: 'Resource created.',
+      renamed: 'Name updated.',
+      invalid: 'Enter a valid name.',
       conflict: 'The resource conflicts with current catalog data.',
       notAuthorized: 'The resource does not exist or you cannot manage it.',
       error: 'The resource could not be created.',
@@ -223,6 +236,7 @@ export const en = {
       createBinding: 'Create binding',
       createDeny: 'Create deny',
       addMember: 'Add member',
+      manageMembers: 'Manage members',
       disable: 'Disable',
       revoke: 'Revoke',
     },
@@ -250,6 +264,19 @@ export const en = {
         'The user must change this password after the first login. Use 8 to 72 characters.',
       userSearch: 'Search username',
       scopeResource: 'Scope resource',
+    },
+    groupMembers: {
+      title: '{{group}} members',
+      addLabel: 'Add a user',
+      candidatePlaceholder: 'Select a user or type to filter',
+      add: 'Add member',
+      current: 'Current members',
+      empty: 'This Group has no active members.',
+      manual: 'Manual',
+      remove: 'Remove',
+      removeConfirm: 'Remove this user from the Group?',
+      oidcManaged: 'Managed by OIDC',
+      loadMore: 'Load more members',
     },
     disable: {
       confirm: 'Disable this record and revoke its active access?',
@@ -340,6 +367,8 @@ export const en = {
     actions: {
       create: 'Create Workflow',
       newVersion: 'Create new version',
+      copy: 'Copy Workflow',
+      delete: 'Delete Workflow',
       publish: 'Publish version',
       disable: 'Disable version',
       save: 'Save Workflow',
@@ -362,8 +391,8 @@ export const en = {
       reviewPolicy: 'Review policy',
       requiredApprovals: 'Required approvals',
       allowSelfReview: 'Allow request creator review',
-      userIds: 'Assigned user IDs',
-      roleIds: 'Assigned Role IDs',
+      userIds: 'Assigned users',
+      roleIds: 'Assigned Roles',
       from: 'Source state',
       to: 'Target state',
       trigger: 'Trigger',
@@ -373,8 +402,18 @@ export const en = {
       value: 'Value',
     },
     inspector: { state: 'State settings', transition: 'Transition settings' },
+    reviewOptions: {
+      userPlaceholder: 'Select users',
+      rolePlaceholder: 'Select Roles',
+      loading: 'Loading assignable options…',
+      empty: 'No assignable options',
+      error: 'Assignable users and Roles could not be loaded.',
+      unavailable: '{{name}} (currently unavailable)',
+      roleLabel: '{{name}} · {{owner}}',
+    },
     editor: {
       createTitle: 'Create Release Workflow',
+      copyTitle: 'Copy Release Workflow',
       versionTitle: 'Create Workflow Version',
       canvas: 'Workflow graph editor',
       selectElement: 'Select a state or transition to configure it.',
@@ -383,6 +422,24 @@ export const en = {
     template: {
       name: 'Production approval',
       description: 'Baseline production approval and deployment flow.',
+    },
+    copy: {
+      defaultName: '{{name}} copy',
+    },
+    delete: {
+      title: 'Delete Release Workflow',
+      warning: 'This action cannot be undone',
+      impact:
+        'Only Workflows that were never published and are not used by any data can be deleted.',
+      instruction: 'Enter the full name “{{name}}” to confirm deletion.',
+      confirmationLabel: 'Enter the Workflow name to confirm deletion',
+      confirm: 'Delete permanently',
+      publishedReason:
+        'A Workflow that was published or disabled must retain its history and cannot be deleted.',
+      success: 'Workflow deleted.',
+      conflict:
+        'The Workflow changed, was published, or is in use and cannot be deleted.',
+      error: 'The Workflow could not be deleted.',
     },
     validation: {
       name: 'Enter a Workflow name.',
@@ -469,6 +526,14 @@ export const en = {
     editor: {
       createTitle: 'Create Deployment Plan',
       versionTitle: 'Create Deployment Plan Version',
+      back: 'Back to Plans',
+      eyebrow: 'Plan editor',
+      createDescription:
+        'Define the Plan scope, metadata, Applications, and deployment dependencies.',
+      versionDescription:
+        'Create a new version from the selected Plan without changing its identity.',
+      detailsTitle: 'Plan details',
+      workspace: 'Deployment Plan workspace',
       canvas: 'Deployment Plan graph editor',
       selectElement: 'Select an Application or dependency to configure it.',
     },

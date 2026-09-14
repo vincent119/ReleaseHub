@@ -14,7 +14,6 @@ import {
   Table,
   Tooltip,
   Typography,
-  message,
 } from 'antd'
 import { useState } from 'react'
 import type { TableProps } from 'antd'
@@ -42,6 +41,7 @@ import {
   useListVisibleCatalogApplications,
 } from '@/generated/api'
 import type { CatalogApplication } from '@/generated/model'
+import { useFeedback } from '@/shared/feedback/useFeedback'
 import releaseHubMark from '@/assets/releasehub-mark.svg'
 
 import styles from './App.module.css'
@@ -265,6 +265,7 @@ function ApplicationsPage() {
 
 function ApplicationDetailPage() {
   const { t } = useTranslation()
+  const feedback = useFeedback()
   const { applicationId } = useParams()
   const application = useGetCatalogApplication(applicationId ?? '', {
     query: { enabled: Boolean(applicationId) },
@@ -377,11 +378,13 @@ function ApplicationDetailPage() {
                   onSuccess: (response) => {
                     if (response.status === 200) {
                       void status.refetch()
-                      message.success(t('applicationDetail.onboarding.success'))
+                      feedback.success(
+                        t('applicationDetail.onboarding.success'),
+                      )
                     }
                   },
                   onError: () =>
-                    message.error(t('applicationDetail.onboarding.error')),
+                    feedback.error(t('applicationDetail.onboarding.error')),
                 },
               )
             }
@@ -406,13 +409,15 @@ function ApplicationDetailPage() {
                     .then((response) => {
                       void status.refetch()
                       if (response.status === 202) {
-                        message.info(t('applicationDetail.onboarding.pending'))
+                        feedback.info(t('applicationDetail.onboarding.pending'))
                         return
                       }
-                      message.success(t('applicationDetail.onboarding.success'))
+                      feedback.success(
+                        t('applicationDetail.onboarding.success'),
+                      )
                     })
                     .catch(() =>
-                      message.error(t('applicationDetail.onboarding.error')),
+                      feedback.error(t('applicationDetail.onboarding.error')),
                     )
                 }}
               >
@@ -448,9 +453,9 @@ function LoadingPage({ label }: { label: string }) {
   )
 }
 
-function SignInPage() {
+export function SignInPage() {
   const { t } = useTranslation()
-  const [error, setError] = useState(false)
+  const feedback = useFeedback()
   const [submitting, setSubmitting] = useState(false)
   const systemStatus = useGetSystemStatus()
   const oidcEnabled =
@@ -458,13 +463,12 @@ function SignInPage() {
 
   async function submit(values: { username: string; password: string }) {
     setSubmitting(true)
-    setError(false)
     try {
       const response = await loginLocal(values)
       if (response.status !== 200) throw new Error('login rejected')
       window.location.reload()
     } catch {
-      setError(true)
+      feedback.error(t('session.local.error'))
       setSubmitting(false)
     }
   }
@@ -528,14 +532,6 @@ function SignInPage() {
             >
               {t('session.signInRequired.description')}
             </Typography.Paragraph>
-            {error && (
-              <Alert
-                className={styles.authError}
-                type="error"
-                message={t('session.local.error')}
-                showIcon
-              />
-            )}
             <Form
               className={styles.authForm}
               layout="vertical"
@@ -581,9 +577,9 @@ function SignInPage() {
   )
 }
 
-function ChangePasswordPage() {
+export function ChangePasswordPage() {
   const { t } = useTranslation()
-  const [error, setError] = useState(false)
+  const feedback = useFeedback()
   const [submitting, setSubmitting] = useState(false)
 
   async function submit(values: {
@@ -591,7 +587,6 @@ function ChangePasswordPage() {
     newPassword: string
   }) {
     setSubmitting(true)
-    setError(false)
     try {
       const response = await changeLocalPassword(values, {
         headers: { 'X-CSRF-Token': browserCookie('releasehub_csrf') ?? '' },
@@ -599,7 +594,7 @@ function ChangePasswordPage() {
       if (response.status !== 204) throw new Error('password change rejected')
       window.location.reload()
     } catch {
-      setError(true)
+      feedback.error(t('session.passwordChange.error'))
       setSubmitting(false)
     }
   }
@@ -616,13 +611,6 @@ function ChangePasswordPage() {
             message={t('session.passwordChange.required')}
             showIcon
           />
-          {error && (
-            <Alert
-              type="error"
-              message={t('session.passwordChange.error')}
-              showIcon
-            />
-          )}
           <Form layout="vertical" onFinish={submit}>
             <Form.Item
               name="currentPassword"

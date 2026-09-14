@@ -146,8 +146,9 @@ paths:
       security: [{ sessionCookie: [] }]
       parameters:
         - { name: groupId, in: path, required: true, schema: { type: string, format: uuid } }
-        - { name: query, in: query, required: true, schema: { type: string, minLength: 1, maxLength: 128 } }
-        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 20, default: 20 } }
+        - { name: query, in: query, schema: { type: string, minLength: 1, maxLength: 128 } }
+        - { $ref: "#/components/parameters/Cursor" }
+        - { $ref: "#/components/parameters/Limit" }
       responses:
         "200": { description: Eligible minimal user identities, content: { application/json: { schema: { $ref: "#/components/schemas/AccessUserCandidatesResponse" } } } }
         "404": { description: The Group does not exist or the caller lacks management permission. }
@@ -435,6 +436,24 @@ paths:
         "201": { description: The Organization was created, content: { application/json: { schema: { $ref: "#/components/schemas/CatalogOrganizationResponse" } } } }
         "404": { description: The caller lacks platform-management permission. }
         "409": { description: The name conflicts or the current data state does not permit creation. }
+  /api/v1/catalog/organizations/{organizationId}:
+    patch:
+      operationId: updateCatalogOrganization
+      summary: Rename an Organization
+      tags: [Catalog]
+      security: [{ sessionCookie: [] }]
+      parameters:
+        - { name: organizationId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { $ref: "#/components/parameters/CsrfToken" }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/UpdateCatalogOrganizationRequest" } } }
+      responses:
+        "200": { description: The Organization was renamed, content: { application/json: { schema: { $ref: "#/components/schemas/CatalogOrganizationResponse" } } } }
+        "400": { description: The request body or expected version is invalid. }
+        "401": { description: The user is unauthenticated or the session has expired. }
+        "404": { description: The Organization does not exist or the caller lacks platform-management permission. }
+        "409": { description: The name conflicts or the Organization changed concurrently. }
   /api/v1/catalog/organizations/{organizationId}/projects:
     post:
       operationId: createCatalogProject
@@ -944,6 +963,46 @@ paths:
           description: The user is unauthenticated or the session has expired.
         "409":
           description: The Workflow name conflicts.
+  /api/v1/release-workflows/review-options:
+    get:
+      operationId: getReleaseWorkflowReviewOptions
+      summary: List minimal User and Role options for Workflow Review policies
+      tags:
+        - ReleaseWorkflows
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: User and Role options visible to an authorized Workflow manager.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReleaseWorkflowReviewOptionsResponse"
+        "401":
+          description: The user is unauthenticated or the session has expired.
+        "404":
+          description: The caller lacks Workflow management permission.
+  /api/v1/release-workflows/{workflowId}:
+    delete:
+      operationId: deleteReleaseWorkflow
+      summary: Delete an unused Release Workflow whose versions are all Draft
+      tags:
+        - ReleaseWorkflows
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/WorkflowId"
+        - $ref: "#/components/parameters/ExpectedWorkflowVersion"
+        - $ref: "#/components/parameters/CsrfToken"
+      responses:
+        "204":
+          description: The unused Draft-only Workflow was deleted.
+        "401":
+          description: The user is unauthenticated or the session has expired.
+        "404":
+          description: The Workflow does not exist or the caller lacks operation permission.
+        "409":
+          description: The expectedVersion is stale, a Version left Draft, or the Workflow is referenced.
   /api/v1/release-workflows/{workflowId}/versions:
     post:
       operationId: createReleaseWorkflowVersion
@@ -1646,6 +1705,14 @@ components:
       schema:
         type: string
         format: uuid
+    ExpectedWorkflowVersion:
+      name: expectedVersion
+      in: query
+      required: true
+      schema:
+        type: integer
+        format: int64
+        minimum: 1
     WorkflowVersionId:
       name: workflowVersionId
       in: path
@@ -1692,6 +1759,12 @@ components:
       required: [name]
       properties:
         name: { type: string, minLength: 1, maxLength: 128 }
+    UpdateCatalogOrganizationRequest:
+      type: object
+      required: [name, version]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 128 }
+        version: { type: integer, format: int64, minimum: 1 }
     CreateEnvironmentRequest:
       type: object
       required: [name, type]
@@ -1775,6 +1848,12 @@ components:
         username: { type: string, minLength: 1 }
         disabled: { type: boolean }
         allowedActions: { type: array, items: { $ref: "#/components/schemas/AccessAction" } }
+    AccessUserCandidate:
+      type: object
+      required: [id, username]
+      properties:
+        id: { type: string, format: uuid }
+        username: { type: string, minLength: 1 }
     AccessGroup:
       type: object
       required: [id, ownerKind, name, oidcViewerOnly, disabled, allowedActions]
@@ -1913,8 +1992,8 @@ components:
       type: object
       required: [data, meta]
       properties:
-        data: { type: array, items: { $ref: "#/components/schemas/AccessUser" } }
-        meta: { $ref: "#/components/schemas/ResponseMeta" }
+        data: { type: array, items: { $ref: "#/components/schemas/AccessUserCandidate" } }
+        meta: { $ref: "#/components/schemas/CursorPageMeta" }
     AccessScopeOptions:
       type: object
       required: [groups, roles, permissions]
@@ -2243,10 +2322,13 @@ components:
             $ref: "#/components/schemas/CatalogEnvironmentNode"
     CatalogOrganizationNode:
       type: object
-      required: [id, name, canCreateProject, projects]
+      required: [id, name, version, isDefault, canRename, canCreateProject, projects]
       properties:
         id: { type: string, format: uuid }
         name: { type: string, minLength: 1 }
+        version: { type: integer, format: int64, minimum: 1 }
+        isDefault: { type: boolean }
+        canRename: { type: boolean }
         canCreateProject: { type: boolean }
         projects:
           type: array
@@ -2681,6 +2763,54 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/ReleaseWorkflow"
+        meta:
+          $ref: "#/components/schemas/ResponseMeta"
+    ReleaseWorkflowReviewUserOption:
+      type: object
+      required: [id, username, assignable]
+      properties:
+        id:
+          type: string
+          format: uuid
+        username:
+          type: string
+        assignable:
+          type: boolean
+    ReleaseWorkflowReviewRoleOption:
+      type: object
+      required: [id, name, ownerKind, assignable]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        ownerKind:
+          type: string
+          enum: [platform, project]
+        ownerId:
+          type: string
+          format: uuid
+        assignable:
+          type: boolean
+    ReleaseWorkflowReviewOptions:
+      type: object
+      required: [users, roles]
+      properties:
+        users:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReleaseWorkflowReviewUserOption"
+        roles:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReleaseWorkflowReviewRoleOption"
+    ReleaseWorkflowReviewOptionsResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          $ref: "#/components/schemas/ReleaseWorkflowReviewOptions"
         meta:
           $ref: "#/components/schemas/ResponseMeta"
     DeploymentPlanCondition:

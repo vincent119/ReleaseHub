@@ -1,11 +1,15 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { App } from 'antd'
 import { render, screen } from '@testing-library/react'
 import { I18nextProvider } from 'react-i18next'
 import { MemoryRouter } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import type { CatalogOrganizationNode } from '@/generated/model'
 import i18n from '@/shared/i18n/config'
 
 import { AccessPage } from './AccessPage'
+import { scopePayload, scopeResourceOptions } from './scopeResources'
 
 const api = vi.hoisted(() => ({
   capabilities: vi.fn(),
@@ -18,6 +22,9 @@ const api = vi.hoisted(() => ({
   candidates: vi.fn(),
   scopeOptions: vi.fn(),
   resources: vi.fn(),
+  system: vi.fn(),
+  listCandidates: vi.fn(),
+  listMemberships: vi.fn(),
 }))
 
 vi.mock('@/generated/api', () => ({
@@ -29,8 +36,11 @@ vi.mock('@/generated/api', () => ({
   useListAccessBindings: api.bindings,
   useListAccessDenies: api.denies,
   useListAccessMembershipCandidates: api.candidates,
+  listAccessMembershipCandidates: api.listCandidates,
+  listAccessMemberships: api.listMemberships,
   useGetAccessScopeOptions: api.scopeOptions,
   useGetCatalogResourceTree: api.resources,
+  useGetSystemStatus: api.system,
   createAccessBinding: vi.fn(),
   createAccessDeny: vi.fn(),
   createAccessGroup: vi.fn(),
@@ -56,10 +66,17 @@ function query(data: unknown) {
 }
 
 function renderPage(initialEntry = '/') {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  })
   return render(
     <MemoryRouter initialEntries={[initialEntry]}>
       <I18nextProvider i18n={i18n}>
-        <AccessPage />
+        <QueryClientProvider client={queryClient}>
+          <App>
+            <AccessPage />
+          </App>
+        </QueryClientProvider>
       </I18nextProvider>
     </MemoryRouter>,
   )
@@ -109,6 +126,23 @@ describe('AccessPage', () => {
       query({ groups: [], roles: [], permissions: [] }),
     )
     api.resources.mockReturnValue(query([]))
+    api.system.mockReturnValue(
+      query({ name: 'ReleaseHub', version: 'test', tenancyMode: 'single' }),
+    )
+    api.listCandidates.mockResolvedValue({
+      status: 200,
+      data: {
+        data: [{ id: '019c1230-0000-7000-8000-000000000002', username: 'amy' }],
+        meta: { requestId: 'request', timestamp: '', hasMore: false },
+      },
+    })
+    api.listMemberships.mockResolvedValue({
+      status: 200,
+      data: {
+        data: [],
+        meta: { requestId: 'request', timestamp: '', hasMore: false },
+      },
+    })
   })
 
   it('renders only access records returned by the authorized API', () => {
@@ -150,5 +184,104 @@ describe('AccessPage', () => {
     expect(
       screen.queryByRole('button', { name: '停用' }),
     ).not.toBeInTheDocument()
+  })
+
+  it('offers Group member management from the Group row', () => {
+    api.groups.mockReturnValue(
+      query([
+        {
+          id: '019c1230-0000-7000-8000-000000000003',
+          ownerKind: 'platform',
+          name: 'release-managers',
+          oidcViewerOnly: false,
+          disabled: false,
+          allowedActions: ['viewMemberships', 'addMember'],
+        },
+      ]),
+    )
+
+    renderPage('/access?tab=groups')
+
+    expect(screen.getByText('管理成員')).toBeInTheDocument()
+  })
+
+  it('formats Scope labels by tenancy mode without changing ancestry IDs', () => {
+    const organizations: CatalogOrganizationNode[] = [
+      {
+        id: '019c1230-0000-7000-8000-000000000010',
+        name: 'default',
+        version: 1,
+        isDefault: true,
+        canRename: true,
+        canCreateProject: true,
+        projects: [
+          {
+            id: '019c1230-0000-7000-8000-000000000011',
+            name: 'Payment',
+            canManage: true,
+            environments: [
+              {
+                id: '019c1230-0000-7000-8000-000000000012',
+                name: 'production',
+                type: 'Production',
+                applications: [
+                  {
+                    id: '019c1230-0000-7000-8000-000000000013',
+                    organizationId: '019c1230-0000-7000-8000-000000000010',
+                    projectId: '019c1230-0000-7000-8000-000000000011',
+                    environmentId: '019c1230-0000-7000-8000-000000000012',
+                    name: 'api',
+                    argocdNamespace: 'argocd',
+                    argocdApplicationName: 'api-production',
+                    argocdProject: 'payment',
+                    destinationServer: 'https://kubernetes.default.svc',
+                    destinationNamespace: 'payment',
+                    sourceRepositoryUrl: 'https://git.example/repo.git',
+                    sourceTargetRevision: 'main',
+                    sourcePath: 'production/api',
+                    active: true,
+                    version: 1,
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    ]
+
+    expect(scopeResourceOptions('project', organizations, true)[0]?.label).toBe(
+      'Payment',
+    )
+    expect(
+      scopeResourceOptions('environment', organizations, true)[0]?.label,
+    ).toBe('Payment / production')
+    expect(
+      scopeResourceOptions('application', organizations, true)[0]?.label,
+    ).toBe('Payment / production / api')
+    expect(
+      scopeResourceOptions('project', organizations, false)[0]?.label,
+    ).toBe('default / Payment')
+    expect(
+      scopeResourceOptions('environment', organizations, false)[0]?.label,
+    ).toBe('default / Payment / production')
+    expect(
+      scopeResourceOptions('application', organizations, false)[0]?.label,
+    ).toBe('default / Payment / production / api')
+    expect(
+      scopePayload(
+        {
+          scopeKind: 'application',
+          scopeId: '019c1230-0000-7000-8000-000000000013',
+        },
+        organizations,
+      ),
+    ).toEqual({
+      scopeKind: 'application',
+      organizationId: '019c1230-0000-7000-8000-000000000010',
+      projectId: '019c1230-0000-7000-8000-000000000011',
+      environmentId: '019c1230-0000-7000-8000-000000000012',
+      applicationId: '019c1230-0000-7000-8000-000000000013',
+    })
   })
 })

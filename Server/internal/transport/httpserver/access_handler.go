@@ -30,7 +30,7 @@ type accessManagementService interface {
 	ListMemberships(context.Context, authzapp.AccessPrincipal, *uuid.UUID, *uuid.UUID, string, string, int) (authzapp.AccessListPage[authzapp.AccessMembership], error)
 	ListBindings(context.Context, authzapp.AccessPrincipal, string, string, int) (authzapp.AccessListPage[authzapp.AccessBinding], error)
 	ListDenies(context.Context, authzapp.AccessPrincipal, string, string, int) (authzapp.AccessListPage[authzapp.AccessDeny], error)
-	MembershipCandidates(context.Context, authzapp.AccessPrincipal, uuid.UUID, string, int) ([]authzapp.AccessUser, error)
+	MembershipCandidates(context.Context, authzapp.AccessPrincipal, uuid.UUID, string, string, int) (authzapp.AccessListPage[authzapp.AccessUser], error)
 	ScopeOptions(context.Context, authzapp.AccessPrincipal, string, string) (authzapp.AccessScopeOptions, error)
 	RevokeMembership(context.Context, authzapp.AccessPrincipal, authzapp.AccessMutation, uuid.UUID) error
 	DisableRole(context.Context, authzapp.AccessPrincipal, authzapp.AccessMutation, uuid.UUID) error

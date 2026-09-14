@@ -5,7 +5,10 @@ import { Button, Empty, Flex, Select, Space, Typography } from 'antd'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import type { ReleaseWorkflowDocument } from '@/generated/model'
+import type {
+  ReleaseWorkflowDocument,
+  ReleaseWorkflowReviewOptions,
+} from '@/generated/model'
 
 import { useWorkflowEditor } from '../hooks/useWorkflowEditor'
 import { StateInspector } from './StateInspector'
@@ -17,12 +20,18 @@ const nodeTypes = { workflowState: WorkflowStateNode }
 
 interface Props {
   initialDocument: ReleaseWorkflowDocument
+  reviewOptions?: ReleaseWorkflowReviewOptions
+  reviewOptionsLoading?: boolean
+  reviewOptionsError?: boolean
   onChange?: (document: ReleaseWorkflowDocument) => void
   readOnly?: boolean
 }
 
 export function WorkflowGraphEditor({
   initialDocument,
+  reviewOptions,
+  reviewOptionsLoading = false,
+  reviewOptionsError = false,
   onChange,
   readOnly = false,
 }: Props) {
@@ -88,6 +97,9 @@ export function WorkflowGraphEditor({
           <StateInspector
             state={node.data.state}
             initial={graph.initialState === node.id}
+            reviewOptions={reviewOptions}
+            reviewOptionsLoading={reviewOptionsLoading}
+            reviewOptionsError={reviewOptionsError}
             onMakeInitial={() => emit({ type: 'initial', id: node.id })}
             onChange={(state) => {
               emit({ type: 'updateState', id: node.id, state })

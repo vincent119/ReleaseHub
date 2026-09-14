@@ -5,7 +5,7 @@ import {
   UserOutlined,
 } from '@ant-design/icons'
 import { useQueryClient } from '@tanstack/react-query'
-import { App, Avatar, Button, Dropdown, Grid, Space, Spin } from 'antd'
+import { Avatar, Button, Dropdown, Grid, Space, Spin } from 'antd'
 import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -13,6 +13,7 @@ import {
   getGetAuthSessionQueryKey,
   useLogoutAuthSession,
 } from '@/generated/api'
+import { useFeedback } from '@/shared/feedback/useFeedback'
 
 import styles from './AccountMenu.module.css'
 import { PersonalSettings } from './PersonalSettings'
@@ -32,7 +33,7 @@ export function AccountMenu({
   navigateTo = (url) => window.location.assign(url),
 }: AccountMenuProps) {
   const { t } = useTranslation()
-  const { message } = App.useApp()
+  const feedback = useFeedback()
   const queryClient = useQueryClient()
   const screens = Grid.useBreakpoint()
   const desktop = desktopOverride ?? Boolean(screens.md)
@@ -55,14 +56,14 @@ export function AccountMenu({
   const signOut = async () => {
     if (logout.isPending) return
     if (!csrfToken) {
-      message.error(t('account.signOutError'))
+      feedback.error(t('account.signOutError'))
       return
     }
 
     try {
       const response = await logout.mutateAsync()
       if (response.status !== 200 || !response.data.data.loggedOut) {
-        message.error(t('account.signOutError'))
+        feedback.error(t('account.signOutError'))
         return
       }
 
@@ -76,7 +77,7 @@ export function AccountMenu({
         queryKey: getGetAuthSessionQueryKey(),
       })
     } catch {
-      message.error(t('account.signOutError'))
+      feedback.error(t('account.signOutError'))
     }
   }
 

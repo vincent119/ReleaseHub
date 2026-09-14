@@ -72,6 +72,100 @@ test('creates a local user without sending the confirmation password', async ({
   })
 })
 
+test('loads Group candidates without search and removes only manual members', async ({
+  page,
+}) => {
+  let candidateURL = ''
+  let removedMembership = ''
+  await page.context().addCookies([
+    {
+      name: 'releasehub_csrf',
+      value: 'access-csrf-token',
+      url: 'http://127.0.0.1:4173',
+    },
+  ])
+  await page.route('**/api/v1/access/groups**', (route) =>
+    route.fulfill(
+      accessList([
+        {
+          id: '019c1230-0000-7000-8000-000000000010',
+          ownerKind: 'platform',
+          name: 'release-managers',
+          oidcViewerOnly: false,
+          disabled: false,
+          allowedActions: ['viewMemberships', 'addMember'],
+        },
+      ]),
+    ),
+  )
+  await page.route(
+    '**/api/v1/access/groups/*/membership-candidates**',
+    (route) => {
+      candidateURL = route.request().url()
+      return route.fulfill(
+        accessList([
+          {
+            id: '019c1230-0000-7000-8000-000000000011',
+            username: 'amy',
+          },
+        ]),
+      )
+    },
+  )
+  await page.route('**/api/v1/access/memberships**', (route) =>
+    route.fulfill(
+      accessList([
+        {
+          id: 'manual-membership',
+          groupId: '019c1230-0000-7000-8000-000000000010',
+          groupName: 'release-managers',
+          userId: '019c1230-0000-7000-8000-000000000012',
+          username: 'manual-user',
+          source: 'manual',
+          active: true,
+          allowedActions: ['revoke'],
+        },
+        {
+          id: 'oidc-membership',
+          groupId: '019c1230-0000-7000-8000-000000000010',
+          groupName: 'release-managers',
+          userId: '019c1230-0000-7000-8000-000000000013',
+          username: 'oidc-user',
+          source: 'oidc',
+          active: true,
+          allowedActions: [],
+        },
+      ]),
+    ),
+  )
+  await page.route(
+    '**/api/v1/access/memberships/manual-membership/revoke',
+    (route) => {
+      if (route.request().method() === 'POST') {
+        removedMembership = 'manual-membership'
+        return route.fulfill({ status: 204 })
+      }
+      return route.continue()
+    },
+  )
+
+  await page.goto('/access?tab=groups')
+  await page.getByRole('button', { name: 'Manage members' }).click()
+  const dialog = page.getByRole('dialog', { name: 'release-managers members' })
+
+  await expect(dialog.getByText('manual-user')).toBeVisible()
+  await expect(dialog.getByText('oidc-user')).toBeVisible()
+  await expect(dialog.getByRole('button', { name: 'Remove' })).toHaveCount(1)
+  await expect(dialog.getByText('Managed by OIDC')).toBeVisible()
+  await dialog.getByRole('combobox').click()
+  await expect(page.getByText('amy')).toBeVisible()
+  expect(new URL(candidateURL).searchParams.has('query')).toBe(false)
+
+  await dialog.getByRole('button', { name: 'Remove' }).click()
+  await page.getByRole('button', { name: 'OK' }).click()
+  await expect.poll(() => removedMembership).toBe('manual-membership')
+})
+
 async function mockShell(page: Page) {
   await page.route('**/api/v1/auth/session', (route) =>
     route.fulfill(

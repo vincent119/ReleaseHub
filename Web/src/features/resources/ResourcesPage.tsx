@@ -14,7 +14,6 @@ import {
   Spin,
   Tag,
   Typography,
-  message,
 } from 'antd'
 import { useState } from 'react'
 import { Link } from 'react-router'
@@ -25,6 +24,7 @@ import {
   createCatalogEnvironmentLabelMapping,
   createCatalogOrganization,
   createCatalogProject,
+  updateCatalogOrganization,
   useGetCatalogResourceTree,
   useGetSystemStatus,
 } from '@/generated/api'
@@ -32,9 +32,11 @@ import type {
   CatalogOrganizationNode,
   CatalogProjectNode,
 } from '@/generated/model'
+import { useFeedback } from '@/shared/feedback/useFeedback'
 
 type ResourceAction =
   | { kind: 'organization' }
+  | { kind: 'rename'; organization: CatalogOrganizationNode }
   | { kind: 'project'; organization: CatalogOrganizationNode }
   | {
       kind: 'environment'
@@ -57,6 +59,7 @@ interface ResourceFields {
 
 export function ResourcesPage() {
   const { t } = useTranslation()
+  const feedback = useFeedback()
   const [form] = Form.useForm<ResourceFields>()
   const [action, setAction] = useState<ResourceAction>()
   const [submitting, setSubmitting] = useState(false)
@@ -89,6 +92,9 @@ export function ResourcesPage() {
   const singleTenant = system.data.data.data.tenancyMode === 'single'
   const open = (next: ResourceAction) => {
     form.resetFields()
+    if (next.kind === 'rename') {
+      form.setFieldsValue({ name: next.organization.name })
+    }
     setAction(next)
   }
   const close = () => {
@@ -98,7 +104,7 @@ export function ResourcesPage() {
     if (!action) return
     const csrfToken = browserCookie('releasehub_csrf')
     if (!csrfToken) {
-      message.error(t('resources.mutation.error'))
+      feedback.error(t('resources.mutation.error'))
       return
     }
     setSubmitting(true)
@@ -108,6 +114,17 @@ export function ResourcesPage() {
       if (action.kind === 'organization') {
         status = (
           await createCatalogOrganization({ name: fields.name ?? '' }, options)
+        ).status
+      } else if (action.kind === 'rename') {
+        status = (
+          await updateCatalogOrganization(
+            action.organization.id,
+            {
+              name: fields.name?.trim() ?? '',
+              version: action.organization.version,
+            },
+            options,
+          )
         ).status
       } else if (action.kind === 'project') {
         status = (
@@ -140,19 +157,28 @@ export function ResourcesPage() {
           )
         ).status
       }
-      if (status !== 201) {
-        message.error(
-          status === 404
-            ? t('resources.mutation.notAuthorized')
-            : t('resources.mutation.conflict'),
+      const expectedStatus = action.kind === 'rename' ? 200 : 201
+      if (status !== expectedStatus) {
+        feedback.error(
+          status === 400
+            ? t('resources.mutation.invalid')
+            : status === 404
+              ? t('resources.mutation.notAuthorized')
+              : t('resources.mutation.conflict'),
         )
         return
       }
       setAction(undefined)
-      message.success(t('resources.mutation.success'))
+      feedback.success(
+        t(
+          action.kind === 'rename'
+            ? 'resources.mutation.renamed'
+            : 'resources.mutation.success',
+        ),
+      )
       await resources.refetch()
     } catch {
-      message.error(t('resources.mutation.error'))
+      feedback.error(t('resources.mutation.error'))
     } finally {
       setSubmitting(false)
     }
@@ -178,15 +204,34 @@ export function ResourcesPage() {
       ) : (
         organizations.map((organization) =>
           singleTenant ? (
-            <ProjectList
+            <Card
               key={organization.id}
-              organization={organization}
-              open={open}
-            />
+              title={`${t('resources.workspace')}: ${organization.name}`}
+              extra={
+                organization.canRename ? (
+                  <Button
+                    onClick={() => open({ kind: 'rename', organization })}
+                  >
+                    {t('resources.actions.renameWorkspace')}
+                  </Button>
+                ) : undefined
+              }
+            >
+              <ProjectList organization={organization} open={open} />
+            </Card>
           ) : (
             <Card
               key={organization.id}
               title={`${t('resources.organization')}: ${organization.name}`}
+              extra={
+                organization.canRename ? (
+                  <Button
+                    onClick={() => open({ kind: 'rename', organization })}
+                  >
+                    {t('resources.actions.renameOrganization')}
+                  </Button>
+                ) : undefined
+              }
             >
               <ProjectList organization={organization} open={open} />
             </Card>
@@ -321,7 +366,11 @@ function ResourceModal({
     <Modal
       open={Boolean(action)}
       title={action ? t(`resources.modal.${action.kind}`) : ''}
-      okText={t('resources.modal.submit')}
+      okText={t(
+        action?.kind === 'rename'
+          ? 'resources.modal.save'
+          : 'resources.modal.submit',
+      )}
       cancelText={t('resources.modal.cancel')}
       confirmLoading={submitting}
       onCancel={close}

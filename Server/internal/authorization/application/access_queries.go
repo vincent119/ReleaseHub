@@ -2,6 +2,8 @@ package application
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"strings"
 
 	"github.com/google/uuid"
@@ -27,28 +29,76 @@ func (s *AccessManagementService) Capabilities(ctx context.Context, principal Ac
 	}, Permissions: value.Permissions}, nil
 }
 
-// MembershipCandidates returns minimal user identities for one manageable Group.
-func (s *AccessManagementService) MembershipCandidates(ctx context.Context, principal AccessPrincipal, groupID uuid.UUID, query string, limit int) ([]AccessUser, error) {
+// MembershipCandidates returns one stable page of minimal user identities for one manageable Group.
+func (s *AccessManagementService) MembershipCandidates(ctx context.Context, principal AccessPrincipal, groupID uuid.UUID, query, cursor string, limit int) (AccessListPage[AccessUser], error) {
 	query = strings.TrimSpace(query)
-	if query == "" || len(query) > 128 {
-		return nil, ErrInvalidAccessRequest
+	if len(query) > 128 {
+		return AccessListPage[AccessUser]{}, ErrInvalidAccessRequest
+	}
+	after, err := decodeMembershipCandidateCursor(cursor, query)
+	if err != nil {
+		return AccessListPage[AccessUser]{}, err
 	}
 	value, err := s.Load(ctx, principal)
 	if err != nil {
-		return nil, err
+		return AccessListPage[AccessUser]{}, err
 	}
 	group, ok := findGroup(value.Groups, groupID)
 	if !ok || group.DisabledAt != nil {
-		return nil, ErrAccessManagementNotFound
+		return AccessListPage[AccessUser]{}, ErrAccessManagementNotFound
 	}
 	allowed, err := s.mayManageOwner(ctx, principal, s.groupManage, group.OwnerKind, group.OwnerID)
 	if err != nil || !allowed {
-		return nil, accessDecision(err)
+		return AccessListPage[AccessUser]{}, accessDecision(err)
 	}
-	if limit < 1 || limit > 20 {
+	if limit < 1 || limit > 100 {
 		limit = 20
 	}
-	return s.repository.FindMembershipCandidates(ctx, groupID, query, !value.CanManagePlatform, limit)
+	items, err := s.repository.FindMembershipCandidates(ctx, groupID, query, after, limit+1)
+	if err != nil {
+		return AccessListPage[AccessUser]{}, err
+	}
+	hasMore := len(items) > limit
+	if hasMore {
+		items = items[:limit]
+	}
+	next := ""
+	if hasMore && len(items) > 0 {
+		next, err = encodeMembershipCandidateCursor(query, items[len(items)-1])
+		if err != nil {
+			return AccessListPage[AccessUser]{}, err
+		}
+	}
+	return AccessListPage[AccessUser]{Items: items, NextCursor: next, HasMore: hasMore}, nil
+}
+
+type membershipCandidateCursorPayload struct {
+	Query    string    `json:"query"`
+	Username string    `json:"username"`
+	UserID   uuid.UUID `json:"userId"`
+}
+
+func encodeMembershipCandidateCursor(query string, user AccessUser) (string, error) {
+	value, err := json.Marshal(membershipCandidateCursorPayload{Query: strings.ToLower(query), Username: strings.ToLower(user.Username), UserID: user.ID})
+	if err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(value), nil
+}
+
+func decodeMembershipCandidateCursor(cursor, query string) (*MembershipCandidateCursor, error) {
+	if cursor == "" {
+		return nil, nil
+	}
+	value, err := base64.RawURLEncoding.DecodeString(cursor)
+	if err != nil {
+		return nil, ErrInvalidAccessRequest
+	}
+	var payload membershipCandidateCursorPayload
+	if err := json.Unmarshal(value, &payload); err != nil || payload.UserID == uuid.Nil || payload.Username == "" || payload.Query != strings.ToLower(query) {
+		return nil, ErrInvalidAccessRequest
+	}
+	return &MembershipCandidateCursor{Username: payload.Username, UserID: payload.UserID}, nil
 }
 
 // ScopeOptions returns legal Group, Role, and Permission choices after a scope is selected.

@@ -2,6 +2,7 @@ import { Alert, Button, Drawer, Form, Input, Space } from 'antd'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { useGetReleaseWorkflowReviewOptions } from '@/generated/api'
 import type { ReleaseWorkflowDocument } from '@/generated/model'
 
 import { WorkflowGraphEditor } from './WorkflowGraphEditor'
@@ -34,6 +35,14 @@ export function WorkflowEditorDrawer({
   const [form] =
     Form.useForm<Pick<WorkflowEditorValue, 'name' | 'description'>>()
   const [document, setDocument] = useState(initial.document)
+  const reviewOptionsQuery = useGetReleaseWorkflowReviewOptions()
+  const reviewOptions =
+    reviewOptionsQuery.data?.status === 200
+      ? reviewOptionsQuery.data.data.data
+      : undefined
+  const reviewOptionsError =
+    reviewOptionsQuery.isError ||
+    Boolean(reviewOptionsQuery.data && reviewOptionsQuery.data.status !== 200)
   const validation = useMemo(() => validateDocument(document, t), [document, t])
   const submit = async () => {
     const fields = await form.validateFields()
@@ -101,6 +110,9 @@ export function WorkflowEditorDrawer({
         <div className={styles.workspace}>
           <WorkflowGraphEditor
             initialDocument={initial.document}
+            reviewOptions={reviewOptions}
+            reviewOptionsLoading={reviewOptionsQuery.isPending}
+            reviewOptionsError={reviewOptionsError}
             onChange={setDocument}
           />
         </div>

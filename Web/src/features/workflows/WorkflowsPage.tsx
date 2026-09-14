@@ -1,16 +1,23 @@
-import { ApartmentOutlined, PlusOutlined } from '@ant-design/icons'
+import {
+  ApartmentOutlined,
+  CopyOutlined,
+  DeleteOutlined,
+  PlusOutlined,
+} from '@ant-design/icons'
 import {
   Alert,
   Button,
   Card,
   Empty,
   Flex,
+  Input,
   List,
+  Modal,
   Select,
   Space,
   Tag,
+  Tooltip,
   Typography,
-  message,
 } from 'antd'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -19,6 +26,7 @@ import {
   changeReleaseWorkflowVersionLifecycle,
   createReleaseWorkflow,
   createReleaseWorkflowVersion,
+  deleteReleaseWorkflow,
   useListReleaseWorkflows,
 } from '@/generated/api'
 import type {
@@ -26,6 +34,7 @@ import type {
   ReleaseWorkflow,
   ReleaseWorkflowVersion,
 } from '@/generated/model'
+import { useFeedback } from '@/shared/feedback/useFeedback'
 
 import {
   WorkflowEditorDrawer,
@@ -36,43 +45,48 @@ import { productionApprovalTemplate } from './model/workflowGraph'
 import styles from './WorkflowsPage.module.css'
 
 interface EditorState {
-  mode: 'create' | 'version'
+  mode: 'create' | 'copy' | 'version'
   workflow?: ReleaseWorkflow
   initial: WorkflowEditorValue
 }
 
 export function WorkflowsPage() {
   const { t } = useTranslation()
+  const feedback = useFeedback()
   const query = useListReleaseWorkflows()
-  const [workflowID, setWorkflowID] = useState<string>()
+  const [workflowID, setWorkflowID] = useState<string | null>()
   const [versionID, setVersionID] = useState<string>()
   const [editor, setEditor] = useState<EditorState>()
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [deleteConfirmation, setDeleteConfirmation] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const workflows = query.data?.status === 200 ? query.data.data.data : []
   const workflow =
-    workflows.find((item) => item.id === workflowID) ?? workflows[0]
+    workflowID === null
+      ? undefined
+      : (workflows.find((item) => item.id === workflowID) ?? workflows[0])
   const version = selectedVersion(workflow, versionID)
   const mutate = async (
     operation: (options: RequestInit) => Promise<{ status: number }>,
   ) => {
     const csrf = browserCookie('releasehub_csrf')
-    if (!csrf) return void message.error(t('workflows.mutation.error'))
+    if (!csrf) return void feedback.error(t('workflows.mutation.error'))
     setSubmitting(true)
     try {
       const response = await operation({ headers: { 'X-CSRF-Token': csrf } })
       if (response.status < 200 || response.status >= 300)
-        return void message.error(t('workflows.mutation.rejected'))
+        return void feedback.error(t('workflows.mutation.rejected'))
       setEditor(undefined)
-      message.success(t('workflows.mutation.saved'))
+      feedback.success(t('workflows.mutation.saved'))
       await query.refetch()
     } catch {
-      message.error(t('workflows.mutation.error'))
+      feedback.error(t('workflows.mutation.error'))
     } finally {
       setSubmitting(false)
     }
   }
   const save = (value: WorkflowEditorValue) =>
-    editor?.mode === 'create'
+    editor?.mode !== 'version'
       ? mutate((options) => createReleaseWorkflow(value, options))
       : mutate((options) =>
           createReleaseWorkflowVersion(
@@ -84,6 +98,33 @@ export function WorkflowsPage() {
             options,
           ),
         )
+  const removeWorkflow = async () => {
+    if (!workflow) return
+    const csrf = browserCookie('releasehub_csrf')
+    if (!csrf) return void feedback.error(t('workflows.delete.error'))
+    setSubmitting(true)
+    try {
+      const response = await deleteReleaseWorkflow(
+        workflow.id,
+        { expectedVersion: latestVersionNumber(workflow) },
+        { headers: { 'X-CSRF-Token': csrf } },
+      )
+      if (response.status === 409)
+        return void feedback.error(t('workflows.delete.conflict'))
+      if (response.status !== 204)
+        return void feedback.error(t('workflows.delete.error'))
+      setWorkflowID(null)
+      setVersionID(undefined)
+      setDeleteOpen(false)
+      setDeleteConfirmation('')
+      feedback.success(t('workflows.delete.success'))
+      await query.refetch()
+    } catch {
+      feedback.error(t('workflows.delete.error'))
+    } finally {
+      setSubmitting(false)
+    }
+  }
   if (query.isError || (query.data && query.data.status !== 200))
     return (
       <Alert
@@ -146,6 +187,21 @@ export function WorkflowsPage() {
           onNewVersion={() =>
             workflow && version && setEditor(versionEditor(workflow, version))
           }
+          onCopy={() =>
+            workflow &&
+            version &&
+            setEditor(
+              copyEditor(
+                workflow,
+                version,
+                t('workflows.copy.defaultName', { name: workflow.name }),
+              ),
+            )
+          }
+          onDelete={() => {
+            setDeleteConfirmation('')
+            setDeleteOpen(true)
+          }}
           onLifecycle={(lifecycle) =>
             workflow &&
             version &&
@@ -166,7 +222,9 @@ export function WorkflowsPage() {
           title={
             editor.mode === 'create'
               ? t('workflows.editor.createTitle')
-              : t('workflows.editor.versionTitle')
+              : editor.mode === 'copy'
+                ? t('workflows.editor.copyTitle')
+                : t('workflows.editor.versionTitle')
           }
           initial={editor.initial}
           submitting={submitting}
@@ -174,6 +232,41 @@ export function WorkflowsPage() {
           onSubmit={(value) => void save(value)}
         />
       )}
+      <Modal
+        open={deleteOpen && Boolean(workflow)}
+        title={t('workflows.delete.title')}
+        okText={t('workflows.delete.confirm')}
+        cancelText={t('workflows.actions.cancel')}
+        okButtonProps={{
+          danger: true,
+          disabled: deleteConfirmation !== workflow?.name,
+        }}
+        confirmLoading={submitting}
+        destroyOnHidden
+        onCancel={() => {
+          setDeleteOpen(false)
+          setDeleteConfirmation('')
+        }}
+        onOk={() => void removeWorkflow()}
+      >
+        <Space orientation="vertical" size="middle" className={styles.detail}>
+          <Alert
+            type="warning"
+            showIcon
+            title={t('workflows.delete.warning')}
+            description={t('workflows.delete.impact')}
+          />
+          <Typography.Text>
+            {t('workflows.delete.instruction', { name: workflow?.name })}
+          </Typography.Text>
+          <Input
+            value={deleteConfirmation}
+            aria-label={t('workflows.delete.confirmationLabel')}
+            placeholder={workflow?.name}
+            onChange={(event) => setDeleteConfirmation(event.target.value)}
+          />
+        </Space>
+      </Modal>
     </Space>
   )
 }
@@ -185,6 +278,8 @@ function WorkflowDetail({
   setVersionID,
   submitting,
   onNewVersion,
+  onCopy,
+  onDelete,
   onLifecycle,
 }: {
   workflow?: ReleaseWorkflow
@@ -193,6 +288,8 @@ function WorkflowDetail({
   setVersionID: (id: string) => void
   submitting: boolean
   onNewVersion: () => void
+  onCopy: () => void
+  onDelete: () => void
   onLifecycle: (value: 'Published' | 'Disabled') => void
 }) {
   const { t } = useTranslation()
@@ -218,6 +315,9 @@ function WorkflowDetail({
           <Button onClick={onNewVersion}>
             {t('workflows.actions.newVersion')}
           </Button>
+          <Button icon={<CopyOutlined />} onClick={onCopy}>
+            {t('workflows.actions.copy')}
+          </Button>
           {version.lifecycle === 'Draft' && (
             <Button
               type="primary"
@@ -236,6 +336,25 @@ function WorkflowDetail({
               {t('workflows.actions.disable')}
             </Button>
           )}
+          <Tooltip
+            title={
+              isDraftOnly(workflow)
+                ? undefined
+                : t('workflows.delete.publishedReason')
+            }
+          >
+            <span>
+              <Button
+                danger
+                icon={<DeleteOutlined />}
+                disabled={!isDraftOnly(workflow)}
+                loading={submitting}
+                onClick={onDelete}
+              >
+                {t('workflows.actions.delete')}
+              </Button>
+            </span>
+          </Tooltip>
         </Space>
       }
     >
@@ -262,6 +381,17 @@ function latestLock(workflow: ReleaseWorkflow) {
   return workflow.versions.at(-1)?.lockVersion ?? 1
 }
 
+function latestVersionNumber(workflow: ReleaseWorkflow) {
+  return workflow.versions.at(-1)?.versionNumber ?? 1
+}
+
+function isDraftOnly(workflow: ReleaseWorkflow) {
+  return (
+    workflow.versions.length > 0 &&
+    workflow.versions.every((item) => item.lifecycle === 'Draft')
+  )
+}
+
 function createEditor(t: (key: string) => string): EditorState {
   return {
     mode: 'create',
@@ -284,6 +414,21 @@ function versionEditor(
       name: workflow.name,
       description: workflow.description,
       document: version.document,
+    },
+  }
+}
+
+function copyEditor(
+  workflow: ReleaseWorkflow,
+  version: ReleaseWorkflowVersion,
+  name: string,
+): EditorState {
+  return {
+    mode: 'copy',
+    initial: {
+      name,
+      description: workflow.description,
+      document: structuredClone(version.document),
     },
   }
 }
