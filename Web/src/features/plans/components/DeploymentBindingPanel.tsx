@@ -1,4 +1,4 @@
-import { Alert, Button, Card, Form, Select, Typography, message } from 'antd'
+import { Alert, Button, Card, Form, Select, Typography } from 'antd'
 import { useTranslation } from 'react-i18next'
 
 import {
@@ -6,6 +6,7 @@ import {
   useGetDeploymentBinding,
 } from '@/generated/api'
 import type { DeploymentPlan, ReleaseWorkflow } from '@/generated/model'
+import { useFeedback } from '@/shared/feedback/useFeedback'
 
 interface Props {
   organizationId: string
@@ -22,12 +23,13 @@ interface BindingFields {
 
 export function DeploymentBindingPanel(props: Props) {
   const { t } = useTranslation()
+  const feedback = useFeedback()
   const [form] = Form.useForm<BindingFields>()
   const query = useGetDeploymentBinding(scopeParams(props))
   const binding = query.data?.status === 200 ? query.data.data.data : null
   const submit = async (fields: BindingFields) => {
     const csrf = browserCookie('releasehub_csrf')
-    if (!csrf) return void message.error(t('plans.binding.error'))
+    if (!csrf) return void feedback.error(t('plans.binding.error'))
     const response = await bindDeploymentDefinitions(
       {
         ...scopeParams(props),
@@ -37,8 +39,8 @@ export function DeploymentBindingPanel(props: Props) {
       { headers: { 'X-CSRF-Token': csrf } },
     )
     if (response.status !== 200)
-      return void message.error(t('plans.binding.rejected'))
-    message.success(t('plans.binding.saved'))
+      return void feedback.error(t('plans.binding.rejected'))
+    feedback.success(t('plans.binding.saved'))
     await query.refetch()
   }
   if (query.isError || (query.data && query.data.status !== 200))

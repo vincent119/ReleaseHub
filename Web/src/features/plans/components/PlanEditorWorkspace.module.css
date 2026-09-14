@@ -1,0 +1,142 @@
+.workspace {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  gap: var(--rh-space-4);
+}
+
+.header {
+  position: sticky;
+  z-index: 1;
+  top: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--rh-space-6);
+  padding: var(--rh-space-5) var(--rh-space-6);
+  background: color-mix(in srgb, var(--rh-color-surface) 96%, transparent);
+  border: 1px solid var(--rh-color-border);
+  border-radius: var(--rh-radius-xl);
+  box-shadow: var(--rh-shadow-card);
+  backdrop-filter: blur(1rem);
+}
+
+.headingGroup {
+  display: flex;
+  min-width: 0;
+  gap: var(--rh-space-3);
+}
+
+.back {
+  flex: 0 0 auto;
+  margin-top: var(--rh-space-1);
+}
+
+.headingCopy {
+  min-width: 0;
+}
+
+.eyebrow {
+  display: block;
+  margin-bottom: var(--rh-space-1);
+  color: var(--rh-color-primary);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.title {
+  margin: 0 !important;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+
+.description {
+  max-width: 65ch;
+  margin: var(--rh-space-2) 0 0 !important;
+  line-height: 1.6;
+  text-wrap: pretty;
+}
+
+.actions {
+  flex: 0 0 auto;
+  justify-content: flex-end;
+}
+
+.body {
+  display: grid;
+  min-width: 0;
+  gap: var(--rh-space-4);
+}
+
+.metadata {
+  padding: var(--rh-space-5) var(--rh-space-6) var(--rh-space-6);
+  background: var(--rh-color-surface);
+  border: 1px solid var(--rh-color-border);
+  border-radius: var(--rh-radius-lg);
+  box-shadow: var(--rh-shadow-card);
+}
+
+.metadataTitle {
+  margin: 0 0 var(--rh-space-4) !important;
+}
+
+.form {
+  display: grid;
+  grid-template-columns: minmax(14rem, 0.75fr) minmax(18rem, 1.25fr);
+  column-gap: var(--rh-space-6);
+  row-gap: var(--rh-space-4);
+}
+
+.form :global(.ant-form-item) {
+  margin-bottom: 0;
+}
+
+.descriptionField {
+  grid-column: 1 / -1;
+}
+
+.graphRegion {
+  min-width: 0;
+  min-height: max(38rem, calc(100dvh - 22rem));
+}
+
+.graphRegion > * {
+  min-height: max(38rem, calc(100dvh - 22rem));
+}
+
+@media (max-width: 768px) {
+  .header {
+    position: static;
+    flex-direction: column;
+    padding: var(--rh-space-4);
+  }
+
+  .headingGroup {
+    flex-direction: column;
+  }
+
+  .back {
+    align-self: flex-start;
+    margin-top: 0;
+  }
+
+  .actions {
+    width: 100%;
+  }
+
+  .actions > * {
+    flex: 1 1 8rem;
+  }
+
+  .metadata {
+    padding: var(--rh-space-4);
+  }
+
+  .form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .descriptionField {
+    grid-column: auto;
+  }
+}

@@ -150,6 +150,12 @@ type AccessListPage[T any] struct {
 	HasMore    bool
 }
 
+// MembershipCandidateCursor identifies the last candidate in a stable username-ordered page.
+type MembershipCandidateCursor struct {
+	Username string
+	UserID   uuid.UUID
+}
+
 // AccessSnapshot is the filtered read model consumed by the administration UI.
 type AccessSnapshot struct {
 	CanManagePlatform bool
@@ -169,7 +175,7 @@ type AccessSnapshot struct {
 type AccessManagementRepository interface {
 	ListProjectScopes(context.Context) ([]ProjectScope, error)
 	ResolveAccessScope(context.Context, string, uuid.UUID) (authz.Scope, error)
-	FindMembershipCandidates(context.Context, uuid.UUID, string, bool, int) ([]AccessUser, error)
+	FindMembershipCandidates(context.Context, uuid.UUID, string, *MembershipCandidateCursor, int) ([]AccessUser, error)
 	LoadAccessSnapshot(context.Context) (AccessSnapshot, error)
 	CreateGroup(context.Context, AccessMutation, CreateGroupInput) (AccessGroup, error)
 	DisableGroup(context.Context, AccessMutation, uuid.UUID) error

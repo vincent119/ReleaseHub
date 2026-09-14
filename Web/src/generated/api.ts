@@ -71,6 +71,7 @@ import type {
   CreateReleaseWorkflowRequest,
   CreateReleaseWorkflowVersionRequest,
   DefinitionLifecycleRequest,
+  DeleteReleaseWorkflowParams,
   DeploymentBindingResponse,
   DeploymentExecutionResponse,
   DeploymentHistoryListResponse,
@@ -107,8 +108,10 @@ import type {
   OnboardingResponse,
   ReleaseWorkflowListResponse,
   ReleaseWorkflowResponse,
+  ReleaseWorkflowReviewOptionsResponse,
   ReleaseWorkflowVersionResponse,
   SystemStatusResponse,
+  UpdateCatalogOrganizationRequest,
   UpdateDeploymentRequestVersionRequest
 } from './model';
 
@@ -1123,7 +1126,7 @@ export type listAccessMembershipCandidatesResponseError = (listAccessMembershipC
 export type listAccessMembershipCandidatesResponse = (listAccessMembershipCandidatesResponseSuccess | listAccessMembershipCandidatesResponseError)
 
 export const getListAccessMembershipCandidatesUrl = (groupId: string,
-    params: ListAccessMembershipCandidatesParams,) => {
+    params?: ListAccessMembershipCandidatesParams,) => {
   const normalizedParams = new URLSearchParams();
 
   Object.entries(params || {}).forEach(([key, value]) => {
@@ -1142,7 +1145,7 @@ export const getListAccessMembershipCandidatesUrl = (groupId: string,
  * @summary Find minimal user identities eligible for one manageable Group
  */
 export const listAccessMembershipCandidates = async (groupId: string,
-    params: ListAccessMembershipCandidatesParams, options?: RequestInit): Promise<listAccessMembershipCandidatesResponse> => {
+    params?: ListAccessMembershipCandidatesParams, options?: RequestInit): Promise<listAccessMembershipCandidatesResponse> => {
 
   const res = await fetch(getListAccessMembershipCandidatesUrl(groupId,params),
   {
@@ -1173,7 +1176,7 @@ export const getListAccessMembershipCandidatesQueryKey = (groupId: string,
 
 
 export const getListAccessMembershipCandidatesQueryOptions = <TData = Awaited<ReturnType<typeof listAccessMembershipCandidates>>, TError = void>(groupId: string,
-    params: ListAccessMembershipCandidatesParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAccessMembershipCandidates>>, TError, TData>>, fetch?: RequestInit}
+    params?: ListAccessMembershipCandidatesParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAccessMembershipCandidates>>, TError, TData>>, fetch?: RequestInit}
 ) => {
 
 const {query: queryOptions, fetch: fetchOptions} = options ?? {};
@@ -1197,7 +1200,7 @@ export type ListAccessMembershipCandidatesQueryError = void
 
 export function useListAccessMembershipCandidates<TData = Awaited<ReturnType<typeof listAccessMembershipCandidates>>, TError = void>(
  groupId: string,
-    params: ListAccessMembershipCandidatesParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAccessMembershipCandidates>>, TError, TData>> & Pick<
+    params: undefined |  ListAccessMembershipCandidatesParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAccessMembershipCandidates>>, TError, TData>> & Pick<
         DefinedInitialDataOptions<
           Awaited<ReturnType<typeof listAccessMembershipCandidates>>,
           TError,
@@ -1208,7 +1211,7 @@ export function useListAccessMembershipCandidates<TData = Awaited<ReturnType<typ
   ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 export function useListAccessMembershipCandidates<TData = Awaited<ReturnType<typeof listAccessMembershipCandidates>>, TError = void>(
  groupId: string,
-    params: ListAccessMembershipCandidatesParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAccessMembershipCandidates>>, TError, TData>> & Pick<
+    params?: ListAccessMembershipCandidatesParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAccessMembershipCandidates>>, TError, TData>> & Pick<
         UndefinedInitialDataOptions<
           Awaited<ReturnType<typeof listAccessMembershipCandidates>>,
           TError,
@@ -1219,7 +1222,7 @@ export function useListAccessMembershipCandidates<TData = Awaited<ReturnType<typ
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 export function useListAccessMembershipCandidates<TData = Awaited<ReturnType<typeof listAccessMembershipCandidates>>, TError = void>(
  groupId: string,
-    params: ListAccessMembershipCandidatesParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAccessMembershipCandidates>>, TError, TData>>, fetch?: RequestInit}
+    params?: ListAccessMembershipCandidatesParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAccessMembershipCandidates>>, TError, TData>>, fetch?: RequestInit}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 /**
@@ -1228,7 +1231,7 @@ export function useListAccessMembershipCandidates<TData = Awaited<ReturnType<typ
 
 export function useListAccessMembershipCandidates<TData = Awaited<ReturnType<typeof listAccessMembershipCandidates>>, TError = void>(
  groupId: string,
-    params: ListAccessMembershipCandidatesParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAccessMembershipCandidates>>, TError, TData>>, fetch?: RequestInit}
+    params?: ListAccessMembershipCandidatesParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAccessMembershipCandidates>>, TError, TData>>, fetch?: RequestInit}
  , queryClient?: QueryClient
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
@@ -3513,6 +3516,128 @@ export const useCreateCatalogOrganization = <TError = void,
         TContext
       > => {
       return useMutation(getCreateCatalogOrganizationMutationOptions(options), queryClient);
+    }
+
+export type updateCatalogOrganizationResponse200 = {
+  data: CatalogOrganizationResponse
+  status: 200
+}
+
+export type updateCatalogOrganizationResponse400 = {
+  data: void
+  status: 400
+}
+
+export type updateCatalogOrganizationResponse401 = {
+  data: void
+  status: 401
+}
+
+export type updateCatalogOrganizationResponse404 = {
+  data: void
+  status: 404
+}
+
+export type updateCatalogOrganizationResponse409 = {
+  data: void
+  status: 409
+}
+
+export type updateCatalogOrganizationResponseSuccess = (updateCatalogOrganizationResponse200) & {
+  headers: Headers;
+};
+export type updateCatalogOrganizationResponseError = (updateCatalogOrganizationResponse400 | updateCatalogOrganizationResponse401 | updateCatalogOrganizationResponse404 | updateCatalogOrganizationResponse409) & {
+  headers: Headers;
+};
+
+export type updateCatalogOrganizationResponse = (updateCatalogOrganizationResponseSuccess | updateCatalogOrganizationResponseError)
+
+export const getUpdateCatalogOrganizationUrl = (organizationId: string,) => {
+
+
+
+
+  return `/api/v1/catalog/organizations/${organizationId}`
+}
+
+/**
+ * @summary Rename an Organization
+ */
+export const updateCatalogOrganization = async (organizationId: string,
+    updateCatalogOrganizationRequest: UpdateCatalogOrganizationRequest, options?: RequestInit): Promise<updateCatalogOrganizationResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+const res = await fetch(getUpdateCatalogOrganizationUrl(organizationId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(updateCatalogOrganizationRequest)
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: updateCatalogOrganizationResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as updateCatalogOrganizationResponse
+}
+
+
+
+
+
+export const getUpdateCatalogOrganizationMutationKey = () => ['updateCatalogOrganization'] as const;
+
+export const getUpdateCatalogOrganizationMutationOptions = <TError = void,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateCatalogOrganization>>, TError,UpdateCatalogOrganizationMutationVariables, TContext>, fetch?: RequestInit}
+): UseMutationOptions<Awaited<ReturnType<typeof updateCatalogOrganization>>, TError,UpdateCatalogOrganizationMutationVariables, TContext> => {
+
+const mutationKey = getUpdateCatalogOrganizationMutationKey();
+const {mutation: mutationOptions, fetch: fetchOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, fetch: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateCatalogOrganization>>, UpdateCatalogOrganizationMutationVariables> = (props) => {
+          const {organizationId,data} = props ?? {};
+
+          return  updateCatalogOrganization(organizationId,data,fetchOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateCatalogOrganizationMutationResult = NonNullable<Awaited<ReturnType<typeof updateCatalogOrganization>>>
+    export type UpdateCatalogOrganizationMutationBody = UpdateCatalogOrganizationRequest
+    export type UpdateCatalogOrganizationMutationError = void
+    export type UpdateCatalogOrganizationMutationVariables = {organizationId: string;data: UpdateCatalogOrganizationRequest}
+
+    /**
+ * @summary Rename an Organization
+ */
+export const useUpdateCatalogOrganization = <TError = void,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateCatalogOrganization>>, TError,UpdateCatalogOrganizationMutationVariables, TContext>, fetch?: RequestInit}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof updateCatalogOrganization>>,
+        TError,
+        UpdateCatalogOrganizationMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUpdateCatalogOrganizationMutationOptions(options), queryClient);
     }
 
 export type createCatalogProjectResponse201 = {
@@ -5844,6 +5969,257 @@ export const useCreateReleaseWorkflow = <TError = void,
         TContext
       > => {
       return useMutation(getCreateReleaseWorkflowMutationOptions(options), queryClient);
+    }
+
+export type getReleaseWorkflowReviewOptionsResponse200 = {
+  data: ReleaseWorkflowReviewOptionsResponse
+  status: 200
+}
+
+export type getReleaseWorkflowReviewOptionsResponse401 = {
+  data: void
+  status: 401
+}
+
+export type getReleaseWorkflowReviewOptionsResponse404 = {
+  data: void
+  status: 404
+}
+
+export type getReleaseWorkflowReviewOptionsResponseSuccess = (getReleaseWorkflowReviewOptionsResponse200) & {
+  headers: Headers;
+};
+export type getReleaseWorkflowReviewOptionsResponseError = (getReleaseWorkflowReviewOptionsResponse401 | getReleaseWorkflowReviewOptionsResponse404) & {
+  headers: Headers;
+};
+
+export type getReleaseWorkflowReviewOptionsResponse = (getReleaseWorkflowReviewOptionsResponseSuccess | getReleaseWorkflowReviewOptionsResponseError)
+
+export const getGetReleaseWorkflowReviewOptionsUrl = () => {
+
+
+
+
+  return `/api/v1/release-workflows/review-options`
+}
+
+/**
+ * @summary List minimal User and Role options for Workflow Review policies
+ */
+export const getReleaseWorkflowReviewOptions = async ( options?: RequestInit): Promise<getReleaseWorkflowReviewOptionsResponse> => {
+
+  const res = await fetch(getGetReleaseWorkflowReviewOptionsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getReleaseWorkflowReviewOptionsResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as getReleaseWorkflowReviewOptionsResponse
+}
+
+
+
+
+
+export const getGetReleaseWorkflowReviewOptionsQueryKey = () => {
+    return [
+    `/api/v1/release-workflows/review-options`
+    ] as const;
+    }
+
+
+export const getGetReleaseWorkflowReviewOptionsQueryOptions = <TData = Awaited<ReturnType<typeof getReleaseWorkflowReviewOptions>>, TError = void>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getReleaseWorkflowReviewOptions>>, TError, TData>>, fetch?: RequestInit}
+) => {
+
+const {query: queryOptions, fetch: fetchOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetReleaseWorkflowReviewOptionsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getReleaseWorkflowReviewOptions>>> = ({ signal }) => getReleaseWorkflowReviewOptions({ signal, ...fetchOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getReleaseWorkflowReviewOptions>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetReleaseWorkflowReviewOptionsQueryResult = NonNullable<Awaited<ReturnType<typeof getReleaseWorkflowReviewOptions>>>
+export type GetReleaseWorkflowReviewOptionsQueryError = void
+
+
+export function useGetReleaseWorkflowReviewOptions<TData = Awaited<ReturnType<typeof getReleaseWorkflowReviewOptions>>, TError = void>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getReleaseWorkflowReviewOptions>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getReleaseWorkflowReviewOptions>>,
+          TError,
+          Awaited<ReturnType<typeof getReleaseWorkflowReviewOptions>>
+        > , 'initialData'
+      >, fetch?: RequestInit}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetReleaseWorkflowReviewOptions<TData = Awaited<ReturnType<typeof getReleaseWorkflowReviewOptions>>, TError = void>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getReleaseWorkflowReviewOptions>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getReleaseWorkflowReviewOptions>>,
+          TError,
+          Awaited<ReturnType<typeof getReleaseWorkflowReviewOptions>>
+        > , 'initialData'
+      >, fetch?: RequestInit}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetReleaseWorkflowReviewOptions<TData = Awaited<ReturnType<typeof getReleaseWorkflowReviewOptions>>, TError = void>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getReleaseWorkflowReviewOptions>>, TError, TData>>, fetch?: RequestInit}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary List minimal User and Role options for Workflow Review policies
+ */
+
+export function useGetReleaseWorkflowReviewOptions<TData = Awaited<ReturnType<typeof getReleaseWorkflowReviewOptions>>, TError = void>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getReleaseWorkflowReviewOptions>>, TError, TData>>, fetch?: RequestInit}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetReleaseWorkflowReviewOptionsQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export type deleteReleaseWorkflowResponse204 = {
+  data: void
+  status: 204
+}
+
+export type deleteReleaseWorkflowResponse401 = {
+  data: void
+  status: 401
+}
+
+export type deleteReleaseWorkflowResponse404 = {
+  data: void
+  status: 404
+}
+
+export type deleteReleaseWorkflowResponse409 = {
+  data: void
+  status: 409
+}
+
+export type deleteReleaseWorkflowResponseSuccess = (deleteReleaseWorkflowResponse204) & {
+  headers: Headers;
+};
+export type deleteReleaseWorkflowResponseError = (deleteReleaseWorkflowResponse401 | deleteReleaseWorkflowResponse404 | deleteReleaseWorkflowResponse409) & {
+  headers: Headers;
+};
+
+export type deleteReleaseWorkflowResponse = (deleteReleaseWorkflowResponseSuccess | deleteReleaseWorkflowResponseError)
+
+export const getDeleteReleaseWorkflowUrl = (workflowId: string,
+    params: DeleteReleaseWorkflowParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/v1/release-workflows/${workflowId}?${stringifiedParams}` : `/api/v1/release-workflows/${workflowId}`
+}
+
+/**
+ * @summary Delete an unused Release Workflow whose versions are all Draft
+ */
+export const deleteReleaseWorkflow = async (workflowId: string,
+    params: DeleteReleaseWorkflowParams, options?: RequestInit): Promise<deleteReleaseWorkflowResponse> => {
+
+  const res = await fetch(getDeleteReleaseWorkflowUrl(workflowId,params),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: deleteReleaseWorkflowResponse['data'] = body ? JSON.parse(body) : undefined
+  return { data, status: res.status, headers: res.headers } as deleteReleaseWorkflowResponse
+}
+
+
+
+
+
+export const getDeleteReleaseWorkflowMutationKey = () => ['deleteReleaseWorkflow'] as const;
+
+export const getDeleteReleaseWorkflowMutationOptions = <TError = void,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteReleaseWorkflow>>, TError,DeleteReleaseWorkflowMutationVariables, TContext>, fetch?: RequestInit}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteReleaseWorkflow>>, TError,DeleteReleaseWorkflowMutationVariables, TContext> => {
+
+const mutationKey = getDeleteReleaseWorkflowMutationKey();
+const {mutation: mutationOptions, fetch: fetchOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, fetch: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteReleaseWorkflow>>, DeleteReleaseWorkflowMutationVariables> = (props) => {
+          const {workflowId,params} = props ?? {};
+
+          return  deleteReleaseWorkflow(workflowId,params,fetchOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteReleaseWorkflowMutationResult = NonNullable<Awaited<ReturnType<typeof deleteReleaseWorkflow>>>
+
+    export type DeleteReleaseWorkflowMutationError = void
+    export type DeleteReleaseWorkflowMutationVariables = {workflowId: string;params: DeleteReleaseWorkflowParams}
+
+    /**
+ * @summary Delete an unused Release Workflow whose versions are all Draft
+ */
+export const useDeleteReleaseWorkflow = <TError = void,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteReleaseWorkflow>>, TError,DeleteReleaseWorkflowMutationVariables, TContext>, fetch?: RequestInit}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof deleteReleaseWorkflow>>,
+        TError,
+        DeleteReleaseWorkflowMutationVariables,
+        TContext
+      > => {
+      return useMutation(getDeleteReleaseWorkflowMutationOptions(options), queryClient);
     }
 
 export type createReleaseWorkflowVersionResponse201 = {

@@ -11,6 +11,10 @@ export interface CatalogOrganizationNode {
   id: string;
   /** @minLength 1 */
   name: string;
+  /** @minimum 1 */
+  version: number;
+  isDefault: boolean;
+  canRename: boolean;
   canCreateProject: boolean;
   projects: CatalogProjectNode[];
 }

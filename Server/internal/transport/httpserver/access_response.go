@@ -27,6 +27,14 @@ func accessUsersResponse(values []authzapp.AccessUser) []contract.AccessUser {
 	return result
 }
 
+func accessUserCandidatesResponse(values []authzapp.AccessUser) []contract.AccessUserCandidate {
+	result := make([]contract.AccessUserCandidate, 0, len(values))
+	for _, value := range values {
+		result = append(result, contract.AccessUserCandidate{Id: value.ID, Username: value.Username})
+	}
+	return result
+}
+
 func accessGroupsResponse(values []authzapp.AccessGroup) []contract.AccessGroup {
 	result := make([]contract.AccessGroup, 0, len(values))
 	for _, value := range values {

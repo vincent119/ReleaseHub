@@ -1,4 +1,4 @@
-import { Button, Card, Empty, Space, message } from 'antd'
+import { Button, Card, Empty, Space } from 'antd'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -7,6 +7,7 @@ import type {
   DeploymentRequestVersion,
   ReleaseWorkflowVersion,
 } from '@/generated/model'
+import { useFeedback } from '@/shared/feedback/useFeedback'
 
 interface Props {
   request: DeploymentRequestVersion
@@ -16,6 +17,7 @@ interface Props {
 
 export function TransitionPanel({ request, workflow, onUpdated }: Props) {
   const { t } = useTranslation()
+  const feedback = useFeedback()
   const [submitting, setSubmitting] = useState<string>()
   const transitions =
     workflow?.document.transitions.filter(
@@ -41,11 +43,11 @@ export function TransitionPanel({ request, workflow, onUpdated }: Props) {
         },
       )
       if (response.status !== 202)
-        return void message.error(t('requestDetail.transitions.rejected'))
-      message.success(t('requestDetail.transitions.accepted'))
+        return void feedback.error(t('requestDetail.transitions.rejected'))
+      feedback.success(t('requestDetail.transitions.accepted'))
       await onUpdated()
     } catch {
-      message.error(t('requestDetail.transitions.error'))
+      feedback.error(t('requestDetail.transitions.error'))
     } finally {
       setSubmitting(undefined)
     }

@@ -15,6 +15,12 @@ import (
 // ErrResourceNotFound intentionally represents both missing and unauthorized resources.
 var ErrResourceNotFound = errors.New("resource not found")
 
+// ErrInvalidResource identifies malformed catalog mutation input.
+var ErrInvalidResource = errors.New("invalid resource mutation")
+
+// ErrResourceConflict identifies a stale or conflicting catalog mutation.
+var ErrResourceConflict = errors.New("resource mutation conflict")
+
 // Mutation identifies the actor and request attached to an audited catalog change.
 type Mutation struct {
 	ActorID   *uuid.UUID
@@ -24,6 +30,7 @@ type Mutation struct {
 // Writer is the transactional persistence boundary used by authorized command handlers.
 type Writer interface {
 	CreateOrganization(context.Context, Mutation, domain.Organization) error
+	RenameOrganization(context.Context, Mutation, domain.Organization, domain.Organization) error
 	CreateProject(context.Context, Mutation, domain.Project) error
 	CreateEnvironment(context.Context, Mutation, domain.Environment) error
 	CreateApplication(context.Context, Mutation, domain.Application) error
@@ -32,6 +39,7 @@ type Writer interface {
 
 // Reader is the persistence boundary for catalog queries.
 type Reader interface {
+	FindOrganization(context.Context, uuid.UUID) (domain.Organization, error)
 	FindApplication(context.Context, uuid.UUID) (domain.Application, error)
 	ListActiveOrganizations(context.Context) ([]domain.Organization, error)
 	ListActiveProjects(context.Context) ([]domain.Project, error)
@@ -87,17 +95,18 @@ type Principal struct {
 
 // Service provides tenant-isolated catalog queries.
 type Service struct {
-	repository     Repository
-	authorizer     Authorizer
-	view           authz.Permission
-	platformManage authz.Permission
-	projectManage  authz.Permission
+	repository            Repository
+	authorizer            Authorizer
+	view                  authz.Permission
+	platformManage        authz.Permission
+	projectManage         authz.Permission
+	defaultOrganizationID uuid.UUID
 }
 
 // NewService creates a catalog application service.
-func NewService(repository Repository, authorizer Authorizer) (*Service, error) {
-	if repository == nil || authorizer == nil {
-		return nil, fmt.Errorf("catalog repository and authorizer are required")
+func NewService(repository Repository, authorizer Authorizer, defaultOrganizationID uuid.UUID) (*Service, error) {
+	if repository == nil || authorizer == nil || defaultOrganizationID == uuid.Nil {
+		return nil, fmt.Errorf("catalog repository, authorizer, and default Organization ID are required")
 	}
 	view, err := authz.NewPermission("resource.view")
 	if err != nil {
@@ -111,7 +120,11 @@ func NewService(repository Repository, authorizer Authorizer) (*Service, error) 
 	if err != nil {
 		return nil, err
 	}
-	return &Service{repository: repository, authorizer: authorizer, view: view, platformManage: platformManage, projectManage: projectManage}, nil
+	return &Service{
+		repository: repository, authorizer: authorizer, view: view,
+		platformManage: platformManage, projectManage: projectManage,
+		defaultOrganizationID: defaultOrganizationID,
+	}, nil
 }
 
 // CreateOrganization creates a tenant boundary after platform authorization.
@@ -132,6 +145,36 @@ func (s *Service) CreateOrganization(ctx context.Context, principal Principal, m
 		return domain.Organization{}, fmt.Errorf("create Organization: %w", err)
 	}
 	return value, nil
+}
+
+// RenameOrganization changes only the display name of a platform-managed tenant boundary.
+func (s *Service) RenameOrganization(ctx context.Context, principal Principal, mutation Mutation, organizationID uuid.UUID, name string, expectedVersion uint64) (domain.Organization, error) {
+	allowed, err := s.authorizer.AuthorizeFresh(ctx, authz.AuthorizationRequest{UserID: principal.UserID, Disabled: principal.Disabled, Permission: s.platformManage, Scope: authz.NewPlatformScope()})
+	if err != nil {
+		return domain.Organization{}, fmt.Errorf("authorize Organization rename: %w", err)
+	}
+	if !allowed {
+		return domain.Organization{}, ErrResourceNotFound
+	}
+	if organizationID == uuid.Nil || expectedVersion == 0 {
+		return domain.Organization{}, ErrInvalidResource
+	}
+	current, err := s.repository.FindOrganization(ctx, organizationID)
+	if err != nil {
+		return domain.Organization{}, ErrResourceNotFound
+	}
+	if current.Version != expectedVersion {
+		return domain.Organization{}, ErrResourceConflict
+	}
+	renamed, err := current.Rename(name)
+	if err != nil {
+		return domain.Organization{}, fmt.Errorf("%w: %v", ErrInvalidResource, err)
+	}
+	mutation.ActorID = &principal.UserID
+	if err := s.repository.RenameOrganization(ctx, mutation, current, renamed); err != nil {
+		return domain.Organization{}, fmt.Errorf("rename Organization: %w", err)
+	}
+	return renamed, nil
 }
 
 // CreateProject creates a Project after platform authorization.
@@ -221,6 +264,8 @@ type OrganizationNode struct {
 	Organization     domain.Organization
 	Projects         []ProjectNode
 	CanCreateProject bool
+	CanRename        bool
+	IsDefault        bool
 }
 
 // ProjectNode is one visible Project and its visible Environments.
@@ -264,7 +309,11 @@ func (s *Service) ListResourceTree(ctx context.Context, principal Principal) (Re
 
 	result := ResourceTree{Organizations: make([]OrganizationNode, 0), CanCreateOrganization: platformAllowed}
 	for _, organization := range organizations {
-		organizationNode := OrganizationNode{Organization: organization, Projects: make([]ProjectNode, 0), CanCreateProject: platformAllowed}
+		organizationNode := OrganizationNode{
+			Organization: organization, Projects: make([]ProjectNode, 0),
+			CanCreateProject: platformAllowed, CanRename: platformAllowed,
+			IsDefault: organization.IsDefault(s.defaultOrganizationID),
+		}
 		for _, project := range projects {
 			if project.OrganizationID != organization.ID {
 				continue

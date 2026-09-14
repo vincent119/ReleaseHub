@@ -55,7 +55,7 @@ func TestDeploymentSchemaConstraintsAndIndexes(t *testing.T) {
 	verifyDeploymentReviewConstraints(t, db, ids.userID, requestVersionID, ids.workflowVersionID)
 	verifyDeploymentPermissions(t, db)
 	verifyDeploymentIndexes(t, db)
-	verifyLatestDeploymentMigrationDownAndUp(t, cfg, db)
+	verifyDeploymentNotificationMigrationDownAndUp(t, cfg, db)
 }
 
 type deploymentSchemaIDs struct {
@@ -251,7 +251,7 @@ func verifyDeploymentIndexes(t *testing.T, db *gorm.DB) {
 	}
 }
 
-func verifyLatestDeploymentMigrationDownAndUp(t *testing.T, cfg config.DatabaseConfig, db *gorm.DB) {
+func verifyDeploymentNotificationMigrationDownAndUp(t *testing.T, cfg config.DatabaseConfig, db *gorm.DB) {
 	t.Helper()
 	source, err := iofs.New(migrations.Files, ".")
 	if err != nil {
@@ -264,7 +264,7 @@ func verifyLatestDeploymentMigrationDownAndUp(t *testing.T, cfg config.DatabaseC
 	t.Cleanup(func() {
 		_, _ = migrator.Close()
 	})
-	if err := migrator.Steps(-1); err != nil {
+	if err := migrator.Migrate(20260907001300); err != nil {
 		t.Fatalf("roll back deployment migration: %v", err)
 	}
 	var indexName *string
@@ -278,7 +278,7 @@ func verifyLatestDeploymentMigrationDownAndUp(t *testing.T, cfg config.DatabaseC
 	if err := db.Raw(`SELECT to_regclass('public.deployment_execution_commands')::text`).Scan(&tableName).Error; err != nil || tableName == nil {
 		t.Fatalf("previous deployment schema must remain after one rollback: %v", err)
 	}
-	if err := migrator.Steps(1); err != nil {
+	if err := migrator.Up(); err != nil {
 		t.Fatalf("reapply deployment migration: %v", err)
 	}
 }

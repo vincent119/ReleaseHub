@@ -1,11 +1,51 @@
 package domain_test
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/google/uuid"
 	"github.com/vincent119/ReleaseHub/Server/internal/catalog/domain"
 )
+
+func TestOrganizationRenamePreservesIdentityAndDefaultProtection(t *testing.T) {
+	defaultID := uuid.New()
+	organization := domain.Organization{ID: defaultID, Name: "default", Active: true, Version: 4}
+
+	renamed, err := organization.Rename("  Platform Engineering  ")
+	if err != nil {
+		t.Fatalf("rename Organization: %v", err)
+	}
+	if renamed.ID != defaultID || renamed.Name != "Platform Engineering" || renamed.Version != 5 || !renamed.Active {
+		t.Fatalf("renamed Organization changed protected state: %#v", renamed)
+	}
+	if err := renamed.ValidateDeletion(defaultID); !errors.Is(err, domain.ErrDefaultOrganizationProtected) {
+		t.Fatalf("renamed default Organization should remain protected: %v", err)
+	}
+	if err := renamed.ValidateDeletion(uuid.New()); err != nil {
+		t.Fatalf("non-default Organization should pass the default guard: %v", err)
+	}
+}
+
+func TestOrganizationRenameRejectsInvalidState(t *testing.T) {
+	tests := []struct {
+		name         string
+		organization domain.Organization
+		newName      string
+	}{
+		{name: "missing identity", organization: domain.Organization{Active: true, Version: 1}, newName: "Workspace"},
+		{name: "inactive", organization: domain.Organization{ID: uuid.New(), Version: 1}, newName: "Workspace"},
+		{name: "missing version", organization: domain.Organization{ID: uuid.New(), Active: true}, newName: "Workspace"},
+		{name: "blank name", organization: domain.Organization{ID: uuid.New(), Active: true, Version: 1}, newName: "  "},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if _, err := test.organization.Rename(test.newName); err == nil {
+				t.Fatal("invalid Organization rename should fail")
+			}
+		})
+	}
+}
 
 func TestCustomEnvironmentFixedType(t *testing.T) {
 	environment, err := domain.NewEnvironment(uuid.New(), uuid.New(), "uat-tw", domain.EnvironmentTesting)

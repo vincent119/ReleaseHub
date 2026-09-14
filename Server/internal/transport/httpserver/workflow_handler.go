@@ -15,9 +15,11 @@ import (
 
 type workflowDefinitionService interface {
 	List(context.Context, deployapp.WorkflowPrincipal) ([]deploydomain.ReleaseWorkflow, error)
+	ReviewOptions(context.Context, deployapp.WorkflowPrincipal) (deployapp.WorkflowReviewOptions, error)
 	Create(context.Context, deployapp.WorkflowPrincipal, deployapp.CreateWorkflowInput) (deploydomain.ReleaseWorkflow, error)
 	CreateVersion(context.Context, deployapp.WorkflowPrincipal, deployapp.CreateWorkflowVersionInput) (deploydomain.ReleaseWorkflowVersion, error)
 	ChangeLifecycle(context.Context, deployapp.WorkflowPrincipal, deployapp.ChangeWorkflowLifecycleInput) (deploydomain.ReleaseWorkflowVersion, error)
+	Delete(context.Context, deployapp.WorkflowPrincipal, deployapp.DeleteWorkflowInput) error
 }
 
 type workflowHandler struct {
@@ -39,6 +41,22 @@ func (h *workflowHandler) ListReleaseWorkflows(c *gin.Context) {
 	c.JSON(http.StatusOK, contract.ReleaseWorkflowListResponse{Data: workflowResponses(values), Meta: responseMeta(c)})
 }
 
+// GetReleaseWorkflowReviewOptions returns minimal identities for Review policy assignment.
+func (h *workflowHandler) GetReleaseWorkflowReviewOptions(c *gin.Context) {
+	principal, ok := h.authenticate(c)
+	if !ok {
+		return
+	}
+	value, err := h.definitions.ReviewOptions(c.Request.Context(), principal)
+	if err != nil {
+		respondWorkflowReadError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, contract.ReleaseWorkflowReviewOptionsResponse{
+		Data: workflowReviewOptionsResponse(value), Meta: responseMeta(c),
+	})
+}
+
 // CreateReleaseWorkflow creates a workflow with its first immutable draft.
 func (h *workflowHandler) CreateReleaseWorkflow(c *gin.Context, params contract.CreateReleaseWorkflowParams) {
 	principal, ok := h.authenticateMutation(c, params.XCSRFToken)
@@ -55,6 +73,23 @@ func (h *workflowHandler) CreateReleaseWorkflow(c *gin.Context, params contract.
 		return
 	}
 	c.JSON(http.StatusCreated, contract.ReleaseWorkflowResponse{Data: workflowResponse(value), Meta: responseMeta(c)})
+}
+
+// DeleteReleaseWorkflow removes an unused workflow whose versions never left Draft.
+func (h *workflowHandler) DeleteReleaseWorkflow(c *gin.Context, workflowID uuid.UUID, params contract.DeleteReleaseWorkflowParams) {
+	principal, ok := h.authenticateMutation(c, params.XCSRFToken)
+	if !ok {
+		return
+	}
+	input, err := deleteWorkflowInput(c, workflowID, params.ExpectedVersion)
+	if err != nil {
+		respondInvalidWorkflowRequest(c)
+		return
+	}
+	if !respondWorkflowMutationError(c, h.definitions.Delete(c.Request.Context(), principal, input), http.StatusBadRequest) {
+		return
+	}
+	c.Status(http.StatusNoContent)
 }
 
 // CreateReleaseWorkflowVersion appends one draft to an existing workflow.

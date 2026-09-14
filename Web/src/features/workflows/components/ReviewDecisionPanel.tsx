@@ -1,15 +1,4 @@
-import {
-  Button,
-  Card,
-  Empty,
-  Form,
-  Input,
-  List,
-  Modal,
-  Space,
-  Tag,
-  message,
-} from 'antd'
+import { Button, Card, Empty, Form, Input, List, Modal, Space, Tag } from 'antd'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -21,6 +10,7 @@ import type {
   DeploymentRequestVersion,
   DeploymentReviewTask,
 } from '@/generated/model'
+import { useFeedback } from '@/shared/feedback/useFeedback'
 
 import {
   ReviewReassignmentModal,
@@ -41,6 +31,7 @@ export function ReviewDecisionPanel({
   canReassign = false,
 }: Props) {
   const { t } = useTranslation()
+  const feedback = useFeedback()
   const [rejecting, setRejecting] = useState<DeploymentReviewTask>()
   const [reassigning, setReassigning] = useState<DeploymentReviewTask>()
   const [submitting, setSubmitting] = useState(false)
@@ -54,7 +45,7 @@ export function ReviewDecisionPanel({
     reason?: string,
   ) => {
     const csrf = browserCookie('releasehub_csrf')
-    if (!csrf) return void message.error(t('workflows.review.error'))
+    if (!csrf) return void feedback.error(t('workflows.review.error'))
     setSubmitting(true)
     try {
       const response = await decideDeploymentReview(
@@ -70,12 +61,12 @@ export function ReviewDecisionPanel({
         },
       )
       if (response.status !== 200)
-        return void message.error(t('workflows.review.rejected'))
+        return void feedback.error(t('workflows.review.rejected'))
       onUpdated(response.data.data)
       setRejecting(undefined)
-      message.success(t('workflows.review.saved'))
+      feedback.success(t('workflows.review.saved'))
     } catch {
-      message.error(t('workflows.review.error'))
+      feedback.error(t('workflows.review.error'))
     } finally {
       setSubmitting(false)
     }
@@ -83,7 +74,7 @@ export function ReviewDecisionPanel({
   const reassign = async (value: ReviewReassignmentValue) => {
     if (!reassigning) return
     const csrf = browserCookie('releasehub_csrf')
-    if (!csrf) return void message.error(t('workflows.review.error'))
+    if (!csrf) return void feedback.error(t('workflows.review.error'))
     setSubmitting(true)
     try {
       const response = await reassignDeploymentReview(
@@ -99,12 +90,12 @@ export function ReviewDecisionPanel({
         },
       )
       if (response.status !== 200)
-        return void message.error(t('workflows.review.rejected'))
+        return void feedback.error(t('workflows.review.rejected'))
       onUpdated(response.data.data)
       setReassigning(undefined)
-      message.success(t('workflows.review.reassigned'))
+      feedback.success(t('workflows.review.reassigned'))
     } catch {
-      message.error(t('workflows.review.error'))
+      feedback.error(t('workflows.review.error'))
     } finally {
       setSubmitting(false)
     }

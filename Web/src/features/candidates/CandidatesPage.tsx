@@ -10,7 +10,6 @@ import {
   Spin,
   Table,
   Typography,
-  message,
 } from 'antd'
 import type { TableProps } from 'antd'
 import { useState } from 'react'
@@ -22,6 +21,7 @@ import {
   useListArgoCDCandidates,
 } from '@/generated/api'
 import type { ArgoCDCandidate } from '@/generated/model'
+import { useFeedback } from '@/shared/feedback/useFeedback'
 
 interface AssignmentFields {
   scopeId: string
@@ -31,6 +31,7 @@ interface AssignmentFields {
 
 export function CandidatesPage() {
   const { t } = useTranslation()
+  const feedback = useFeedback()
   const [form] = Form.useForm<AssignmentFields>()
   const [selected, setSelected] = useState<ArgoCDCandidate>()
   const [submitting, setSubmitting] = useState(false)
@@ -62,7 +63,7 @@ export function CandidatesPage() {
     const source = selected.sources[Number(fields.sourceIndex)]
     const csrfToken = browserCookie('releasehub_csrf')
     if (!scope || !source || !csrfToken) {
-      message.error(t('candidates.assignment.error'))
+      feedback.error(t('candidates.assignment.error'))
       return
     }
 
@@ -81,19 +82,19 @@ export function CandidatesPage() {
         { headers: { 'X-CSRF-Token': csrfToken } },
       )
       if (response.status !== 201) {
-        message.error(
+        feedback.error(
           response.status === 409
             ? t('candidates.assignment.conflict')
             : t('candidates.assignment.error'),
         )
         return
       }
-      message.success(t('candidates.assignment.success'))
+      feedback.success(t('candidates.assignment.success'))
       setSelected(undefined)
       form.resetFields()
       await candidates.refetch()
     } catch {
-      message.error(t('candidates.assignment.error'))
+      feedback.error(t('candidates.assignment.error'))
     } finally {
       setSubmitting(false)
     }

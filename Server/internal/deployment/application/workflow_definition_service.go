@@ -39,10 +39,34 @@ type WorkflowMutation struct {
 // WorkflowDefinitionRepository persists workflow aggregates atomically.
 type WorkflowDefinitionRepository interface {
 	List(context.Context) ([]deploydomain.ReleaseWorkflow, error)
+	ListReviewOptions(context.Context) (WorkflowReviewOptions, error)
 	Load(context.Context, uuid.UUID) (deploydomain.ReleaseWorkflow, error)
 	Create(context.Context, WorkflowMutation, deploydomain.ReleaseWorkflow) error
 	AppendVersion(context.Context, WorkflowMutation, uint64, deploydomain.ReleaseWorkflowVersion) error
 	UpdateLifecycle(context.Context, WorkflowMutation, uint64, deploydomain.ReleaseWorkflowVersion) error
+	DeleteUnusedDraft(context.Context, WorkflowMutation, uuid.UUID, uint64) error
+}
+
+// WorkflowReviewUserOption is a minimal user identity available to Review policies.
+type WorkflowReviewUserOption struct {
+	ID         uuid.UUID
+	Username   string
+	Assignable bool
+}
+
+// WorkflowReviewRoleOption is a minimal Role identity available to Review policies.
+type WorkflowReviewRoleOption struct {
+	ID         uuid.UUID
+	Name       string
+	OwnerKind  string
+	OwnerID    *uuid.UUID
+	Assignable bool
+}
+
+// WorkflowReviewOptions contains identities that can be referenced by a Review policy.
+type WorkflowReviewOptions struct {
+	Users []WorkflowReviewUserOption
+	Roles []WorkflowReviewRoleOption
 }
 
 // WorkflowAuthorizer evaluates sensitive workflow permissions against fresh policy.
@@ -82,6 +106,14 @@ func (s *WorkflowDefinitionService) List(ctx context.Context, principal Workflow
 		return nil, ErrWorkflowForbidden
 	}
 	return s.repository.List(ctx)
+}
+
+// ReviewOptions returns minimal user and Role identities to authorized Workflow managers.
+func (s *WorkflowDefinitionService) ReviewOptions(ctx context.Context, principal WorkflowPrincipal) (WorkflowReviewOptions, error) {
+	if err := s.authorizeManage(ctx, principal); err != nil {
+		return WorkflowReviewOptions{}, err
+	}
+	return s.repository.ListReviewOptions(ctx)
 }
 
 // Create stores a workflow and its first draft version.
@@ -142,6 +174,18 @@ func (s *WorkflowDefinitionService) ChangeLifecycle(ctx context.Context, princip
 		return deploydomain.ReleaseWorkflowVersion{}, err
 	}
 	return updated, nil
+}
+
+// Delete removes a workflow only while every version is an unused draft.
+func (s *WorkflowDefinitionService) Delete(ctx context.Context, principal WorkflowPrincipal, input DeleteWorkflowInput) error {
+	if err := s.authorizeManage(ctx, principal); err != nil {
+		return err
+	}
+	if input.WorkflowID == uuid.Nil || input.ExpectedVersion < 1 {
+		return ErrWorkflowInvalid
+	}
+	mutation := workflowMutation(principal.UserID, input.RequestID, s.clock.Now())
+	return s.repository.DeleteUnusedDraft(ctx, mutation, input.WorkflowID, input.ExpectedVersion)
 }
 
 func changeWorkflowLifecycle(workflow deploydomain.ReleaseWorkflow, input ChangeWorkflowLifecycleInput, now time.Time) (deploydomain.ReleaseWorkflowVersion, error) {
@@ -233,5 +277,12 @@ type ChangeWorkflowLifecycleInput struct {
 	VersionID       uuid.UUID
 	ExpectedVersion uint64
 	Lifecycle       deploydomain.DefinitionLifecycle
+	RequestID       string
+}
+
+// DeleteWorkflowInput contains one optimistic workflow deletion command.
+type DeleteWorkflowInput struct {
+	WorkflowID      uuid.UUID
+	ExpectedVersion uint64
 	RequestID       string
 }

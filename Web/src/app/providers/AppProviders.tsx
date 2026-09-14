@@ -37,7 +37,9 @@ function ThemedProvider({ children }: PropsWithChildren) {
       locale={locale}
       theme={createReleaseHubTheme(resolvedTheme)}
     >
-      <AntdApp>{children}</AntdApp>
+      <AntdApp notification={{ maxCount: 3, placement: 'topRight' }}>
+        {children}
+      </AntdApp>
     </ConfigProvider>
   )
 }

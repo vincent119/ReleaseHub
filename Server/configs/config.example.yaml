@@ -72,6 +72,7 @@ oidc:
   issuer: ""
   client_id: ""
   client_secret: ""
+  ## The redirect URL is the URL to which the OIDC provider will redirect after successful authentication. It must match the redirect URL configured in the OIDC provider. if empty, not use OIDC authentication.
   redirect_url: "https://releasehub.example.com/api/v1/auth/callback"
   web_redirect_url: "https://releasehub.example.com/"
   logout_url: ""
@@ -101,5 +102,6 @@ identity:
   sync_interval: 5m
 
 tenancy:
+  ## Tenancy mode can be either "single" or "multi". In single tenancy mode, all users belong to the same organization. In multi-tenancy mode, each user belongs to a specific organization and can only access resources within that organization.
   mode: single
   default_organization_id: "00000000-0000-0000-0000-000000000001"

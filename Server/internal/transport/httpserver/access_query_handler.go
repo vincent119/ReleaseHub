@@ -119,16 +119,12 @@ func (h *accessHandler) ListAccessMembershipCandidates(c *gin.Context, groupID u
 	if !ok {
 		return
 	}
-	limit := 20
-	if params.Limit != nil {
-		limit = *params.Limit
-	}
-	value, err := h.service.MembershipCandidates(c.Request.Context(), accessPrincipal(user), groupID, params.Query, limit)
+	value, err := h.service.MembershipCandidates(c.Request.Context(), accessPrincipal(user), groupID, stringValue(params.Query), cursorValue(params.Cursor), limitValue(params.Limit))
 	if err != nil {
 		respondAccessReadError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, contract.AccessUserCandidatesResponse{Data: accessUsersResponse(value), Meta: responseMeta(c)})
+	c.JSON(http.StatusOK, contract.AccessUserCandidatesResponse{Data: accessUserCandidatesResponse(value.Items), Meta: accessPageMeta(c, value.NextCursor, value.HasMore)})
 }
 
 // GetAccessScopeOptions returns legal downstream options after scope selection.

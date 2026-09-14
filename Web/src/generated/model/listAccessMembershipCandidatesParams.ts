@@ -5,16 +5,22 @@
  * Shared HTTP API contract for the ReleaseHub frontend and backend.
  * OpenAPI spec version: 1.0.0
  */
+import type { CursorParameter } from './cursorParameter';
+import type { LimitParameter } from './limitParameter';
 
 export type ListAccessMembershipCandidatesParams = {
 /**
  * @minLength 1
  * @maxLength 128
  */
-query: string;
+query?: string;
+/**
+ * @minLength 1
+ */
+cursor?: CursorParameter;
 /**
  * @minimum 1
- * @maximum 20
+ * @maximum 100
  */
-limit?: number;
+limit?: LimitParameter;
 };

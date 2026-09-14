@@ -3,6 +3,8 @@ import { useTranslation } from 'react-i18next'
 
 import type { CatalogOrganizationNode } from '@/generated/model'
 
+import styles from './PlanScopeSelector.module.css'
+
 export interface PlanScopeChoice {
   organizationId: string
   projectId: string
@@ -28,12 +30,18 @@ export function PlanScopeSelector({ organizations, scope, onChange }: Props) {
   const selected = projects.find((item) => item.project.id === scope?.projectId)
   return (
     <Card>
-      <Flex gap="middle" wrap>
+      <Flex className={styles.scopeRow} gap="middle" wrap>
         <Select
+          className={styles.scopeSelect}
           aria-label={t('plans.scope.project')}
           placeholder={t('plans.scope.project')}
           value={selected?.value}
-          options={projects.map(({ value, label }) => ({ value, label }))}
+          popupMatchSelectWidth
+          options={projects.map(({ value, label }) => ({
+            value,
+            label,
+            title: label,
+          }))}
           onChange={(value) => {
             const item = projects.find((project) => project.value === value)!
             onChange({
@@ -43,13 +51,16 @@ export function PlanScopeSelector({ organizations, scope, onChange }: Props) {
           }}
         />
         <Select
+          className={styles.scopeSelect}
           aria-label={t('plans.scope.environment')}
           placeholder={t('plans.scope.environment')}
           disabled={!selected}
           value={scope?.environmentId}
+          popupMatchSelectWidth
           options={selected?.project.environments.map((environment) => ({
             value: environment.id,
             label: environment.name,
+            title: environment.name,
           }))}
           onChange={(environmentId) =>
             scope && onChange({ ...scope, environmentId })

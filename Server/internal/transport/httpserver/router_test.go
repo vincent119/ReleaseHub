@@ -183,7 +183,7 @@ func TestVisibleCatalogApplicationsRequireSession(t *testing.T) {
 func TestCatalogResourceTreeRequiresSessionAndPreservesAuthorizedAncestors(t *testing.T) {
 	organizationID, projectID, environmentID := uuid.New(), uuid.New(), uuid.New()
 	service := &fakeCatalogService{tree: catalogapp.ResourceTree{Organizations: []catalogapp.OrganizationNode{{
-		Organization: catalog.Organization{ID: organizationID, Name: "Tenant A"},
+		Organization: catalog.Organization{ID: organizationID, Name: "Tenant A", Version: 2}, IsDefault: true, CanRename: true,
 		Projects: []catalogapp.ProjectNode{{Project: catalog.Project{ID: projectID, OrganizationID: organizationID, Name: "Payment"}, Environments: []catalogapp.EnvironmentNode{{
 			Environment:  catalog.Environment{ID: environmentID, OrganizationID: organizationID, ProjectID: projectID, Name: "production", Type: catalog.EnvironmentProduction},
 			Applications: []catalog.Application{},
@@ -195,7 +195,8 @@ func TestCatalogResourceTreeRequiresSessionAndPreservesAuthorizedAncestors(t *te
 	request := httptest.NewRequest(http.MethodGet, "/api/v1/catalog/resource-tree", nil)
 	request.AddCookie(&http.Cookie{Name: "releasehub_session", Value: "session-token"})
 	router.ServeHTTP(response, request)
-	if response.Code != http.StatusOK || service.treeCalls != 1 || !strings.Contains(response.Body.String(), `"name":"production"`) {
+	body := response.Body.String()
+	if response.Code != http.StatusOK || service.treeCalls != 1 || !strings.Contains(body, `"name":"production"`) || !strings.Contains(body, `"version":2`) || !strings.Contains(body, `"isDefault":true`) || !strings.Contains(body, `"canRename":true`) {
 		t.Fatalf("resource tree = %d %s calls=%d", response.Code, response.Body.String(), service.treeCalls)
 	}
 }
@@ -213,6 +214,59 @@ func TestCatalogEnvironmentCreationUsesMutationValidation(t *testing.T) {
 	router.ServeHTTP(response, request)
 	if response.Code != http.StatusCreated || service.environmentCreates != 1 || !strings.Contains(response.Body.String(), `"name":"uat-tw"`) {
 		t.Fatalf("create Environment = %d %s calls=%d", response.Code, response.Body.String(), service.environmentCreates)
+	}
+}
+
+func TestCatalogOrganizationRenameUsesVersionedMutation(t *testing.T) {
+	organizationID := uuid.New()
+	service := &fakeCatalogService{}
+	router, _, _, _, _ := newTestRouterWithCatalog(t, &fakeAuthFlow{}, service)
+	request := httptest.NewRequest(http.MethodPatch, "/api/v1/catalog/organizations/"+organizationID.String(), strings.NewReader(`{"name":"Platform","version":2}`))
+	request.AddCookie(&http.Cookie{Name: "releasehub_session", Value: "session-token"})
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Origin", "https://releasehub.example")
+	request.Header.Set("X-CSRF-Token", "csrf-token")
+	response := httptest.NewRecorder()
+
+	router.ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK || service.organizationRenames != 1 || service.renameID != organizationID || service.renameName != "Platform" || service.renameVersion != 2 {
+		t.Fatalf("rename Organization = %d %s calls=%d input=%s/%q/%d", response.Code, response.Body.String(), service.organizationRenames, service.renameID, service.renameName, service.renameVersion)
+	}
+	if !strings.Contains(response.Body.String(), `"name":"Platform"`) || !strings.Contains(response.Body.String(), `"version":3`) {
+		t.Fatalf("rename Organization response = %s", response.Body.String())
+	}
+}
+
+func TestCatalogOrganizationRenameMapsValidationAndConflictErrors(t *testing.T) {
+	organizationID := uuid.New()
+	tests := []struct {
+		name       string
+		body       string
+		serviceErr error
+		status     int
+		code       string
+	}{
+		{name: "invalid version", body: `{"name":"Platform","version":0}`, status: http.StatusBadRequest, code: "INVALID_REQUEST"},
+		{name: "invalid name", body: `{"name":" ","version":1}`, serviceErr: catalogapp.ErrInvalidResource, status: http.StatusBadRequest, code: "INVALID_REQUEST"},
+		{name: "hidden resource", body: `{"name":"Platform","version":1}`, serviceErr: catalogapp.ErrResourceNotFound, status: http.StatusNotFound, code: "RESOURCE_NOT_FOUND"},
+		{name: "conflict", body: `{"name":"Platform","version":1}`, serviceErr: catalogapp.ErrResourceConflict, status: http.StatusConflict, code: "RESOURCE_MUTATION_CONFLICT"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			service := &fakeCatalogService{renameError: test.serviceErr}
+			router, _, _, _, _ := newTestRouterWithCatalog(t, &fakeAuthFlow{}, service)
+			request := httptest.NewRequest(http.MethodPatch, "/api/v1/catalog/organizations/"+organizationID.String(), strings.NewReader(test.body))
+			request.AddCookie(&http.Cookie{Name: "releasehub_session", Value: "session-token"})
+			request.Header.Set("Content-Type", "application/json")
+			request.Header.Set("Origin", "https://releasehub.example")
+			request.Header.Set("X-CSRF-Token", "csrf-token")
+			response := httptest.NewRecorder()
+			router.ServeHTTP(response, request)
+			if response.Code != test.status || !strings.Contains(response.Body.String(), `"code":"`+test.code+`"`) {
+				t.Fatalf("rename error = %d %s", response.Code, response.Body.String())
+			}
+		})
 	}
 }
 
@@ -245,6 +299,28 @@ func TestAccessManagementSnapshotRequiresSessionAndReturnsFilteredRecords(t *tes
 	router.ServeHTTP(response, request)
 	if response.Code != http.StatusOK || service.calls != 1 || !strings.Contains(response.Body.String(), `"username":"vincent"`) {
 		t.Fatalf("access snapshot = %d %s calls=%d", response.Code, response.Body.String(), service.calls)
+	}
+}
+
+func TestMembershipCandidatesAllowEmptySearchAndReturnCursorMetadata(t *testing.T) {
+	groupID := uuid.New()
+	service := &fakeAccessManagementService{candidatePage: authzapp.AccessListPage[authzapp.AccessUser]{
+		Items:      []authzapp.AccessUser{{ID: uuid.New(), Username: "amy"}},
+		NextCursor: "next-cursor",
+		HasMore:    true,
+	}}
+	router := newTestRouterWithAccess(t, &fakeAuthFlow{}, service)
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/access/groups/"+groupID.String()+"/membership-candidates", nil)
+	request.AddCookie(&http.Cookie{Name: "releasehub_session", Value: "session-token"})
+	response := httptest.NewRecorder()
+
+	router.ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK || service.candidateQuery != "" || service.candidateCursor != "" {
+		t.Fatalf("membership candidates = %d %s query=%q cursor=%q", response.Code, response.Body.String(), service.candidateQuery, service.candidateCursor)
+	}
+	if !strings.Contains(response.Body.String(), `"username":"amy"`) || !strings.Contains(response.Body.String(), `"nextCursor":"next-cursor"`) || !strings.Contains(response.Body.String(), `"hasMore":true`) {
+		t.Fatalf("membership candidate response = %s", response.Body.String())
 	}
 }
 
@@ -717,12 +793,25 @@ func (f *fakeLocalAuth) MustChangePassword(context.Context, uuid.UUID) (bool, er
 }
 
 type fakeCatalogService struct {
-	listCalls, visibleCalls, treeCalls, environmentCreates int
-	tree                                                   catalogapp.ResourceTree
+	listCalls, visibleCalls, treeCalls, environmentCreates, organizationRenames int
+	tree                                                                        catalogapp.ResourceTree
+	renameID                                                                    uuid.UUID
+	renameName                                                                  string
+	renameVersion                                                               uint64
+	renameError                                                                 error
 }
 
 func (*fakeCatalogService) CreateOrganization(_ context.Context, _ catalogapp.Principal, _ catalogapp.Mutation, name string) (catalog.Organization, error) {
 	return catalog.Organization{ID: uuid.New(), Name: name, Active: true, Version: 1}, nil
+}
+
+func (s *fakeCatalogService) RenameOrganization(_ context.Context, _ catalogapp.Principal, _ catalogapp.Mutation, organizationID uuid.UUID, name string, expectedVersion uint64) (catalog.Organization, error) {
+	s.organizationRenames++
+	s.renameID, s.renameName, s.renameVersion = organizationID, name, expectedVersion
+	if s.renameError != nil {
+		return catalog.Organization{}, s.renameError
+	}
+	return catalog.Organization{ID: organizationID, Name: name, Active: true, Version: expectedVersion + 1}, nil
 }
 
 func (*fakeCatalogService) CreateProject(_ context.Context, _ catalogapp.Principal, _ catalogapp.Mutation, organizationID uuid.UUID, name string) (catalog.Project, error) {
@@ -750,10 +839,12 @@ type fakeCandidateService struct {
 }
 
 type fakeAccessManagementService struct {
-	value         authzapp.AccessSnapshot
-	capabilities  authzapp.AccessCapabilities
-	calls         int
-	mutationCalls int
+	value                           authzapp.AccessSnapshot
+	capabilities                    authzapp.AccessCapabilities
+	candidatePage                   authzapp.AccessListPage[authzapp.AccessUser]
+	candidateQuery, candidateCursor string
+	calls                           int
+	mutationCalls                   int
 }
 
 func (s *fakeAccessManagementService) Load(context.Context, authzapp.AccessPrincipal) (authzapp.AccessSnapshot, error) {
@@ -790,8 +881,13 @@ func (*fakeAccessManagementService) ListBindings(context.Context, authzapp.Acces
 func (*fakeAccessManagementService) ListDenies(context.Context, authzapp.AccessPrincipal, string, string, int) (authzapp.AccessListPage[authzapp.AccessDeny], error) {
 	return authzapp.AccessListPage[authzapp.AccessDeny]{Items: []authzapp.AccessDeny{}}, nil
 }
-func (*fakeAccessManagementService) MembershipCandidates(context.Context, authzapp.AccessPrincipal, uuid.UUID, string, int) ([]authzapp.AccessUser, error) {
-	return []authzapp.AccessUser{}, nil
+func (s *fakeAccessManagementService) MembershipCandidates(_ context.Context, _ authzapp.AccessPrincipal, _ uuid.UUID, query, cursor string, _ int) (authzapp.AccessListPage[authzapp.AccessUser], error) {
+	s.candidateQuery = query
+	s.candidateCursor = cursor
+	if s.candidatePage.Items == nil {
+		return authzapp.AccessListPage[authzapp.AccessUser]{Items: []authzapp.AccessUser{}}, nil
+	}
+	return s.candidatePage, nil
 }
 func (*fakeAccessManagementService) ScopeOptions(context.Context, authzapp.AccessPrincipal, string, string) (authzapp.AccessScopeOptions, error) {
 	return authzapp.AccessScopeOptions{Groups: []authzapp.AccessGroup{}, Roles: []authzapp.AccessRole{}, Permissions: []authzapp.AccessPermission{}}, nil

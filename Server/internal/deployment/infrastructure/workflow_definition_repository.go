@@ -50,6 +50,27 @@ func (r *WorkflowDefinitionRepository) List(ctx context.Context) ([]deploydomain
 	return joinWorkflows(workflows, versions), nil
 }
 
+// ListReviewOptions returns minimal identities referenced by Workflow Review policies.
+func (r *WorkflowDefinitionRepository) ListReviewOptions(ctx context.Context) (deployapp.WorkflowReviewOptions, error) {
+	value := deployapp.WorkflowReviewOptions{
+		Users: []deployapp.WorkflowReviewUserOption{},
+		Roles: []deployapp.WorkflowReviewRoleOption{},
+	}
+	if err := r.db.WithContext(ctx).Raw(`
+SELECT id, username, disabled_at IS NULL AS assignable
+FROM users
+ORDER BY lower(username), id`).Scan(&value.Users).Error; err != nil {
+		return deployapp.WorkflowReviewOptions{}, fmt.Errorf("list Workflow Review users: %w", err)
+	}
+	if err := r.db.WithContext(ctx).Raw(`
+SELECT id, name, owner_kind, owner_id, active AS assignable
+FROM authorization_roles
+ORDER BY owner_kind, lower(name), id`).Scan(&value.Roles).Error; err != nil {
+		return deployapp.WorkflowReviewOptions{}, fmt.Errorf("list Workflow Review Roles: %w", err)
+	}
+	return value, nil
+}
+
 // Load returns one workflow and all immutable versions.
 func (r *WorkflowDefinitionRepository) Load(ctx context.Context, workflowID uuid.UUID) (deploydomain.ReleaseWorkflow, error) {
 	var workflow releaseWorkflowModel
@@ -240,7 +261,7 @@ func workflowReadError(err error) error {
 
 func workflowWriteError(operation string, err error) error {
 	var postgresError *pgconn.PgError
-	if errors.As(err, &postgresError) && postgresError.Code == "23505" {
+	if errors.As(err, &postgresError) && (postgresError.Code == "23503" || postgresError.Code == "23505") {
 		return deployapp.ErrWorkflowConflict
 	}
 	return fmt.Errorf("%s: %w", operation, err)

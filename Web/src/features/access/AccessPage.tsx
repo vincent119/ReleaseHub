@@ -1,6 +1,5 @@
 import {
   Alert,
-  App,
   Button,
   Card,
   Checkbox,
@@ -23,7 +22,6 @@ import {
   createAccessBinding,
   createAccessDeny,
   createAccessGroup,
-  createAccessMembership,
   createAccessRole,
   createAccessUser,
   disableAccessGroup,
@@ -35,10 +33,10 @@ import {
   useGetAccessCapabilities,
   useGetAccessScopeOptions,
   useGetCatalogResourceTree,
+  useGetSystemStatus,
   useListAccessBindings,
   useListAccessDenies,
   useListAccessGroups,
-  useListAccessMembershipCandidates,
   useListAccessMemberships,
   useListAccessRoles,
   useListAccessUsers,
@@ -53,11 +51,18 @@ import type {
   AccessUser,
   CatalogOrganizationNode,
 } from '@/generated/model'
+import { useFeedback } from '@/shared/feedback/useFeedback'
+import { GroupMembersModal } from './GroupMembersModal'
+import {
+  scopePayload,
+  scopeResourceOptions,
+  type ScopeKind,
+} from './scopeResources'
 
 type TabKey =
   'users' | 'groups' | 'roles' | 'memberships' | 'bindings' | 'denies'
-type Action = 'user' | 'group' | 'role' | 'membership' | 'binding' | 'deny'
-type ScopeKind = 'platform' | 'project' | 'environment' | 'application'
+type Action = 'user' | 'group' | 'role' | 'binding' | 'deny'
+type ManagedGroup = { id: string; name: string; allowedActions: string[] }
 
 interface Fields {
   username?: string
@@ -70,7 +75,6 @@ interface Fields {
   permissions?: string[]
   groupId?: string
   userId?: string
-  userQuery?: string
   roleId?: string
   permission?: string
   scopeKind?: ScopeKind
@@ -88,13 +92,14 @@ const tabs: TabKey[] = [
 
 export function AccessPage() {
   const { t } = useTranslation()
-  const { message } = App.useApp()
+  const feedback = useFeedback()
   const [searchParams, setSearchParams] = useSearchParams()
   const requestedTab = searchParams.get('tab') as TabKey | null
   const activeTab =
     requestedTab && tabs.includes(requestedTab) ? requestedTab : 'users'
   const [form] = Form.useForm<Fields>()
   const [action, setAction] = useState<Action>()
+  const [memberGroup, setMemberGroup] = useState<ManagedGroup>()
   const [submitting, setSubmitting] = useState(false)
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState<'all' | 'active' | 'inactive'>('all')
@@ -143,6 +148,7 @@ export function AccessPage() {
     cursor: cursors.denies,
   })
   const resources = useGetCatalogResourceTree()
+  const system = useGetSystemStatus()
 
   const capabilityData =
     capabilities.data?.status === 200
@@ -172,6 +178,9 @@ export function AccessPage() {
   }[activeTab]
   const organizationData =
     resources.data?.status === 200 ? resources.data.data.data : []
+  const singleTenant =
+    system.data?.status === 200 &&
+    system.data.data.data.tenancyMode === 'single'
   const capability = new Map(capabilityData.map((item) => [item.key, item]))
   const visibleTabs = tabs.filter(
     (key) => capability.get(key)?.visible !== false,
@@ -218,36 +227,44 @@ export function AccessPage() {
   }
   const mutate = async (
     work: (options: RequestInit) => Promise<{ status: number }>,
-  ) => {
+    closeModal = true,
+  ): Promise<boolean> => {
     const csrf = browserCookie('releasehub_csrf')
-    if (!csrf) return void message.error(t('access.mutation.error'))
+    if (!csrf) {
+      feedback.error(t('access.mutation.error'))
+      return false
+    }
     setSubmitting(true)
     try {
       const response = await work({ headers: { 'X-CSRF-Token': csrf } })
       if (response.status !== 201 && response.status !== 204) {
         const code = mutationErrorCode(response)
+        let errorKey = 'access.mutation.error'
         if (response.status === 401)
-          return void message.error(t('access.mutation.unauthenticated'))
-        if (response.status === 400)
-          return void message.error(t('access.mutation.invalid'))
-        if (response.status === 404)
-          return void message.error(t('access.mutation.notAuthorized'))
-        if (code === 'ACCESS_SELF_DISABLE_FORBIDDEN')
-          return void message.error(t('access.mutation.selfDisable'))
-        if (code === 'ACCESS_LAST_PLATFORM_MANAGER')
-          return void message.error(t('access.mutation.lastManager'))
-        if (code === 'ACCESS_RESOURCE_PROTECTED')
-          return void message.error(t('access.mutation.protected'))
-        if (response.status === 409)
-          return void message.error(t('access.mutation.conflict'))
-        return void message.error(t('access.mutation.error'))
+          errorKey = 'access.mutation.unauthenticated'
+        else if (response.status === 400) errorKey = 'access.mutation.invalid'
+        else if (response.status === 404)
+          errorKey = 'access.mutation.notAuthorized'
+        else if (code === 'ACCESS_SELF_DISABLE_FORBIDDEN')
+          errorKey = 'access.mutation.selfDisable'
+        else if (code === 'ACCESS_LAST_PLATFORM_MANAGER')
+          errorKey = 'access.mutation.lastManager'
+        else if (code === 'ACCESS_RESOURCE_PROTECTED')
+          errorKey = 'access.mutation.protected'
+        else if (response.status === 409) errorKey = 'access.mutation.conflict'
+        feedback.error(t(errorKey))
+        return false
       }
-      setAction(undefined)
-      form.resetFields()
-      message.success(t('access.mutation.success'))
+      if (closeModal) {
+        setAction(undefined)
+        form.resetFields()
+      }
+      feedback.success(t('access.mutation.success'))
       await refetch()
+      return true
     } catch {
-      message.error(t('access.mutation.error'))
+      feedback.error(t('access.mutation.error'))
+      return false
     } finally {
       setSubmitting(false)
     }
@@ -281,14 +298,6 @@ export function AccessPage() {
             name: fields.name!,
             permissions: fields.permissions ?? [],
           },
-          options,
-        ),
-      )
-    if (action === 'membership')
-      await mutate((options) =>
-        createAccessMembership(
-          fields.groupId!,
-          { userId: fields.userId! },
           options,
         ),
       )
@@ -450,6 +459,7 @@ export function AccessPage() {
                   denies: denyData,
                   t,
                   open,
+                  manageMembers: setMemberGroup,
                   destructive,
                 })
               ),
@@ -474,9 +484,18 @@ export function AccessPage() {
         canManagePlatform={canManagePlatform}
         permissions={permissionData}
         organizations={organizationData}
+        singleTenant={singleTenant}
         close={() => !submitting && setAction(undefined)}
         submit={submit}
       />
+      {memberGroup && (
+        <GroupMembersModal
+          group={memberGroup}
+          submitting={submitting}
+          mutate={mutate}
+          close={() => !submitting && setMemberGroup(undefined)}
+        />
+      )}
     </Space>
   )
 }
@@ -491,6 +510,7 @@ type TableContext = {
   denies: AccessDeny[]
   t: ReturnType<typeof useTranslation>['t']
   open: (action: Action, fields?: Fields) => void
+  manageMembers: (group: ManagedGroup) => void
   destructive: (
     kind: 'user' | 'group' | 'role' | 'membership' | 'binding' | 'deny',
     id: string,
@@ -505,14 +525,21 @@ function renderTable(key: TabKey, context: TableContext) {
     title: context.t('access.columns.actions'),
     render: (_: unknown, item: T) => (
       <Space>
-        {kind === 'group' && item.allowedActions.includes('addMember') && (
-          <Button
-            size="small"
-            onClick={() => context.open('membership', { groupId: item.id })}
-          >
-            {context.t('access.actions.addMember')}
-          </Button>
-        )}
+        {kind === 'group' &&
+          item.allowedActions.includes('viewMemberships') && (
+            <Button
+              size="small"
+              onClick={() =>
+                context.manageMembers({
+                  id: item.id,
+                  name: describe(item),
+                  allowedActions: item.allowedActions,
+                })
+              }
+            >
+              {context.t('access.actions.manageMembers')}
+            </Button>
+          )}
         {(item.allowedActions.includes('disable') ||
           item.allowedActions.includes('revoke')) && (
           <ActionConfirm
@@ -697,6 +724,7 @@ function AccessModal({
   canManagePlatform,
   permissions,
   organizations,
+  singleTenant,
   close,
   submit,
 }: {
@@ -706,34 +734,21 @@ function AccessModal({
   canManagePlatform: boolean
   permissions: AccessPermission[]
   organizations: CatalogOrganizationNode[]
+  singleTenant: boolean
   close: () => void
   submit: (fields: Fields) => Promise<void>
 }) {
   const { t } = useTranslation()
   const ownerKind = Form.useWatch('ownerKind', form)
-  const groupID = Form.useWatch('groupId', form) ?? ''
-  const userQuery = Form.useWatch('userQuery', form) ?? ''
   const scopeKind = Form.useWatch('scopeKind', form) ?? 'project'
   const selectedScopeID = Form.useWatch('scopeId', form)
   const scopeID =
     scopeKind === 'platform' ? 'platform' : (selectedScopeID ?? '')
-  const candidates = useListAccessMembershipCandidates(
-    groupID,
-    { query: userQuery || ' ' },
-    {
-      query: {
-        enabled:
-          action === 'membership' && Boolean(groupID && userQuery.trim()),
-      },
-    },
-  )
   const scopeOptions = useGetAccessScopeOptions(scopeKind, scopeID, {
     query: {
       enabled: (action === 'binding' || action === 'deny') && Boolean(scopeID),
     },
   })
-  const candidateData =
-    candidates.data?.status === 200 ? candidates.data.data.data : []
   const options =
     scopeOptions.data?.status === 200 ? scopeOptions.data.data.data : undefined
   const projectOptions = organizations.flatMap((organization) =>
@@ -872,33 +887,6 @@ function AccessModal({
             )}
           </>
         )}
-        {action === 'membership' && (
-          <>
-            <Form.Item name="groupId" hidden>
-              <Input />
-            </Form.Item>
-            <Form.Item
-              name="userQuery"
-              label={t('access.fields.userSearch')}
-              rules={[{ required: true }]}
-            >
-              <Input autoComplete="off" />
-            </Form.Item>
-            <Form.Item
-              name="userId"
-              label={t('access.fields.user')}
-              rules={[{ required: true }]}
-            >
-              <Select
-                loading={candidates.isFetching}
-                options={candidateData.map((item) => ({
-                  value: item.id,
-                  label: item.username,
-                }))}
-              />
-            </Form.Item>
-          </>
-        )}
         {(action === 'binding' || action === 'deny') && (
           <>
             <Form.Item
@@ -931,7 +919,11 @@ function AccessModal({
                 <Select
                   showSearch
                   optionFilterProp="label"
-                  options={scopeResourceOptions(scopeKind, organizations)}
+                  options={scopeResourceOptions(
+                    scopeKind,
+                    organizations,
+                    singleTenant,
+                  )}
                   onChange={() =>
                     form.setFieldsValue({
                       groupId: undefined,
@@ -1003,80 +995,6 @@ function createActionForTab(tab: TabKey): Action | undefined {
 
 function capitalize(value: string) {
   return value.charAt(0).toUpperCase() + value.slice(1)
-}
-
-function scopeResourceOptions(
-  kind: ScopeKind,
-  organizations: CatalogOrganizationNode[],
-) {
-  if (kind === 'project')
-    return organizations.flatMap((organization) =>
-      organization.projects.map((project) => ({
-        value: project.id,
-        label: `${organization.name} / ${project.name}`,
-      })),
-    )
-  if (kind === 'environment')
-    return organizations.flatMap((organization) =>
-      organization.projects.flatMap((project) =>
-        project.environments.map((environment) => ({
-          value: environment.id,
-          label: `${organization.name} / ${project.name} / ${environment.name}`,
-        })),
-      ),
-    )
-  if (kind === 'application')
-    return organizations.flatMap((organization) =>
-      organization.projects.flatMap((project) =>
-        project.environments.flatMap((environment) =>
-          environment.applications.map((application) => ({
-            value: application.id,
-            label: `${organization.name} / ${project.name} / ${environment.name} / ${application.name}`,
-          })),
-        ),
-      ),
-    )
-  return []
-}
-
-function scopePayload(
-  fields: Fields,
-  organizations: CatalogOrganizationNode[],
-) {
-  if (fields.scopeKind === 'platform') return { scopeKind: 'platform' as const }
-  for (const organization of organizations)
-    for (const project of organization.projects) {
-      if (fields.scopeKind === 'project' && project.id === fields.scopeId)
-        return {
-          scopeKind: 'project' as const,
-          organizationId: organization.id,
-          projectId: project.id,
-        }
-      for (const environment of project.environments) {
-        if (
-          fields.scopeKind === 'environment' &&
-          environment.id === fields.scopeId
-        )
-          return {
-            scopeKind: 'environment' as const,
-            organizationId: organization.id,
-            projectId: project.id,
-            environmentId: environment.id,
-          }
-        const application = environment.applications.find(
-          (item) => item.id === fields.scopeId,
-        )
-        if (fields.scopeKind === 'application' && application)
-          return {
-            scopeKind: 'application' as const,
-            organizationId: organization.id,
-            projectId: project.id,
-            environmentId: environment.id,
-            applicationId: application.id,
-          }
-      }
-    }
-  return { scopeKind: fields.scopeKind ?? ('project' as const) }
 }
 
 function ActionConfirm({

@@ -59,6 +59,13 @@ func TestAccessManagementRepositoryLoadsNullableOwnersAndPolicyRecords(t *testin
 		t.Fatalf("create access management repository: %v", err)
 	}
 	guardMutation := authzapp.AccessMutation{ActorID: platformUserID, RequestID: "last-platform-manager-guard"}
+	if err := repository.RevokeMembership(ctx, guardMutation, platformMembershipID); !errors.Is(err, authzapp.ErrLastPlatformManager) {
+		t.Fatalf("last platform membership revoke error = %v", err)
+	}
+	var protectedMembershipActive bool
+	if err := db.Table("authorization_group_memberships").Select("active").Where("id = ?", platformMembershipID).Scan(&protectedMembershipActive).Error; err != nil || !protectedMembershipActive {
+		t.Fatalf("protected platform membership active = %t, error = %v", protectedMembershipActive, err)
+	}
 	if err := repository.RevokeBinding(ctx, guardMutation, platformBindingID); !errors.Is(err, authzapp.ErrLastPlatformManager) {
 		t.Fatalf("last platform binding revoke error = %v", err)
 	}
@@ -100,6 +107,45 @@ func TestAccessManagementRepositoryLoadsNullableOwnersAndPolicyRecords(t *testin
 	if err != nil {
 		t.Fatalf("add membership: %v", err)
 	}
+	candidateAlphaID, candidateBravoID, disabledCandidateID := uuid.New(), uuid.New(), uuid.New()
+	candidateSeeds := []struct {
+		query string
+		args  []any
+	}{
+		{`INSERT INTO users (id, username) VALUES (?, 'membership-candidate-alpha')`, []any{candidateAlphaID}},
+		{`INSERT INTO users (id, username) VALUES (?, 'membership-candidate-bravo')`, []any{candidateBravoID}},
+		{`INSERT INTO users (id, username, disabled_at) VALUES (?, 'membership-candidate-disabled', now())`, []any{disabledCandidateID}},
+	}
+	for _, statement := range candidateSeeds {
+		if err := db.Exec(statement.query, statement.args...).Error; err != nil {
+			t.Fatalf("seed membership candidates: %v", err)
+		}
+	}
+	firstCandidates, err := repository.FindMembershipCandidates(ctx, createdGroup.ID, "membership-candidate-", nil, 1)
+	if err != nil || len(firstCandidates) != 1 || firstCandidates[0].ID != candidateAlphaID {
+		t.Fatalf("first membership candidate page = %#v, error = %v", firstCandidates, err)
+	}
+	secondCandidates, err := repository.FindMembershipCandidates(ctx, createdGroup.ID, "membership-candidate-", &authzapp.MembershipCandidateCursor{Username: firstCandidates[0].Username, UserID: firstCandidates[0].ID}, 2)
+	if err != nil || len(secondCandidates) != 1 || secondCandidates[0].ID != candidateBravoID {
+		t.Fatalf("second membership candidate page = %#v, error = %v", secondCandidates, err)
+	}
+	allCandidates, err := repository.FindMembershipCandidates(ctx, createdGroup.ID, "", nil, 100)
+	if err != nil {
+		t.Fatalf("list membership candidates without query: %v", err)
+	}
+	assertCandidatePresence(t, allCandidates, candidateAlphaID, true)
+	assertCandidatePresence(t, allCandidates, candidateBravoID, true)
+	assertCandidatePresence(t, allCandidates, disabledCandidateID, false)
+	assertCandidatePresence(t, allCandidates, userID, false)
+	if _, err := repository.AddMembership(ctx, mutation, createdGroup.ID, candidateAlphaID); err != nil {
+		t.Fatalf("add selected membership candidate: %v", err)
+	}
+	remainingCandidates, err := repository.FindMembershipCandidates(ctx, createdGroup.ID, "membership-candidate-", nil, 10)
+	if err != nil {
+		t.Fatalf("reload membership candidates after add: %v", err)
+	}
+	assertCandidatePresence(t, remainingCandidates, candidateAlphaID, false)
+	assertCandidatePresence(t, remainingCandidates, candidateBravoID, true)
 	createdBinding, err := repository.CreateBinding(ctx, mutation, authzapp.CreateBindingInput{GroupID: createdGroup.ID, RoleID: createdRole.ID, OrganizationID: organizationID, ScopeKind: "project", ProjectID: projectID})
 	if err != nil {
 		t.Fatalf("create binding: %v", err)
@@ -110,6 +156,39 @@ func TestAccessManagementRepositoryLoadsNullableOwnersAndPolicyRecords(t *testin
 	}
 	if err := repository.RevokeMembership(ctx, mutation, createdMembership.ID); err != nil {
 		t.Fatalf("revoke membership: %v", err)
+	}
+	var revisionBeforeReactivation int64
+	if err := db.Raw(`SELECT revision FROM authorization_policy_revision WHERE singleton`).Scan(&revisionBeforeReactivation).Error; err != nil {
+		t.Fatalf("read policy revision before membership reactivation: %v", err)
+	}
+	reactivatedMembership, err := repository.AddMembership(ctx, mutation, createdGroup.ID, userID)
+	if err != nil {
+		t.Fatalf("reactivate membership: %v", err)
+	}
+	if reactivatedMembership.ID != createdMembership.ID || !reactivatedMembership.Active {
+		t.Fatalf("reactivated membership = %#v, original ID = %s", reactivatedMembership, createdMembership.ID)
+	}
+	reactivatedCandidates, err := repository.FindMembershipCandidates(ctx, createdGroup.ID, "project-manager", nil, 10)
+	if err != nil {
+		t.Fatalf("reload candidates after membership reactivation: %v", err)
+	}
+	assertCandidatePresence(t, reactivatedCandidates, userID, false)
+	var revisionAfterReactivation int64
+	if err := db.Raw(`SELECT revision FROM authorization_policy_revision WHERE singleton`).Scan(&revisionAfterReactivation).Error; err != nil || revisionAfterReactivation != revisionBeforeReactivation+1 {
+		t.Fatalf("policy revision after membership reactivation = %d, before = %d, error = %v", revisionAfterReactivation, revisionBeforeReactivation, err)
+	}
+	if _, err := repository.AddMembership(ctx, mutation, createdGroup.ID, userID); !errors.Is(err, authzapp.ErrAccessManagementConflict) {
+		t.Fatalf("add active membership error = %v", err)
+	}
+	var revisionAfterConflict int64
+	if err := db.Raw(`SELECT revision FROM authorization_policy_revision WHERE singleton`).Scan(&revisionAfterConflict).Error; err != nil || revisionAfterConflict != revisionAfterReactivation {
+		t.Fatalf("policy revision after membership conflict = %d, want %d, error = %v", revisionAfterConflict, revisionAfterReactivation, err)
+	}
+	if err := repository.RevokeMembership(ctx, mutation, createdMembership.ID); err != nil {
+		t.Fatalf("revoke reactivated membership: %v", err)
+	}
+	if err := repository.RevokeMembership(ctx, mutation, createdMembership.ID); !errors.Is(err, authzapp.ErrAccessManagementConflict) {
+		t.Fatalf("revoke inactive membership error = %v", err)
 	}
 	if err := repository.RevokeBinding(ctx, mutation, createdBinding.ID); err != nil {
 		t.Fatalf("revoke binding: %v", err)
@@ -146,8 +225,18 @@ func TestAccessManagementRepositoryLoadsNullableOwnersAndPolicyRecords(t *testin
 	if err := db.Table("outbox_events").Where("aggregate_type LIKE 'authorization_%' OR event_type = 'identity.user.disabled'").Count(&outboxCount).Error; err != nil {
 		t.Fatalf("count outbox records: %v", err)
 	}
-	if auditCount != 11 || outboxCount < 11 {
+	if auditCount != 14 || outboxCount < 14 {
 		t.Fatalf("audit/outbox counts = %d/%d", auditCount, outboxCount)
+	}
+	var reactivatedAuditCount, reactivatedOutboxCount int64
+	if err := db.Table("audit_logs").Where("request_id = ? AND action = ? AND resource_id = ?", mutation.RequestID, "authorization.group_membership.reactivated", createdMembership.ID.String()).Count(&reactivatedAuditCount).Error; err != nil {
+		t.Fatalf("count membership reactivation audit: %v", err)
+	}
+	if err := db.Table("outbox_events").Where("event_type = ? AND aggregate_id = ?", "authorization.group_membership.reactivated", createdMembership.ID.String()).Count(&reactivatedOutboxCount).Error; err != nil {
+		t.Fatalf("count membership reactivation outbox: %v", err)
+	}
+	if reactivatedAuditCount != 1 || reactivatedOutboxCount != 1 {
+		t.Fatalf("membership reactivation audit/outbox counts = %d/%d", reactivatedAuditCount, reactivatedOutboxCount)
 	}
 
 	secondPlatformUserID, secondPlatformGroupID := uuid.New(), uuid.New()
@@ -198,5 +287,19 @@ func TestAccessManagementRepositoryLoadsNullableOwnersAndPolicyRecords(t *testin
 	var activePlatformBindings int64
 	if err := db.Table("authorization_platform_role_bindings").Where("active").Count(&activePlatformBindings).Error; err != nil || activePlatformBindings != 1 {
 		t.Fatalf("active platform bindings = %d, error = %v", activePlatformBindings, err)
+	}
+}
+
+func assertCandidatePresence(t *testing.T, candidates []authzapp.AccessUser, userID uuid.UUID, expected bool) {
+	t.Helper()
+	found := false
+	for _, candidate := range candidates {
+		if candidate.ID == userID {
+			found = true
+			break
+		}
+	}
+	if found != expected {
+		t.Fatalf("candidate %s presence = %t, expected %t", userID, found, expected)
 	}
 }

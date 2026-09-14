@@ -55,6 +55,25 @@ func TestWorkflowManagementRequiresPlatformPermission(t *testing.T) {
 	}
 }
 
+func TestWorkflowReviewOptionsRequireWorkflowManagementPermission(t *testing.T) {
+	userID, roleID := uuid.New(), uuid.New()
+	repository := &workflowDefinitionRepositoryStub{reviewOptions: WorkflowReviewOptions{
+		Users: []WorkflowReviewUserOption{{ID: userID, Username: "reviewer", Assignable: true}},
+		Roles: []WorkflowReviewRoleOption{{ID: roleID, Name: "release_approver", OwnerKind: "platform", Assignable: true}},
+	}}
+	allowed := mustWorkflowDefinitionService(t, repository, true)
+	options, err := allowed.ReviewOptions(context.Background(), WorkflowPrincipal{UserID: uuid.New()})
+	if err != nil || len(options.Users) != 1 || options.Users[0].ID != userID || len(options.Roles) != 1 || options.Roles[0].ID != roleID {
+		t.Fatalf("review options = %#v, %v", options, err)
+	}
+
+	denied := mustWorkflowDefinitionService(t, repository, false)
+	_, err = denied.ReviewOptions(context.Background(), WorkflowPrincipal{UserID: uuid.New()})
+	if !errors.Is(err, ErrWorkflowForbidden) {
+		t.Fatalf("denied review options error = %v", err)
+	}
+}
+
 func TestWorkflowVersionUsesPinnedDocumentCopy(t *testing.T) {
 	repository := &workflowDefinitionRepositoryStub{}
 	service := mustWorkflowDefinitionService(t, repository, true)
@@ -68,6 +87,40 @@ func TestWorkflowVersionUsesPinnedDocumentCopy(t *testing.T) {
 	document.States[0].Name = "Changed outside aggregate"
 	if created.Versions[0].Document.States[0].Name != "Start" {
 		t.Fatal("workflow version document changed through caller-owned slice")
+	}
+}
+
+func TestDeleteWorkflowRequiresPermissionAndDelegatesOptimisticVersion(t *testing.T) {
+	workflowID := uuid.New()
+	repository := &workflowDefinitionRepositoryStub{}
+	principal := WorkflowPrincipal{UserID: uuid.New()}
+	service := mustWorkflowDefinitionService(t, repository, true)
+	if err := service.Delete(context.Background(), principal, DeleteWorkflowInput{
+		WorkflowID: workflowID, ExpectedVersion: 3, RequestID: "delete-workflow",
+	}); err != nil {
+		t.Fatalf("delete workflow: %v", err)
+	}
+	if repository.deletedWorkflowID != workflowID || repository.deletedExpectedVersion != 3 {
+		t.Fatalf("delete input = %s version %d", repository.deletedWorkflowID, repository.deletedExpectedVersion)
+	}
+	if repository.deletedMutation.ActorID != principal.UserID || repository.deletedMutation.RequestID != "delete-workflow" {
+		t.Fatalf("delete mutation = %#v", repository.deletedMutation)
+	}
+
+	deniedRepository := &workflowDefinitionRepositoryStub{}
+	deniedService := mustWorkflowDefinitionService(t, deniedRepository, false)
+	err := deniedService.Delete(context.Background(), principal, DeleteWorkflowInput{WorkflowID: workflowID, ExpectedVersion: 3})
+	if !errors.Is(err, ErrWorkflowForbidden) || deniedRepository.deletedWorkflowID != uuid.Nil {
+		t.Fatalf("denied delete = %v, repository called = %t", err, deniedRepository.deletedWorkflowID != uuid.Nil)
+	}
+}
+
+func TestDeleteWorkflowRejectsInvalidOptimisticVersion(t *testing.T) {
+	repository := &workflowDefinitionRepositoryStub{}
+	service := mustWorkflowDefinitionService(t, repository, true)
+	err := service.Delete(context.Background(), WorkflowPrincipal{UserID: uuid.New()}, DeleteWorkflowInput{WorkflowID: uuid.New()})
+	if !errors.Is(err, ErrWorkflowInvalid) || repository.deletedWorkflowID != uuid.Nil {
+		t.Fatalf("invalid delete = %v, repository called = %t", err, repository.deletedWorkflowID != uuid.Nil)
 	}
 }
 
@@ -95,11 +148,19 @@ func definitionTestDocument() deploydomain.WorkflowDocument {
 }
 
 type workflowDefinitionRepositoryStub struct {
-	workflows []deploydomain.ReleaseWorkflow
+	workflows              []deploydomain.ReleaseWorkflow
+	reviewOptions          WorkflowReviewOptions
+	deletedWorkflowID      uuid.UUID
+	deletedExpectedVersion uint64
+	deletedMutation        WorkflowMutation
 }
 
 func (s *workflowDefinitionRepositoryStub) List(context.Context) ([]deploydomain.ReleaseWorkflow, error) {
 	return s.workflows, nil
+}
+
+func (s *workflowDefinitionRepositoryStub) ListReviewOptions(context.Context) (WorkflowReviewOptions, error) {
+	return s.reviewOptions, nil
 }
 
 func (s *workflowDefinitionRepositoryStub) Load(_ context.Context, workflowID uuid.UUID) (deploydomain.ReleaseWorkflow, error) {
@@ -137,6 +198,13 @@ func (s *workflowDefinitionRepositoryStub) UpdateLifecycle(_ context.Context, _ 
 		}
 	}
 	return ErrWorkflowConflict
+}
+
+func (s *workflowDefinitionRepositoryStub) DeleteUnusedDraft(_ context.Context, mutation WorkflowMutation, workflowID uuid.UUID, expected uint64) error {
+	s.deletedMutation = mutation
+	s.deletedWorkflowID = workflowID
+	s.deletedExpectedVersion = expected
+	return nil
 }
 
 type workflowAuthorizerStub struct{ allowed bool }

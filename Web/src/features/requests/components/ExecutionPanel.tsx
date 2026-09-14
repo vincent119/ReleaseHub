@@ -11,7 +11,6 @@ import {
   Space,
   Tag,
   Typography,
-  message,
 } from 'antd'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -26,6 +25,7 @@ import type {
   DeploymentExecution,
   DeploymentRequestVersion,
 } from '@/generated/model'
+import { useFeedback } from '@/shared/feedback/useFeedback'
 
 import {
   nodeStatusColor,
@@ -41,6 +41,7 @@ interface Props {
 }
 
 type Command = 'terminate' | 'unlock'
+type Feedback = ReturnType<typeof useFeedback>
 
 export function ExecutionPanel({
   request,
@@ -49,6 +50,7 @@ export function ExecutionPanel({
   onUpdated,
 }: Props) {
   const { t } = useTranslation()
+  const feedback = useFeedback()
   const [selected, setSelected] = useState<string[]>([])
   const [command, setCommand] = useState<Command>()
   const [submitting, setSubmitting] = useState(false)
@@ -85,6 +87,7 @@ export function ExecutionPanel({
           commandOptions(),
         ),
       onUpdated,
+      feedback,
     )
   }
   return (
@@ -194,6 +197,7 @@ export function ExecutionPanel({
             setSubmitting,
             onUpdated,
             t,
+            feedback,
           ).then(() => setCommand(undefined))
         }
       />
@@ -262,6 +266,7 @@ async function executeCommand(
   setSubmitting: (value: boolean) => void,
   onUpdated: () => Promise<unknown>,
   t: (key: string) => string,
+  feedback: Feedback,
 ) {
   if (!command) return
   const operation =
@@ -284,7 +289,7 @@ async function executeCommand(
             },
             commandOptions(),
           )
-  await runCommand(setSubmitting, t, operation, onUpdated)
+  await runCommand(setSubmitting, t, operation, onUpdated, feedback)
 }
 
 async function runCommand(
@@ -292,16 +297,17 @@ async function runCommand(
   t: (key: string) => string,
   operation: () => Promise<{ status: number }>,
   onUpdated: () => Promise<unknown>,
+  feedback: Feedback,
 ) {
   setSubmitting(true)
   try {
     const response = await operation()
     if (response.status !== 202)
-      return void message.error(t('requestDetail.commands.rejected'))
-    message.success(t('requestDetail.commands.accepted'))
+      return void feedback.error(t('requestDetail.commands.rejected'))
+    feedback.success(t('requestDetail.commands.accepted'))
     await onUpdated()
   } catch {
-    message.error(t('requestDetail.commands.error'))
+    feedback.error(t('requestDetail.commands.error'))
   } finally {
     setSubmitting(false)
   }

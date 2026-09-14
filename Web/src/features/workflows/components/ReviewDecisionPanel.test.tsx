@@ -5,6 +5,7 @@ import {
   screen,
   waitFor,
 } from '@testing-library/react'
+import { App as AntdApp } from 'antd'
 import { I18nextProvider } from 'react-i18next'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -132,13 +133,15 @@ describe('ReviewDecisionPanel', () => {
     expect(screen.queryByRole('button', { name: '重新指派' })).toBeNull()
 
     rerender(
-      <I18nextProvider i18n={i18n}>
-        <ReviewDecisionPanel
-          request={request}
-          onUpdated={vi.fn()}
-          canReassign
-        />
-      </I18nextProvider>,
+      <AntdApp>
+        <I18nextProvider i18n={i18n}>
+          <ReviewDecisionPanel
+            request={request}
+            onUpdated={vi.fn()}
+            canReassign
+          />
+        </I18nextProvider>
+      </AntdApp>,
     )
 
     expect(screen.getByRole('button', { name: '重新指派' })).toBeVisible()
@@ -149,13 +152,15 @@ describe('ReviewDecisionPanel', () => {
     const replacementID = '019c1230-0000-7000-8000-000000000009'
     api.reassign.mockResolvedValue({ status: 200, data: { data: request } })
     render(
-      <I18nextProvider i18n={i18n}>
-        <ReviewDecisionPanel
-          request={request}
-          onUpdated={vi.fn()}
-          canReassign
-        />
-      </I18nextProvider>,
+      <AntdApp>
+        <I18nextProvider i18n={i18n}>
+          <ReviewDecisionPanel
+            request={request}
+            onUpdated={vi.fn()}
+            canReassign
+          />
+        </I18nextProvider>
+      </AntdApp>,
     )
 
     fireEvent.click(screen.getByRole('button', { name: '重新指派' }))
@@ -183,9 +188,11 @@ function renderPanel(
   onUpdated: (value: DeploymentRequestVersion) => void,
 ) {
   return render(
-    <I18nextProvider i18n={i18n}>
-      <ReviewDecisionPanel request={request} onUpdated={onUpdated} />
-    </I18nextProvider>,
+    <AntdApp>
+      <I18nextProvider i18n={i18n}>
+        <ReviewDecisionPanel request={request} onUpdated={onUpdated} />
+      </I18nextProvider>
+    </AntdApp>,
   )
 }
 

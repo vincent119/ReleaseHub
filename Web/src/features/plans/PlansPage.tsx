@@ -1,5 +1,5 @@
 import { PlusOutlined } from '@ant-design/icons'
-import { Alert, Button, Empty, Flex, Space, Typography, message } from 'antd'
+import { Alert, Button, Empty, Flex, Space, Typography } from 'antd'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -12,13 +12,14 @@ import {
   useListReleaseWorkflows,
 } from '@/generated/api'
 import type { DeploymentPlan, DeploymentPlanVersion } from '@/generated/model'
+import { useFeedback } from '@/shared/feedback/useFeedback'
 
 import { DeploymentBindingPanel } from './components/DeploymentBindingPanel'
 import { PlanDetail } from './components/PlanDetail'
 import {
-  PlanEditorDrawer,
+  PlanEditorWorkspace,
   type PlanEditorValue,
-} from './components/PlanEditorDrawer'
+} from './components/PlanEditorWorkspace'
 import { PlanList } from './components/PlanList'
 import {
   PlanScopeSelector,
@@ -36,6 +37,7 @@ interface EditorState {
 
 export function PlansPage() {
   const { t } = useTranslation()
+  const feedback = useFeedback()
   const resources = useGetCatalogResourceTree()
   const workflows = useListReleaseWorkflows()
   const [scope, setScope] = useState<PlanScopeChoice>()
@@ -54,17 +56,17 @@ export function PlansPage() {
     operation: (options: RequestInit) => Promise<{ status: number }>,
   ) => {
     const csrf = browserCookie('releasehub_csrf')
-    if (!csrf) return void message.error(t('plans.mutation.error'))
+    if (!csrf) return void feedback.error(t('plans.mutation.error'))
     setSubmitting(true)
     try {
       const response = await operation({ headers: { 'X-CSRF-Token': csrf } })
       if (response.status < 200 || response.status >= 300)
-        return void message.error(t('plans.mutation.rejected'))
+        return void feedback.error(t('plans.mutation.rejected'))
       setEditor(undefined)
-      message.success(t('plans.mutation.saved'))
+      feedback.success(t('plans.mutation.saved'))
       await plansQuery.refetch()
     } catch {
-      message.error(t('plans.mutation.error'))
+      feedback.error(t('plans.mutation.error'))
     } finally {
       setSubmitting(false)
     }
@@ -99,6 +101,21 @@ export function PlansPage() {
   }
   if (resources.isError || workflows.isError)
     return <Alert type="error" showIcon message={t('plans.unavailable')} />
+  if (editor)
+    return (
+      <PlanEditorWorkspace
+        title={
+          editor.mode === 'create'
+            ? t('plans.editor.createTitle')
+            : t('plans.editor.versionTitle')
+        }
+        initial={editor.initial}
+        creating={editor.mode === 'create'}
+        submitting={submitting}
+        onClose={() => setEditor(undefined)}
+        onSubmit={(value) => void save(value)}
+      />
+    )
   const organizations =
     resources.data?.status === 200 ? resources.data.data.data : []
   const workflowValues =
@@ -180,21 +197,6 @@ export function PlansPage() {
             />
           )}
         </>
-      )}
-      {editor && (
-        <PlanEditorDrawer
-          open
-          title={
-            editor.mode === 'create'
-              ? t('plans.editor.createTitle')
-              : t('plans.editor.versionTitle')
-          }
-          initial={editor.initial}
-          creating={editor.mode === 'create'}
-          submitting={submitting}
-          onClose={() => setEditor(undefined)}
-          onSubmit={(value) => void save(value)}
-        />
       )}
     </Space>
   )
