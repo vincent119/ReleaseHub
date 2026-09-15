@@ -81,7 +81,7 @@ export function PlanGraphEditor({
           />
         </div>
         {hasCycle(document) && (
-          <Alert type="error" showIcon message={t('plans.validation.cycle')} />
+          <Alert type="error" showIcon title={t('plans.validation.cycle')} />
         )}
       </Flex>
       <div

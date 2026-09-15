@@ -128,7 +128,7 @@ export function PlansPage() {
     )
   }
   if (resources.isError || workflows.isError)
-    return <Alert type="error" showIcon message={t('plans.unavailable')} />
+    return <Alert type="error" showIcon title={t('plans.unavailable')} />
   if (editor)
     return (
       <PlanEditorWorkspace
@@ -182,7 +182,7 @@ export function PlansPage() {
         }}
       />
       {planListUnavailable ? (
-        <Alert type="error" showIcon message={t('plans.unavailable')} />
+        <Alert type="error" showIcon title={t('plans.unavailable')} />
       ) : !scope ? (
         <Empty description={t('plans.scope.select')} />
       ) : (

@@ -1,4 +1,4 @@
-import { Button, Card, Empty, Form, Input, List, Modal, Space, Tag } from 'antd'
+import { Button, Card, Empty, Form, Input, Modal, Space, Tag } from 'antd'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -11,6 +11,7 @@ import type {
   DeploymentReviewTask,
 } from '@/generated/model'
 import { useFeedback } from '@/shared/feedback/useFeedback'
+import { SemanticList, SemanticListItemContent } from '@/shared/list'
 
 import {
   ReviewReassignmentModal,
@@ -108,10 +109,11 @@ export function ReviewDecisionPanel({
           description={t('workflows.review.empty')}
         />
       ) : (
-        <List
-          dataSource={pending}
+        <SemanticList
+          items={pending}
+          rowKey="id"
           renderItem={(review) => (
-            <List.Item
+            <SemanticListItemContent
               actions={[
                 ...(canReview
                   ? [
@@ -145,21 +147,18 @@ export function ReviewDecisionPanel({
                     ]
                   : []),
               ]}
-            >
-              <List.Item.Meta
-                title={`${review.stateKey} · ${t('workflows.review.stage', { stage: review.stageNumber })}`}
-                description={
-                  <Space>
-                    <Tag>{review.policyType}</Tag>
-                    <span>
-                      {t('workflows.review.required', {
-                        count: review.requiredApprovals,
-                      })}
-                    </span>
-                  </Space>
-                }
-              />
-            </List.Item>
+              title={`${review.stateKey} · ${t('workflows.review.stage', { stage: review.stageNumber })}`}
+              description={
+                <Space>
+                  <Tag>{review.policyType}</Tag>
+                  <span>
+                    {t('workflows.review.required', {
+                      count: review.requiredApprovals,
+                    })}
+                  </span>
+                </Space>
+              }
+            />
           )}
         />
       )}

@@ -7,7 +7,6 @@ import {
   Flex,
   Form,
   Input,
-  List,
   Modal,
   Select,
   Space,
@@ -34,6 +33,7 @@ import type {
   CatalogProjectNode,
 } from '@/generated/model'
 import { useFeedback } from '@/shared/feedback/useFeedback'
+import { SemanticList, SemanticListItemContent } from '@/shared/list'
 
 type ResourceAction =
   | { kind: 'organization' }
@@ -72,7 +72,7 @@ export function ResourcesPage() {
   if (resources.isPending || system.isPending)
     return (
       <main>
-        <Spin size="large" tip={t('resources.loading')} />
+        <Spin size="large" description={t('resources.loading')} />
       </main>
     )
   if (
@@ -85,7 +85,7 @@ export function ResourcesPage() {
       <Alert
         type="error"
         showIcon
-        message={t('resources.error.title')}
+        title={t('resources.error.title')}
         description={t('resources.error.description')}
       />
     )
@@ -388,20 +388,21 @@ function EnvironmentList({
             title={environment.name}
             extra={<Tag>{environment.type}</Tag>}
           >
-            <List
-              dataSource={environment.applications}
-              locale={{ emptyText: t('resources.noApplications') }}
+            <SemanticList
+              items={environment.applications}
+              rowKey="id"
+              emptyContent={
+                <Empty description={t('resources.noApplications')} />
+              }
               renderItem={(application) => (
-                <List.Item>
-                  <List.Item.Meta
-                    title={
-                      <Link to={`/applications/${application.id}`}>
-                        {application.name}
-                      </Link>
-                    }
-                    description={`${application.argocdNamespace}/${application.argocdApplicationName}`}
-                  />
-                </List.Item>
+                <SemanticListItemContent
+                  title={
+                    <Link to={`/applications/${application.id}`}>
+                      {application.name}
+                    </Link>
+                  }
+                  description={`${application.argocdNamespace}/${application.argocdApplicationName}`}
+                />
               )}
             />
           </Card>

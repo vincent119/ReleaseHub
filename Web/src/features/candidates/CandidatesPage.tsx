@@ -146,7 +146,7 @@ export function CandidatesPage() {
   if (candidates.isPending)
     return (
       <main>
-        <Spin size="large" tip={t('candidates.loading')} />
+        <Spin size="large" description={t('candidates.loading')} />
       </main>
     )
   if (candidates.isError || candidates.data?.status !== 200)

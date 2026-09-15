@@ -1,14 +1,5 @@
 import { BellOutlined } from '@ant-design/icons'
-import {
-  Badge,
-  Button,
-  Drawer,
-  Empty,
-  List,
-  Space,
-  Tag,
-  Typography,
-} from 'antd'
+import { Badge, Button, Drawer, Empty, Space, Tag, Typography } from 'antd'
 import { useState } from 'react'
 import { Link } from 'react-router'
 import { useTranslation } from 'react-i18next'
@@ -20,6 +11,7 @@ import {
 } from '@/generated/api'
 import type { Notification } from '@/generated/model'
 import { useFeedback } from '@/shared/feedback/useFeedback'
+import { SemanticList, SemanticListItemContent } from '@/shared/list'
 
 import { useNotificationEvents } from './useNotificationEvents'
 import styles from './NotificationCenter.module.css'
@@ -80,11 +72,12 @@ export function NotificationCenter() {
             {t('notifications.unavailable')}
           </Typography.Text>
         ) : values.length ? (
-          <List
+          <SemanticList
+            items={values}
+            rowKey="id"
             loading={notifications.isPending}
-            dataSource={values}
             renderItem={(notification) => (
-              <List.Item
+              <SemanticListItemContent
                 actions={[
                   <Button
                     key="read"
@@ -97,36 +90,33 @@ export function NotificationCenter() {
                       : t('notifications.markRead')}
                   </Button>,
                 ]}
-              >
-                <List.Item.Meta
-                  title={
-                    <Space>
-                      <Badge
-                        status={notification.read ? 'default' : 'processing'}
-                      />
-                      <span>
-                        {t(`notifications.events.${notification.eventType}`, {
-                          defaultValue: notification.eventType,
-                        })}
-                      </span>
-                      {notification.restricted && (
-                        <Tag>{t('notifications.restricted')}</Tag>
-                      )}
-                    </Space>
-                  }
-                  description={
-                    <Space orientation="vertical" size={0}>
-                      <span>
-                        {new Date(notification.occurredAt).toLocaleString()}
-                      </span>
-                      <NotificationLink
-                        value={notification}
-                        onNavigate={() => setOpen(false)}
-                      />
-                    </Space>
-                  }
-                />
-              </List.Item>
+                title={
+                  <Space>
+                    <Badge
+                      status={notification.read ? 'default' : 'processing'}
+                    />
+                    <span>
+                      {t(`notifications.events.${notification.eventType}`, {
+                        defaultValue: notification.eventType,
+                      })}
+                    </span>
+                    {notification.restricted && (
+                      <Tag>{t('notifications.restricted')}</Tag>
+                    )}
+                  </Space>
+                }
+                description={
+                  <Space orientation="vertical" size={0}>
+                    <span>
+                      {new Date(notification.occurredAt).toLocaleString()}
+                    </span>
+                    <NotificationLink
+                      value={notification}
+                      onNavigate={() => setOpen(false)}
+                    />
+                  </Space>
+                }
+              />
             )}
           />
         ) : (

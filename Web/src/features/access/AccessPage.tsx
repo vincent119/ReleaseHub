@@ -202,7 +202,7 @@ export function AccessPage() {
       <Alert
         type="warning"
         showIcon
-        message={t('access.unavailable.title')}
+        title={t('access.unavailable.title')}
         description={t('access.unavailable.description')}
       />
     )
@@ -440,7 +440,7 @@ export function AccessPage() {
                 <Alert
                   type="error"
                   showIcon
-                  message={t('access.listError.title')}
+                  title={t('access.listError.title')}
                   description={t('access.listError.description')}
                   action={
                     <Button onClick={() => void activeQuery.refetch()}>

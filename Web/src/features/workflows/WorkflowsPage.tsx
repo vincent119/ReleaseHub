@@ -11,7 +11,6 @@ import {
   Empty,
   Flex,
   Input,
-  List,
   Modal,
   Select,
   Space,
@@ -34,8 +33,9 @@ import type {
   ReleaseWorkflow,
   ReleaseWorkflowVersion,
 } from '@/generated/model'
-import { useFeedback } from '@/shared/feedback/useFeedback'
 import definitionStyles from '@/shared/definition/DefinitionWorkspace.module.css'
+import { useFeedback } from '@/shared/feedback/useFeedback'
+import { SemanticList, SemanticListItemContent } from '@/shared/list'
 
 import {
   WorkflowEditorWorkspace,
@@ -149,7 +149,7 @@ export function WorkflowsPage() {
       <Alert
         type="warning"
         showIcon
-        message={t('workflows.unavailable.title')}
+        title={t('workflows.unavailable.title')}
         description={t('workflows.unavailable.description')}
       />
     )
@@ -202,31 +202,33 @@ export function WorkflowsPage() {
           {workflows.length === 0 ? (
             <Empty description={t('workflows.list.empty')} />
           ) : (
-            <List
-              dataSource={workflows}
+            <SemanticList
+              items={workflows}
+              rowKey="id"
+              itemProps={(item) => ({
+                className: `${definitionStyles.listItem} ${item.id === workflow?.id ? definitionStyles.selected : ''}`,
+                role: 'button',
+                tabIndex: 0,
+                'aria-current': item.id === workflow?.id ? 'page' : undefined,
+                onClick: () => {
+                  setWorkflowID(item.id)
+                  setVersionID(undefined)
+                },
+                onKeyDown: (event) => {
+                  if (event.key !== 'Enter' && event.key !== ' ') return
+                  event.preventDefault()
+                  setWorkflowID(item.id)
+                  setVersionID(undefined)
+                },
+              })}
               renderItem={(item) => (
-                <List.Item
-                  className={`${definitionStyles.listItem} ${item.id === workflow?.id ? definitionStyles.selected : ''}`}
-                  role="button"
-                  tabIndex={0}
-                  aria-current={item.id === workflow?.id ? 'page' : undefined}
-                  onClick={() => {
-                    setWorkflowID(item.id)
-                    setVersionID(undefined)
-                  }}
-                  onKeyDown={(event) => {
-                    if (event.key !== 'Enter' && event.key !== ' ') return
-                    event.preventDefault()
-                    setWorkflowID(item.id)
-                    setVersionID(undefined)
-                  }}
-                >
-                  <List.Item.Meta
-                    avatar={<ApartmentOutlined />}
-                    title={item.name}
-                    description={item.description}
-                  />
-                </List.Item>
+                <SemanticListItemContent
+                  leading={<ApartmentOutlined />}
+                  leadingVariant="accent"
+                  truncate
+                  title={item.name}
+                  description={item.description}
+                />
               )}
             />
           )}

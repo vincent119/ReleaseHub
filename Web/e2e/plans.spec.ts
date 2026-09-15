@@ -428,7 +428,7 @@ async function graphFrameMetrics(page: Page, toolbarName: string) {
 }
 
 async function selectedListItemMetrics(page: Page) {
-  const item = page.locator('.ant-list-item').first()
+  const item = page.locator('[role="button"][aria-current="page"]').first()
   await expect(item).toBeVisible()
   return item.evaluate((element) => {
     const style = getComputedStyle(element)
@@ -450,7 +450,7 @@ async function expectReadableGraph(page: Page, canvasName: string) {
 }
 
 async function expectFocusedListItem(page: Page) {
-  const item = page.locator('.ant-list-item[role="button"]').first()
+  const item = page.locator('[role="button"][aria-current="page"]').first()
   await expect(item).toHaveAttribute('aria-current', 'page')
   await item.focus()
   await expect

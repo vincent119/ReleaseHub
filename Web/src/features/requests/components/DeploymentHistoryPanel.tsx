@@ -1,7 +1,8 @@
-import { Card, Empty, List, Tag, Typography } from 'antd'
+import { Card, Empty, Tag, Typography } from 'antd'
 import { useTranslation } from 'react-i18next'
 
 import { useListDeploymentHistory } from '@/generated/api'
+import { SemanticList, SemanticListItemContent } from '@/shared/list'
 
 interface Props {
   projectId: string
@@ -30,17 +31,17 @@ export function DeploymentHistoryPanel({
           {t('requestDetail.history.unavailable')}
         </Typography.Text>
       ) : values.length ? (
-        <List
-          dataSource={values}
+        <SemanticList
+          items={values}
+          rowKey="requestVersionId"
           renderItem={(item) => (
-            <List.Item extra={<Tag>{item.classification}</Tag>}>
-              <List.Item.Meta
-                title={new Date(item.completedAt).toLocaleString()}
-                description={t('requestDetail.history.applicationCount', {
-                  count: item.applications.length,
-                })}
-              />
-            </List.Item>
+            <SemanticListItemContent
+              extra={<Tag>{item.classification}</Tag>}
+              title={new Date(item.completedAt).toLocaleString()}
+              description={t('requestDetail.history.applicationCount', {
+                count: item.applications.length,
+              })}
+            />
           )}
         />
       ) : (

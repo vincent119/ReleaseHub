@@ -35,7 +35,7 @@ export function RequestsPage() {
   const organizations =
     resources.data?.status === 200 ? resources.data.data.data : []
   if (resources.isError || (resources.data && resources.data.status !== 200)) {
-    return <Alert type="error" showIcon message={t('requests.unavailable')} />
+    return <Alert type="error" showIcon title={t('requests.unavailable')} />
   }
   return (
     <Space orientation="vertical" size="large" className={styles.page}>
@@ -57,7 +57,7 @@ export function RequestsPage() {
       {!scope ? (
         <Empty description={t('requests.scope.empty')} />
       ) : requests.isError || requests.data?.status !== 200 ? (
-        <Alert type="error" showIcon message={t('requests.unavailable')} />
+        <Alert type="error" showIcon title={t('requests.unavailable')} />
       ) : (
         <Card>
           <Table<DeploymentRequestSummary>
