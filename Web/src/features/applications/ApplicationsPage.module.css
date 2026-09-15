@@ -1,0 +1,12 @@
+.centered {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  padding: var(--rh-space-6);
+  background: var(--rh-color-page);
+}
+
+.pageSection {
+  display: block;
+  max-width: 70rem;
+}
