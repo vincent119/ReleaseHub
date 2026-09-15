@@ -61,6 +61,123 @@ func TestPolicyEngineDefaultsToDenyAndHonorsLocalDisable(t *testing.T) {
 	require.False(t, allowed)
 }
 
+func TestPlatformPolicyAppliesToProjectDescendants(t *testing.T) {
+	organizationID, projectID, userID := uuid.New(), uuid.New(), uuid.New()
+	permission, _ := authz.NewPermission("deployment_plan.manage")
+	source := &memoryPolicySource{revision: 1, policies: [][]string{
+		{userID.String(), "platform", "/platform", string(permission), "allow"},
+	}}
+	engine, err := authzinfra.NewPolicyEngine(source)
+	require.NoError(t, err)
+
+	for name, scope := range map[string]authz.Scope{
+		"project":     mustProjectScope(t, organizationID, projectID),
+		"environment": mustEnvironmentScope(t, organizationID, projectID, uuid.New()),
+	} {
+		t.Run(name, func(t *testing.T) {
+			allowed, authorizeErr := engine.Authorize(context.Background(), authz.AuthorizationRequest{
+				UserID: userID, Permission: permission, Scope: scope,
+			})
+			require.NoError(t, authorizeErr)
+			require.True(t, allowed)
+		})
+	}
+}
+
+func TestPlatformDeploymentRequestViewAppliesToEnvironmentDescendants(t *testing.T) {
+	organizationID, projectID, userID := uuid.New(), uuid.New(), uuid.New()
+	permission, _ := authz.NewPermission("deployment_request.view")
+	source := &memoryPolicySource{revision: 1, policies: [][]string{
+		{userID.String(), "platform", "/platform", string(permission), "allow"},
+	}}
+	engine, err := authzinfra.NewPolicyEngine(source)
+	require.NoError(t, err)
+
+	for name, scope := range map[string]authz.Scope{
+		"project":     mustProjectScope(t, organizationID, projectID),
+		"environment": mustEnvironmentScope(t, organizationID, projectID, uuid.New()),
+	} {
+		t.Run(name, func(t *testing.T) {
+			allowed, authorizeErr := engine.Authorize(context.Background(), authz.AuthorizationRequest{
+				UserID: userID, Permission: permission, Scope: scope,
+			})
+			require.NoError(t, authorizeErr)
+			require.True(t, allowed)
+		})
+	}
+}
+
+func TestPlatformDeploymentRequestViewHonorsDescendantDeny(t *testing.T) {
+	organizationID, projectID, userID := uuid.New(), uuid.New(), uuid.New()
+	scope := mustEnvironmentScope(t, organizationID, projectID, uuid.New())
+	permission, _ := authz.NewPermission("deployment_request.view")
+	source := &memoryPolicySource{revision: 1, policies: [][]string{
+		{userID.String(), "platform", "/platform", string(permission), "allow"},
+		{userID.String(), organizationID.String(), scope.Path(), string(permission), "deny"},
+	}}
+	engine, err := authzinfra.NewPolicyEngine(source)
+	require.NoError(t, err)
+
+	allowed, err := engine.Authorize(context.Background(), authz.AuthorizationRequest{
+		UserID: userID, Permission: permission, Scope: scope,
+	})
+	require.NoError(t, err)
+	require.False(t, allowed)
+}
+
+func TestPlatformPolicyHonorsProjectDeny(t *testing.T) {
+	organizationID, projectID, userID := uuid.New(), uuid.New(), uuid.New()
+	scope := mustProjectScope(t, organizationID, projectID)
+	permission, _ := authz.NewPermission("deployment_plan.manage")
+	source := &memoryPolicySource{revision: 1, policies: [][]string{
+		{userID.String(), "platform", "/platform", string(permission), "allow"},
+		{userID.String(), organizationID.String(), scope.Path(), string(permission), "deny"},
+	}}
+	engine, err := authzinfra.NewPolicyEngine(source)
+	require.NoError(t, err)
+
+	allowed, err := engine.Authorize(context.Background(), authz.AuthorizationRequest{
+		UserID: userID, Permission: permission, Scope: scope,
+	})
+	require.NoError(t, err)
+	require.False(t, allowed)
+}
+
+func TestScopedPolicyDoesNotApplyOutsideItsProject(t *testing.T) {
+	organizationID, userID := uuid.New(), uuid.New()
+	grantedScope := mustProjectScope(t, organizationID, uuid.New())
+	otherScope := mustProjectScope(t, organizationID, uuid.New())
+	permission, _ := authz.NewPermission("deployment_plan.manage")
+	source := &memoryPolicySource{revision: 1, policies: [][]string{
+		{userID.String(), organizationID.String(), grantedScope.Path(), string(permission), "allow"},
+	}}
+	engine, err := authzinfra.NewPolicyEngine(source)
+	require.NoError(t, err)
+
+	allowed, err := engine.Authorize(context.Background(), authz.AuthorizationRequest{
+		UserID: userID, Permission: permission, Scope: otherScope,
+	})
+	require.NoError(t, err)
+	require.False(t, allowed)
+}
+
+func TestPlatformPolicyDoesNotExpandUnrelatedPermissions(t *testing.T) {
+	organizationID, projectID, userID := uuid.New(), uuid.New(), uuid.New()
+	scope := mustProjectScope(t, organizationID, projectID)
+	permission, _ := authz.NewPermission("resource.view")
+	source := &memoryPolicySource{revision: 1, policies: [][]string{
+		{userID.String(), "platform", "/platform", string(permission), "allow"},
+	}}
+	engine, err := authzinfra.NewPolicyEngine(source)
+	require.NoError(t, err)
+
+	allowed, err := engine.Authorize(context.Background(), authz.AuthorizationRequest{
+		UserID: userID, Permission: permission, Scope: scope,
+	})
+	require.NoError(t, err)
+	require.False(t, allowed)
+}
+
 func TestWorkerSensitiveAuthorizationReloadsPolicyRevision(t *testing.T) {
 	organizationID, projectID, userID := uuid.New(), uuid.New(), uuid.New()
 	scope := mustProjectScope(t, organizationID, projectID)

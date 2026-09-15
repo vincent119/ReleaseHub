@@ -26,6 +26,13 @@ export interface PlanGraph {
 
 const nodeWidth = 190
 const nodeHeight = 68
+const planStageToneCount = 5
+
+export function planStageClassName(order: number): string {
+  const tone =
+    ((order % planStageToneCount) + planStageToneCount) % planStageToneCount
+  return `plan-stage-${tone}`
+}
 
 export function documentToPlanGraph(
   document: DeploymentPlanDocument,
@@ -110,6 +117,7 @@ export function orderPlanNodes(nodes: PlanNode[]): PlanNode[] {
     const value = { ...node.data.node, order: order.indexOf(node.id) }
     return {
       ...node,
+      className: planStageClassName(value.order),
       data: { node: value, label: `${value.applicationKey}\n#${value.order}` },
     }
   })
@@ -121,6 +129,7 @@ function graphNode(
 ): PlanNode {
   return {
     id: node.key,
+    className: planStageClassName(node.order),
     position: { x: point.x - nodeWidth / 2, y: point.y - nodeHeight / 2 },
     data: { node, label: `${node.applicationKey}\n#${node.order}` },
     sourcePosition: Position.Right,

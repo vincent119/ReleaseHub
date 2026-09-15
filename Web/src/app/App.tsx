@@ -17,7 +17,14 @@ import {
 } from 'antd'
 import { useState } from 'react'
 import type { TableProps } from 'antd'
-import { Link, Navigate, Route, Routes, useParams } from 'react-router'
+import {
+  Link,
+  Navigate,
+  Route,
+  Routes,
+  useLocation,
+  useParams,
+} from 'react-router'
 import { useTranslation } from 'react-i18next'
 
 import { AccountMenu } from '@/features/account'
@@ -42,6 +49,7 @@ import {
 } from '@/generated/api'
 import type { CatalogApplication } from '@/generated/model'
 import { useFeedback } from '@/shared/feedback/useFeedback'
+import { useSessionExpiryCheck } from '@/shared/auth/sessionExpiry'
 import releaseHubMark from '@/assets/releasehub-mark.svg'
 
 import styles from './App.module.css'
@@ -58,6 +66,7 @@ export function App() {
 
 function ApplicationShell() {
   const { t } = useTranslation()
+  const location = useLocation()
   const { resolvedTheme } = useThemePreference()
   const { collapsed: desktopCollapsed, setCollapsed: setDesktopCollapsed } =
     useSidebarPreference()
@@ -65,6 +74,14 @@ function ApplicationShell() {
     () => window.matchMedia('(max-width: 991.98px)').matches,
   )
   const session = useGetAuthSession()
+  useSessionExpiryCheck(
+    session.data?.status === 200
+      ? session.data.data.data.idleExpiresAt
+      : undefined,
+    session.data?.status === 200
+      ? session.data.data.data.absoluteExpiresAt
+      : undefined,
+  )
   const sidebarCollapsed = belowLg || desktopCollapsed
 
   if (session.isPending) {
@@ -74,7 +91,7 @@ function ApplicationShell() {
     return <SignInPage />
   }
 
-  const { userId, username } = session.data.data.data
+  const { userId, username, passwordChangeAvailable } = session.data.data.data
 
   if (session.data.data.data.mustChangePassword) {
     return <ChangePasswordPage />
@@ -107,7 +124,7 @@ function ApplicationShell() {
           theme={resolvedTheme}
           mode="inline"
           inlineCollapsed={sidebarCollapsed}
-          selectedKeys={[location.pathname]}
+          selectedKeys={[selectedNavigationKey(location.pathname)]}
           items={navigationItems(t)}
         />
         {!belowLg && (
@@ -149,7 +166,11 @@ function ApplicationShell() {
           <Typography.Text strong>{t('app.title')}</Typography.Text>
           <Flex align="center" gap="small">
             <NotificationCenter />
-            <AccountMenu userId={userId} username={username} />
+            <AccountMenu
+              userId={userId}
+              username={username}
+              passwordChangeAvailable={passwordChangeAvailable}
+            />
           </Flex>
         </Layout.Header>
         <Layout.Content className={styles.content}>
@@ -173,6 +194,11 @@ function ApplicationShell() {
       </Layout>
     </Layout>
   )
+}
+
+function selectedNavigationKey(pathname: string) {
+  const [segment] = pathname.split('/').filter(Boolean)
+  return segment ? `/${segment}` : '/'
 }
 
 function OverviewPage() {

@@ -1,0 +1,5 @@
+.icon {
+  /* Ant Design 的 icon-only Button 會在 runtime 覆寫字級。 */
+  font-size: 1.125rem !important;
+  line-height: 1;
+}

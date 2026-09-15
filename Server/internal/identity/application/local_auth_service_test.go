@@ -25,12 +25,14 @@ func TestLocalAuthBootstrapsLogsInAndRequiresPasswordChange(t *testing.T) {
 
 	require.NoError(t, service.Bootstrap(context.Background(), "admin"))
 	require.NoError(t, bcrypt.CompareHashAndPassword(repository.credential.PasswordHash, []byte("admin")))
-	user, mustChange, sessionToken, csrfToken, err := service.Login(context.Background(), "admin", "admin")
+	user, mustChange, session, sessionToken, csrfToken, err := service.Login(context.Background(), "admin", "admin")
 	require.NoError(t, err)
 	require.Equal(t, userID, user.ID)
 	require.True(t, mustChange)
 	require.NotEmpty(t, sessionToken)
 	require.NotEmpty(t, csrfToken)
+	require.Equal(t, fixedLocalClock{}.Now().Add(time.Minute), session.IdleExpiresAt)
+	require.Equal(t, fixedLocalClock{}.Now().Add(time.Hour), session.AbsoluteExpiresAt)
 	require.Equal(t, "local", sessions.created.AuthenticationMethod)
 
 	require.NoError(t, service.ChangePassword(context.Background(), userID, "admin", "new-password"))
@@ -48,9 +50,9 @@ func TestLocalAuthRejectsInvalidCredentialsAndShortNewPassword(t *testing.T) {
 	service, err := application.NewLocalAuthService(repository, sessionService)
 	require.NoError(t, err)
 
-	_, _, _, _, err = service.Login(context.Background(), "admin", "wrong")
+	_, _, _, _, _, err = service.Login(context.Background(), "admin", "wrong")
 	require.Error(t, err)
-	_, _, _, _, err = service.Login(context.Background(), "admin", string(make([]byte, 73)))
+	_, _, _, _, _, err = service.Login(context.Background(), "admin", string(make([]byte, 73)))
 	require.Error(t, err)
 	require.Error(t, service.ChangePassword(context.Background(), repository.credential.UserID, "admin", "short"))
 	require.Error(t, service.ChangePassword(context.Background(), repository.credential.UserID, "admin", string(make([]byte, 73))))

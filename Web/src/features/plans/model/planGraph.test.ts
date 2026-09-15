@@ -9,6 +9,7 @@ import {
   hasCycle,
   orderPlanNodes,
   planGraphToDocument,
+  planStageClassName,
 } from './planGraph'
 
 const document: DeploymentPlanDocument = {
@@ -44,6 +45,19 @@ describe('Deployment Plan graph mapping', () => {
     expect(planGraphToDocument(documentToPlanGraph(document))).toEqual(document)
   })
 
+  it('derives a stable visual tone from order without changing the document', () => {
+    const graph = documentToPlanGraph(document)
+
+    expect(graph.nodes.map((node) => node.className)).toEqual([
+      'plan-stage-0',
+      'plan-stage-1',
+      'plan-stage-2',
+    ])
+    expect(planStageClassName(5)).toBe('plan-stage-0')
+    expect(planStageClassName(-1)).toBe('plan-stage-4')
+    expect(planGraphToDocument(graph)).toEqual(document)
+  })
+
   it('reports a cycle without changing the document', () => {
     expect(hasCycle(document)).toBe(false)
     expect(
@@ -66,10 +80,9 @@ describe('Deployment Plan graph mapping', () => {
         x: node.id === 'b' ? -100 : node.position.x,
       },
     }))
-    expect(
-      orderPlanNodes(positioned).find((node) => node.id === 'b')?.data.node
-        .order,
-    ).toBe(0)
+    const reordered = orderPlanNodes(positioned).find((node) => node.id === 'b')
+    expect(reordered?.data.node.order).toBe(0)
+    expect(reordered?.className).toBe('plan-stage-0')
   })
 
   it('supports node and edge create, update, and remove operations', () => {

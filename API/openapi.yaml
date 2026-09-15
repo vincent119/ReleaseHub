@@ -422,6 +422,22 @@ paths:
                 $ref: "#/components/schemas/CatalogResourceTreeResponse"
         "401":
           description: The user is unauthenticated or the session has expired.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: The resource catalog could not be read.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Authentication state is temporarily unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /api/v1/catalog/organizations:
     post:
       operationId: createCatalogOrganization
@@ -454,6 +470,21 @@ paths:
         "401": { description: The user is unauthenticated or the session has expired. }
         "404": { description: The Organization does not exist or the caller lacks platform-management permission. }
         "409": { description: The name conflicts or the Organization changed concurrently. }
+    delete:
+      operationId: deleteCatalogOrganization
+      summary: Deactivate an empty non-default Organization
+      tags: [Catalog]
+      security: [{ sessionCookie: [] }]
+      parameters:
+        - { name: organizationId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: expectedVersion, in: query, required: true, schema: { type: integer, format: int64, minimum: 1 } }
+        - { $ref: "#/components/parameters/CsrfToken" }
+      responses:
+        "204": { description: The empty non-default Organization was deactivated. }
+        "400": { description: The expected version is invalid. }
+        "401": { description: The user is unauthenticated or the session has expired. }
+        "404": { description: The Organization does not exist or the caller lacks platform-management permission. }
+        "409": { description: "The Organization is default, contains Projects, or changed concurrently." }
   /api/v1/catalog/organizations/{organizationId}/projects:
     post:
       operationId: createCatalogProject
@@ -937,6 +968,22 @@ paths:
                 $ref: "#/components/schemas/ReleaseWorkflowListResponse"
         "401":
           description: The user is unauthenticated or the session has expired.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: The Workflow definitions could not be read.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Authentication state is temporarily unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
     post:
       operationId: createReleaseWorkflow
       summary: Create a Release Workflow and its first Draft Version
@@ -961,8 +1008,28 @@ paths:
                 $ref: "#/components/schemas/ReleaseWorkflowResponse"
         "401":
           description: The user is unauthenticated or the session has expired.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: The Workflow could not be created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Authentication state is temporarily unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "409":
           description: The Workflow name conflicts.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /api/v1/release-workflows/review-options:
     get:
       operationId: getReleaseWorkflowReviewOptions
@@ -1111,6 +1178,8 @@ paths:
                 $ref: "#/components/schemas/DeploymentPlanResponse"
         "401":
           description: The user is unauthenticated or the session has expired.
+        "404":
+          description: The Project does not exist or the caller lacks operation permission.
         "409":
           description: The Plan name conflicts.
   /api/v1/deployment-plans/{planId}/versions:
@@ -1517,6 +1586,12 @@ paths:
                 $ref: "#/components/schemas/AuthSessionResponse"
         "401":
           description: The user is unauthenticated or the session has expired.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Authentication state is temporarily unavailable.
           content:
             application/json:
               schema:
@@ -2233,7 +2308,13 @@ components:
           $ref: "#/components/schemas/ResponseMeta"
     AuthSession:
       type: object
-      required: [userId, username, mustChangePassword]
+      required:
+        - userId
+        - username
+        - mustChangePassword
+        - passwordChangeAvailable
+        - idleExpiresAt
+        - absoluteExpiresAt
       properties:
         userId:
           type: string
@@ -2243,6 +2324,17 @@ components:
           minLength: 1
         mustChangePassword:
           type: boolean
+        passwordChangeAvailable:
+          type: boolean
+          description: Indicates whether the current session may change a local password.
+        idleExpiresAt:
+          type: string
+          format: date-time
+          description: UTC deadline after which an idle session is no longer valid.
+        absoluteExpiresAt:
+          type: string
+          format: date-time
+          description: UTC deadline after which the session is no longer valid.
     CatalogApplication:
       type: object
       required:
@@ -2322,13 +2414,14 @@ components:
             $ref: "#/components/schemas/CatalogEnvironmentNode"
     CatalogOrganizationNode:
       type: object
-      required: [id, name, version, isDefault, canRename, canCreateProject, projects]
+      required: [id, name, version, isDefault, canRename, canDelete, canCreateProject, projects]
       properties:
         id: { type: string, format: uuid }
         name: { type: string, minLength: 1 }
         version: { type: integer, format: int64, minimum: 1 }
         isDefault: { type: boolean }
         canRename: { type: boolean }
+        canDelete: { type: boolean }
         canCreateProject: { type: boolean }
         projects:
           type: array

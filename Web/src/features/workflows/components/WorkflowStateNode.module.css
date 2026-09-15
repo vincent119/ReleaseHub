@@ -1,45 +1,81 @@
 .node {
+  --workflow-node-accent: var(
+    --workflow-start,
+    var(--workflow-accent, var(--ant-color-primary))
+  );
+  --workflow-node-surface: var(
+    --workflow-start-surface,
+    var(--workflow-node-bg, var(--ant-color-bg-elevated))
+  );
+
   width: 12rem;
   min-height: 4.75rem;
   padding: 0.75rem 0.875rem;
-  color: var(--ant-color-text);
-  background: var(--workflow-surface-elevated, var(--ant-color-bg-elevated));
-  border: 1px solid var(--workflow-border, var(--ant-color-border));
-  border-top: 3px solid var(--workflow-accent, var(--ant-color-primary));
+  color: var(--workflow-text-primary, var(--ant-color-text));
+  background: var(--workflow-node-surface);
+  border: 1px solid var(--workflow-border-strong, var(--ant-color-border));
+  border-top: 3px solid var(--workflow-node-accent);
   border-radius: 0.75rem;
-  box-shadow: var(--rh-shadow-card);
+  box-shadow: var(--workflow-card-shadow, var(--rh-shadow-card));
   transition:
     border-color 160ms ease,
     box-shadow 160ms ease,
     transform 160ms ease;
 }
 
-.node:hover,
-.selected {
-  border-color: var(--workflow-accent, var(--ant-color-primary));
-  box-shadow:
-    0 0 0 3px var(--workflow-accent-soft, var(--ant-color-primary-bg)),
-    var(--rh-shadow-floating);
+.node:hover {
+  box-shadow: var(--workflow-panel-shadow, var(--rh-shadow-floating));
   transform: translateY(-1px);
 }
 
+.selected {
+  border-color: var(--workflow-selected, var(--ant-color-primary));
+  box-shadow:
+    0 0 0 3px var(--workflow-selected-soft, var(--ant-color-primary-border)),
+    var(--workflow-panel-shadow, var(--rh-shadow-floating));
+  transform: translateY(-1px);
+}
+
+.node[data-state-type='Start'] {
+  --workflow-node-accent: var(--workflow-start);
+  --workflow-node-surface: var(--workflow-start-surface);
+}
+
 .node[data-state-type='Review'] {
-  border-top-color: var(--workflow-review, var(--ant-color-warning));
+  --workflow-node-accent: var(--workflow-review);
+  --workflow-node-surface: var(--workflow-review-surface);
+}
+
+.node[data-state-type='ManualAction'] {
+  --workflow-node-accent: var(--workflow-manual);
+  --workflow-node-surface: var(--workflow-manual-surface);
 }
 
 .node[data-state-type='Deployment'] {
-  border-top-color: var(--workflow-accent, var(--ant-color-info));
+  --workflow-node-accent: var(--workflow-deployment);
+  --workflow-node-surface: var(--workflow-deployment-surface);
 }
 
 .node[data-state-type='Terminal'] {
-  border-top-color: var(--workflow-terminal, var(--ant-color-success));
+  --workflow-node-accent: var(--workflow-terminal);
+  --workflow-node-surface: var(--workflow-terminal-surface);
+}
+
+.node[data-terminal-outcome='success'] {
+  --workflow-node-accent: var(--workflow-terminal-success);
+  --workflow-node-surface: var(--workflow-terminal-success-surface);
+}
+
+.node[data-terminal-outcome='failure'] {
+  --workflow-node-accent: var(--workflow-terminal-failure);
+  --workflow-node-surface: var(--workflow-terminal-failure-surface);
 }
 
 .type,
 .key {
   display: block;
   overflow: hidden;
-  color: var(--ant-color-text-secondary);
+  color: var(--workflow-text-secondary, var(--ant-color-text-secondary));
   font-size: 0.6875rem;
   line-height: 1.4;
   text-overflow: ellipsis;
@@ -48,7 +84,7 @@
 
 .type {
   margin-bottom: 0.25rem;
-  color: var(--workflow-accent, var(--ant-color-primary-text));
+  color: var(--workflow-node-accent);
   font-weight: 650;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -67,10 +103,10 @@
 .node :global(.react-flow__handle) {
   width: 0.625rem;
   height: 0.625rem;
-  background: var(--workflow-accent, var(--ant-color-primary));
-  border: 2px solid
-    var(--workflow-surface-elevated, var(--ant-color-bg-elevated));
-  box-shadow: 0 0 0.5rem var(--workflow-accent-soft, transparent);
+  background: var(--workflow-node-accent);
+  border: 2px solid var(--workflow-node-surface);
+  box-shadow: 0 0 0.5rem
+    color-mix(in srgb, var(--workflow-node-accent) 36%, transparent);
 }
 
 @media (prefers-reduced-motion: reduce) {

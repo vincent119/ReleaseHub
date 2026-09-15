@@ -51,6 +51,7 @@ func TestAuthFlowCompletesLoginAndBackchannelLogoutRevokesSession(t *testing.T) 
 	require.NoError(t, flow.BackchannelLogout(context.Background(), "logout-token"))
 	_, _, err = flow.Authenticate(context.Background(), sessionToken)
 	require.Error(t, err)
+	require.ErrorIs(t, err, application.ErrSessionInvalid)
 	_, err = flow.Logout(context.Background(), sessionToken, csrfToken)
 	require.Error(t, err)
 }
@@ -94,9 +95,11 @@ func TestAuthFlowRevokesSessionWhenIdentityRefreshFails(t *testing.T) {
 	provider.refreshErr = errors.New("provider rejected refresh")
 	_, _, err = flow.Authenticate(context.Background(), sessionToken)
 	require.ErrorContains(t, err, "refresh OIDC identity")
+	require.ErrorIs(t, err, application.ErrSessionInvalid)
 	provider.refreshErr = nil
 	_, _, err = flow.Authenticate(context.Background(), sessionToken)
 	require.ErrorContains(t, err, "inactive")
+	require.ErrorIs(t, err, application.ErrSessionInvalid)
 }
 
 func TestAuthFlowSupportsLocalSessionWithoutOIDCProvider(t *testing.T) {
@@ -111,7 +114,7 @@ func TestAuthFlowSupportsLocalSessionWithoutOIDCProvider(t *testing.T) {
 	protector, _ := application.NewTokenProtector([]byte("12345678901234567890123456789012"))
 	flow, err := application.NewAuthFlow(nil, states, identityService, sessionService, protector, 5*time.Minute)
 	require.NoError(t, err)
-	sessionToken, csrfToken, err := sessionService.CreateLocal(context.Background(), user.ID)
+	_, sessionToken, csrfToken, err := sessionService.CreateLocal(context.Background(), user.ID)
 	require.NoError(t, err)
 
 	session, authenticatedUser, err := flow.Authenticate(context.Background(), sessionToken)

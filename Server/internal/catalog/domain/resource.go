@@ -126,6 +126,19 @@ func (o Organization) ValidateDeletion(defaultOrganizationID uuid.UUID) error {
 	return nil
 }
 
+// Deactivate removes a non-default Organization from the active catalog without erasing its history.
+func (o Organization) Deactivate(defaultOrganizationID uuid.UUID) (Organization, error) {
+	if o.ID == uuid.Nil || !o.Active || o.Version == 0 {
+		return Organization{}, fmt.Errorf("active versioned Organization is required")
+	}
+	if err := o.ValidateDeletion(defaultOrganizationID); err != nil {
+		return Organization{}, err
+	}
+	o.Active = false
+	o.Version++
+	return o, nil
+}
+
 // NewProject creates a validated active Project inside an Organization.
 func NewProject(organizationID uuid.UUID, name string) (Project, error) {
 	if organizationID == uuid.Nil {

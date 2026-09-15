@@ -35,7 +35,7 @@ func (h *workflowHandler) ListReleaseWorkflows(c *gin.Context) {
 	}
 	values, err := h.definitions.List(c.Request.Context(), principal)
 	if err != nil {
-		respondWorkflowReadError(c, err)
+		respondWorkflowReadError(c, "list release workflows", err)
 		return
 	}
 	c.JSON(http.StatusOK, contract.ReleaseWorkflowListResponse{Data: workflowResponses(values), Meta: responseMeta(c)})
@@ -49,7 +49,7 @@ func (h *workflowHandler) GetReleaseWorkflowReviewOptions(c *gin.Context) {
 	}
 	value, err := h.definitions.ReviewOptions(c.Request.Context(), principal)
 	if err != nil {
-		respondWorkflowReadError(c, err)
+		respondWorkflowReadError(c, "list release workflow review options", err)
 		return
 	}
 	c.JSON(http.StatusOK, contract.ReleaseWorkflowReviewOptionsResponse{
@@ -153,11 +153,12 @@ func (h *workflowHandler) authenticateMutation(c *gin.Context, csrf string) (dep
 	return deployapp.WorkflowPrincipal{UserID: user.ID, Disabled: user.Disabled}, true
 }
 
-func respondWorkflowReadError(c *gin.Context, err error) {
+func respondWorkflowReadError(c *gin.Context, operation string, err error) {
 	if errors.Is(err, deployapp.ErrWorkflowForbidden) || errors.Is(err, deployapp.ErrWorkflowNotFound) {
 		respondError(c, http.StatusNotFound, "WORKFLOW_NOT_FOUND", "Release workflow was not found")
 		return
 	}
+	recordRequestError(c, operation, err)
 	respondError(c, http.StatusInternalServerError, "WORKFLOW_READ_FAILED", "Unable to read release workflows")
 }
 
@@ -173,11 +174,22 @@ func respondWorkflowMutationError(c *gin.Context, err error, invalidStatus int) 
 		respondError(c, invalidStatus, "WORKFLOW_INVALID", "Release workflow is invalid")
 		return false
 	}
-	if errors.Is(err, deployapp.ErrWorkflowConflict) {
-		respondError(c, http.StatusConflict, "WORKFLOW_CONFLICT", "Release workflow change was rejected")
+	if respondWorkflowConflict(c, err) {
 		return false
 	}
 	respondError(c, http.StatusInternalServerError, "WORKFLOW_MUTATION_FAILED", "Unable to change release workflow")
+	return false
+}
+
+func respondWorkflowConflict(c *gin.Context, err error) bool {
+	if errors.Is(err, deployapp.ErrWorkflowNameConflict) {
+		respondError(c, http.StatusConflict, "WORKFLOW_NAME_CONFLICT", "Release workflow name already exists")
+		return true
+	}
+	if errors.Is(err, deployapp.ErrWorkflowConflict) {
+		respondError(c, http.StatusConflict, "WORKFLOW_CONFLICT", "Release workflow change was rejected")
+		return true
+	}
 	return false
 }
 

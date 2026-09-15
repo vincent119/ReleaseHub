@@ -1,85 +1,160 @@
 .editor {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 20rem;
-  grid-template-rows: auto minmax(32rem, 1fr);
-  min-height: 38rem;
-  overflow: hidden;
-  background: var(--rh-color-surface);
-  border: 1px solid var(--rh-color-border);
-  border-radius: var(--rh-radius-lg);
-  box-shadow: var(--rh-shadow-card);
+  /* 色票由Graph根節點提供，確保編輯與存檔後檢視一致。 */
+  --plan-workspace-bg: var(--rh-color-page);
+  --plan-surface: var(--rh-color-surface);
+  --plan-surface-elevated: var(--rh-color-surface-elevated);
+  --plan-toolbar-bg: var(--rh-color-surface-elevated);
+  --plan-canvas-bg: var(--rh-color-page);
+  --plan-node-bg: #dfe3ff;
+  --plan-stage-0-accent: var(--rh-color-primary);
+  --plan-stage-0-surface: #dfe3ff;
+  --plan-stage-1-accent: #8a5a00;
+  --plan-stage-1-surface: #fff0c2;
+  --plan-stage-2-accent: #6235d5;
+  --plan-stage-2-surface: #eadcff;
+  --plan-stage-3-accent: #145fd7;
+  --plan-stage-3-surface: #dceaff;
+  --plan-stage-4-accent: #0b7451;
+  --plan-stage-4-surface: #d9f4e6;
+  --plan-border: var(--rh-color-border);
+  --plan-border-strong: var(--rh-color-border-strong);
+  --plan-text-primary: var(--rh-color-text-primary);
+  --plan-text-secondary: var(--rh-color-text-secondary);
+  --plan-grid: var(--rh-color-border);
+  --plan-edge: var(--rh-color-border-strong);
+  --plan-edge-selected: var(--rh-color-focus);
+  --plan-selected: var(--rh-color-focus);
+  --plan-selected-soft: var(--rh-color-focus-soft);
+  --plan-accent: var(--rh-color-primary);
+  --plan-accent-soft: var(--rh-color-primary-soft);
+  --plan-ambient: var(--rh-ambient-page);
+  --plan-card-shadow: var(--rh-shadow-card);
+  --plan-panel-shadow: var(--rh-shadow-floating);
+
+  background: var(--plan-surface, var(--rh-color-surface));
+}
+
+:global(:root[data-theme='dark']) .editor {
+  --plan-workspace-bg: var(--rh-color-page);
+  --plan-surface: var(--rh-color-surface);
+  --plan-surface-elevated: var(--rh-color-surface-elevated);
+  --plan-toolbar-bg: var(--rh-color-surface-elevated);
+  --plan-canvas-bg: var(--rh-color-page);
+  --plan-node-bg: #212844;
+  --plan-stage-0-accent: var(--rh-color-primary);
+  --plan-stage-0-surface: #212844;
+  --plan-stage-1-accent: #fbbf24;
+  --plan-stage-1-surface: #3a2d12;
+  --plan-stage-2-accent: #c4b5fd;
+  --plan-stage-2-surface: #2e2450;
+  --plan-stage-3-accent: var(--rh-color-info);
+  --plan-stage-3-surface: #152e55;
+  --plan-stage-4-accent: var(--rh-color-success);
+  --plan-stage-4-surface: #123b32;
+  --plan-border: var(--rh-color-border);
+  --plan-border-strong: var(--rh-color-border-strong);
+  --plan-text-primary: var(--rh-color-text-primary);
+  --plan-text-secondary: var(--rh-color-text-secondary);
+  --plan-grid: var(--rh-color-border);
+  --plan-edge: var(--rh-color-border-strong);
+  --plan-edge-selected: var(--rh-color-focus);
+  --plan-selected: var(--rh-color-focus);
+  --plan-selected-soft: var(--rh-color-focus-soft);
+  --plan-accent: var(--rh-color-primary);
+  --plan-accent-soft: var(--rh-color-primary-soft);
+  --plan-ambient: var(--rh-ambient-page);
+  --plan-card-shadow: var(--rh-shadow-card);
+  --plan-panel-shadow: var(--rh-shadow-floating);
 }
 
 .toolbar {
-  grid-column: 1 / -1;
-  padding: var(--rh-space-3);
-  background: var(--rh-color-surface-elevated);
-  border-bottom: 1px solid var(--rh-color-border);
+  background: var(--plan-toolbar-bg, var(--rh-color-surface-elevated));
+  border-bottom-color: var(--plan-border, var(--rh-color-border));
 }
 
 .canvas {
-  min-width: 0;
-  background-color: var(--rh-color-page);
-  background-image: var(--rh-ambient-page);
+  background-color: var(--plan-canvas-bg, var(--rh-color-page));
+  background-image: var(--plan-ambient, var(--rh-ambient-page));
   background-position: center;
 }
 
 .canvas :global(.react-flow__background-pattern) {
-  fill: color-mix(in srgb, var(--rh-color-primary) 34%, transparent);
+  fill: var(--plan-grid, var(--rh-color-border));
+  fill-opacity: 0.72;
 }
 
 .canvas :global(.react-flow__node-default) {
-  color: var(--rh-color-text-primary);
-  background: var(--rh-color-surface-elevated);
-  border: 1px solid var(--rh-color-border-strong);
-  border-top: 3px solid var(--rh-color-primary);
+  --plan-node-accent: var(--plan-stage-0-accent, var(--plan-accent));
+  --plan-node-surface: var(--plan-stage-0-surface, var(--plan-node-bg));
+
+  color: var(--plan-text-primary, var(--rh-color-text-primary));
+  background: var(--plan-node-surface, var(--rh-color-surface-elevated));
+  border: 1px solid var(--plan-border-strong, var(--rh-color-border-strong));
+  border-top: 3px solid var(--plan-node-accent, var(--rh-color-primary));
   border-radius: var(--rh-radius-lg);
-  box-shadow: var(--rh-shadow-card);
+  box-shadow: var(--plan-card-shadow, var(--rh-shadow-card));
+}
+
+.canvas :global(.react-flow__node-default.plan-stage-1) {
+  --plan-node-accent: var(--plan-stage-1-accent);
+  --plan-node-surface: var(--plan-stage-1-surface);
+}
+
+.canvas :global(.react-flow__node-default.plan-stage-2) {
+  --plan-node-accent: var(--plan-stage-2-accent);
+  --plan-node-surface: var(--plan-stage-2-surface);
+}
+
+.canvas :global(.react-flow__node-default.plan-stage-3) {
+  --plan-node-accent: var(--plan-stage-3-accent);
+  --plan-node-surface: var(--plan-stage-3-surface);
+}
+
+.canvas :global(.react-flow__node-default.plan-stage-4) {
+  --plan-node-accent: var(--plan-stage-4-accent);
+  --plan-node-surface: var(--plan-stage-4-surface);
 }
 
 .canvas :global(.react-flow__node-default.selected) {
-  border-color: var(--rh-color-primary);
+  border-color: var(--plan-selected, var(--rh-color-focus));
   box-shadow:
-    0 0 0 3px var(--rh-color-focus-soft),
-    var(--rh-shadow-floating);
+    0 0 0 3px var(--plan-selected-soft, var(--rh-color-focus-soft)),
+    var(--plan-panel-shadow, var(--rh-shadow-floating));
 }
 
 .canvas :global(.react-flow__handle) {
-  background: var(--rh-color-primary);
-  border-color: var(--rh-color-surface-elevated);
+  background: var(--plan-node-accent, var(--plan-accent));
+  border-color: var(--plan-node-surface, var(--plan-node-bg));
 }
 
 .canvas :global(.react-flow__edge-path) {
-  stroke: color-mix(
-    in srgb,
-    var(--rh-color-primary) 58%,
-    var(--rh-color-text-secondary)
-  );
-  stroke-width: 1.5;
+  stroke: var(--plan-edge, var(--rh-color-border-strong));
+  stroke-width: 1.6;
 }
 
 .canvas :global(.react-flow__edge.selected .react-flow__edge-path) {
-  stroke: var(--rh-color-primary);
+  stroke: var(--plan-edge-selected, var(--rh-color-focus));
   stroke-width: 2;
+  filter: drop-shadow(0 0 0.3rem var(--plan-selected-soft, transparent));
 }
 
 .canvas :global(.react-flow__controls),
 .canvas :global(.react-flow__minimap) {
   overflow: hidden;
-  background: var(--rh-color-surface-elevated);
-  border: 1px solid var(--rh-color-border);
+  background: var(--plan-surface-elevated, var(--rh-color-surface-elevated));
+  border: 1px solid var(--plan-border, var(--rh-color-border));
   border-radius: var(--rh-radius-md);
-  box-shadow: var(--rh-shadow-floating);
+  box-shadow: var(--plan-panel-shadow, var(--rh-shadow-floating));
 }
 
 .canvas :global(.react-flow__controls-button) {
-  color: var(--rh-color-text-primary);
-  background: var(--rh-color-surface-elevated);
-  border-bottom-color: var(--rh-color-border);
+  color: var(--plan-text-primary, var(--rh-color-text-primary));
+  background: var(--plan-surface-elevated, var(--rh-color-surface-elevated));
+  border-bottom-color: var(--plan-border, var(--rh-color-border));
 }
 
 .canvas :global(.react-flow__controls-button:hover) {
-  color: var(--rh-color-primary);
+  color: var(--plan-accent, var(--rh-color-primary));
 }
 
 .canvas :global(.react-flow__controls-button svg) {
@@ -87,20 +162,6 @@
 }
 
 .inspector {
-  padding: var(--rh-space-4);
-  overflow: auto;
-  background: var(--rh-color-surface);
-  border-left: 1px solid var(--rh-color-border);
-}
-
-@media (max-width: 960px) {
-  .editor {
-    grid-template-columns: 1fr;
-    grid-template-rows: auto 28rem auto;
-  }
-
-  .inspector {
-    border-top: 1px solid var(--rh-color-border);
-    border-left: 0;
-  }
+  background: var(--plan-surface, var(--rh-color-surface));
+  border-left-color: var(--plan-border, var(--rh-color-border));
 }

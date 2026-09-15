@@ -1,5 +1,5 @@
 import { App as AntdApp, ConfigProvider } from 'antd'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { QueryClientProvider } from '@tanstack/react-query'
 import type { PropsWithChildren } from 'react'
 import { I18nextProvider, useTranslation } from 'react-i18next'
 
@@ -8,10 +8,9 @@ import i18n from '@/shared/i18n/config'
 import { ThemePreferenceProvider } from '@/shared/theme/ThemePreferenceProvider'
 import { useThemePreference } from '@/shared/theme/useThemePreference'
 import { createReleaseHubTheme } from '@/shared/theme/releaseHubTheme'
+import { createSessionAwareQueryClient } from '@/shared/auth/sessionExpiry'
 
-const queryClient = new QueryClient({
-  defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
-})
+const queryClient = createSessionAwareQueryClient()
 
 export function AppProviders({ children }: PropsWithChildren) {
   return (

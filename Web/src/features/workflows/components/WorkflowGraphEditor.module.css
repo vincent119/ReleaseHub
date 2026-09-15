@@ -1,79 +1,137 @@
 .editor {
-  display: grid;
-  height: 100%;
-  min-height: 36rem;
-  grid-template-columns: minmax(0, 1fr) 22rem;
-  grid-template-rows: auto minmax(31rem, 1fr);
-  border: 1px solid var(--workflow-border, var(--ant-color-border-secondary));
-  border-radius: 1rem;
-  overflow: hidden;
+  /* 色票由Graph根節點提供，確保編輯與存檔後檢視一致。 */
+  --workflow-workspace-bg: var(--rh-color-page);
+  --workflow-surface: var(--rh-color-surface);
+  --workflow-surface-elevated: var(--rh-color-surface-elevated);
+  --workflow-toolbar-bg: var(--rh-color-surface-elevated);
+  --workflow-node-bg: var(--rh-color-surface-elevated);
+  --workflow-border: var(--rh-color-border);
+  --workflow-border-strong: var(--rh-color-border-strong);
+  --workflow-text-primary: var(--rh-color-text-primary);
+  --workflow-text-secondary: var(--rh-color-text-secondary);
+  --workflow-grid: var(--rh-color-border);
+  --workflow-edge: var(--rh-color-border-strong);
+  --workflow-edge-selected: var(--rh-color-focus);
+  --workflow-selected: var(--rh-color-focus);
+  --workflow-selected-soft: var(--rh-color-focus-soft);
+  --workflow-accent: var(--rh-color-primary);
+  --workflow-accent-soft: var(--rh-color-primary-soft);
+  --workflow-start: var(--rh-color-primary);
+  --workflow-start-surface: #dfe3ff;
+  --workflow-review: #8a5a00;
+  --workflow-review-surface: #fff0c2;
+  --workflow-manual: #6235d5;
+  --workflow-manual-surface: #eadcff;
+  --workflow-deployment: #145fd7;
+  --workflow-deployment-surface: #dceaff;
+  --workflow-terminal: #56677a;
+  --workflow-terminal-surface: #f1f4f7;
+  --workflow-terminal-success: #0b7451;
+  --workflow-terminal-success-surface: #d9f4e6;
+  --workflow-terminal-failure: #b42318;
+  --workflow-terminal-failure-surface: #fbdada;
+  --workflow-ambient: var(--rh-ambient-page);
+  --workflow-card-shadow: var(--rh-shadow-card);
+  --workflow-panel-shadow: var(--rh-shadow-floating);
+
+  color: var(--workflow-text-primary, var(--ant-color-text));
   background: var(--workflow-surface, var(--ant-color-bg-container));
-  box-shadow: var(--workflow-panel-shadow, var(--ant-box-shadow-tertiary));
+}
+
+:global(:root[data-theme='dark']) .editor {
+  --workflow-workspace-bg: var(--rh-color-page);
+  --workflow-surface: var(--rh-color-surface);
+  --workflow-surface-elevated: var(--rh-color-surface-elevated);
+  --workflow-toolbar-bg: var(--rh-color-surface-elevated);
+  --workflow-node-bg: var(--rh-color-surface-elevated);
+  --workflow-border: var(--rh-color-border);
+  --workflow-border-strong: var(--rh-color-border-strong);
+  --workflow-text-primary: var(--rh-color-text-primary);
+  --workflow-text-secondary: var(--rh-color-text-secondary);
+  --workflow-grid: var(--rh-color-border);
+  --workflow-edge: var(--rh-color-border-strong);
+  --workflow-edge-selected: var(--rh-color-focus);
+  --workflow-selected: var(--rh-color-focus);
+  --workflow-selected-soft: var(--rh-color-focus-soft);
+  --workflow-accent: var(--rh-color-primary);
+  --workflow-accent-soft: var(--rh-color-primary-soft);
+  --workflow-start: var(--rh-color-primary);
+  --workflow-start-surface: #212844;
+  --workflow-review: #fbbf24;
+  --workflow-review-surface: #3a2d12;
+  --workflow-manual: #c4b5fd;
+  --workflow-manual-surface: #2e2450;
+  --workflow-deployment: var(--rh-color-info);
+  --workflow-deployment-surface: #152e55;
+  --workflow-terminal: #94a3b8;
+  --workflow-terminal-surface: #1e293b;
+  --workflow-terminal-success: var(--rh-color-success);
+  --workflow-terminal-success-surface: #123b32;
+  --workflow-terminal-failure: #fb7185;
+  --workflow-terminal-failure-surface: #481e2b;
+  --workflow-ambient: var(--rh-ambient-page);
+  --workflow-card-shadow: var(--rh-shadow-card);
+  --workflow-panel-shadow: var(--rh-shadow-floating);
 }
 
 .toolbar {
-  grid-column: 1 / -1;
-  min-height: 3.5rem;
-  padding: 0.625rem var(--rh-space-4, 1rem);
-  border-bottom: 1px solid
-    var(--workflow-border, var(--ant-color-border-secondary));
-  background: var(--workflow-surface-elevated, var(--ant-color-bg-container));
+  background: var(--workflow-toolbar-bg, var(--ant-color-bg-container));
+  border-bottom-color: var(
+    --workflow-border,
+    var(--ant-color-border-secondary)
+  );
+}
+
+.initialSelect {
+  min-width: 13rem;
 }
 
 .canvas {
-  min-width: 0;
   background-color: var(--workflow-workspace-bg, var(--rh-color-page));
   background-image: var(--workflow-ambient, var(--rh-ambient-page));
   background-position: center;
 }
 
 .canvas :global(.react-flow__background-pattern) {
-  fill: color-mix(
-    in srgb,
-    var(--workflow-accent, var(--ant-color-primary)) 36%,
-    transparent
-  );
+  fill: var(--workflow-grid, var(--ant-color-border-secondary));
+  fill-opacity: 0.72;
 }
 
 .canvas :global(.react-flow__edge-path) {
-  stroke: color-mix(
-    in srgb,
-    var(--workflow-accent, var(--ant-color-text-tertiary)) 58%,
-    var(--ant-color-text-tertiary)
-  );
-  stroke-width: 1.5;
+  stroke: var(--workflow-edge, var(--ant-color-text-tertiary));
+  stroke-width: 1.6;
 }
 
 .canvas :global(.react-flow__edge.selected .react-flow__edge-path) {
-  stroke: var(--workflow-accent, var(--ant-color-primary));
+  stroke: var(--workflow-edge-selected, var(--ant-color-primary));
   stroke-width: 2;
-  filter: drop-shadow(0 0 0.3rem var(--workflow-accent-soft, transparent));
+  filter: drop-shadow(0 0 0.3rem var(--workflow-selected-soft, transparent));
 }
 
 .canvas :global(.react-flow__edge-text) {
-  fill: var(--ant-color-text);
+  fill: var(--workflow-text-primary, var(--ant-color-text));
   font-size: 0.6875rem;
   font-weight: 600;
 }
 
 .canvas :global(.react-flow__edge-textbg) {
-  fill: var(--workflow-surface-elevated, var(--ant-color-bg-elevated));
-  stroke: var(--workflow-border, var(--ant-color-border-secondary));
+  fill: var(--workflow-node-bg, var(--ant-color-bg-elevated));
+  stroke: var(--workflow-border-strong, var(--ant-color-border));
   stroke-width: 1;
 }
 
 .canvas :global(.react-flow__controls),
 .canvas :global(.react-flow__minimap) {
   overflow: hidden;
-  background: var(--workflow-surface-elevated, var(--ant-color-bg-elevated));
+  background: var(--workflow-toolbar-bg, var(--ant-color-bg-elevated));
   border: 1px solid var(--workflow-border, var(--ant-color-border-secondary));
   border-radius: 0.625rem;
   box-shadow: var(--workflow-panel-shadow, var(--ant-box-shadow-tertiary));
 }
 
 .canvas :global(.react-flow__controls-button) {
-  color: var(--ant-color-text);
-  background: var(--workflow-surface-elevated, var(--ant-color-bg-elevated));
+  color: var(--workflow-text-primary, var(--ant-color-text));
+  background: var(--workflow-toolbar-bg, var(--ant-color-bg-elevated));
   border-bottom-color: var(
     --workflow-border,
     var(--ant-color-border-secondary)
@@ -81,7 +139,7 @@
 }
 
 .canvas :global(.react-flow__controls-button:hover) {
-  color: var(--workflow-accent, var(--ant-color-primary));
+  color: var(--workflow-selected, var(--ant-color-primary));
 }
 
 .canvas :global(.react-flow__controls-button svg) {
@@ -89,11 +147,9 @@
 }
 
 .inspector {
-  padding: var(--rh-space-4, 1rem);
-  overflow: auto;
-  border-left: 1px solid
-    var(--workflow-border, var(--ant-color-border-secondary));
+  color: var(--workflow-text-primary, var(--ant-color-text));
   background: var(--workflow-surface, var(--ant-color-bg-container));
+  border-left-color: var(--workflow-border, var(--ant-color-border-secondary));
   backdrop-filter: blur(1.25rem);
 }
 
@@ -112,15 +168,27 @@
   margin-bottom: var(--rh-space-4, 1rem);
 }
 
-@media (max-width: 960px) {
-  .editor {
-    grid-template-columns: 1fr;
-    grid-template-rows: auto 28rem auto;
-  }
+.inspector :global(.ant-input),
+.inspector :global(.ant-input-number),
+.inspector :global(.ant-select-selector),
+.inspector :global(.ant-btn) {
+  min-height: 2.75rem;
+}
 
-  .inspector {
-    border-top: 1px solid
-      var(--workflow-border, var(--ant-color-border-secondary));
-    border-left: 0;
+.inspector :global(.rh-danger-action) {
+  margin-top: var(--rh-space-3, 0.75rem);
+}
+
+.draftHint {
+  margin-top: var(--rh-space-4, 1rem);
+  padding: var(--rh-space-3, 0.75rem);
+  background: color-mix(in srgb, var(--ant-color-error-bg) 72%, transparent);
+  border: 1px solid var(--ant-color-error-border);
+  border-radius: var(--rh-radius-md, 0.5rem);
+}
+
+@media (max-width: 768px) {
+  .initialSelect {
+    width: 100%;
   }
 }

@@ -153,17 +153,17 @@ func TestMigrationsAndTransactionalAuditOutbox(t *testing.T) {
 	if err := localService.Bootstrap(ctx, "must-not-overwrite"); err != nil {
 		t.Fatalf("repeat local manager bootstrap: %v", err)
 	}
-	manager, mustChange, _, _, err := localService.Login(ctx, "admin", "admin")
+	manager, mustChange, _, _, _, err := localService.Login(ctx, "admin", "admin")
 	if err != nil || manager.Username != "admin" || !mustChange {
 		t.Fatalf("initial manager login = %#v, mustChange=%t, error=%v", manager, mustChange, err)
 	}
 	if err := localService.ChangePassword(ctx, manager.ID, "admin", "changed-password"); err != nil {
 		t.Fatalf("change initial manager password: %v", err)
 	}
-	if _, _, _, _, err := localService.Login(ctx, "admin", "admin"); err == nil {
+	if _, _, _, _, _, err := localService.Login(ctx, "admin", "admin"); err == nil {
 		t.Fatal("initial manager password should no longer authenticate")
 	}
-	_, mustChange, _, _, err = localService.Login(ctx, "admin", "changed-password")
+	_, mustChange, _, _, _, err = localService.Login(ctx, "admin", "changed-password")
 	if err != nil || mustChange {
 		t.Fatalf("changed manager login mustChange=%t, error=%v", mustChange, err)
 	}
@@ -191,7 +191,7 @@ func TestMigrationsAndTransactionalAuditOutbox(t *testing.T) {
 	if err := db.Raw(`SELECT count(*) FROM authorization_group_memberships WHERE user_id = ?`, createdUser.ID).Scan(&createdMemberships).Error; err != nil || createdMemberships != 0 {
 		t.Fatalf("new local user received automatic access: memberships=%d error=%v", createdMemberships, err)
 	}
-	_, createdMustChange, _, _, err := localService.Login(ctx, "operator", "initial-password")
+	_, createdMustChange, _, _, _, err := localService.Login(ctx, "operator", "initial-password")
 	if err != nil || !createdMustChange {
 		t.Fatalf("created local user login mustChange=%t error=%v", createdMustChange, err)
 	}

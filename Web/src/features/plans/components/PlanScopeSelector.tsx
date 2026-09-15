@@ -29,7 +29,7 @@ export function PlanScopeSelector({ organizations, scope, onChange }: Props) {
   )
   const selected = projects.find((item) => item.project.id === scope?.projectId)
   return (
-    <Card>
+    <Card className={styles.scopeCard}>
       <Flex className={styles.scopeRow} gap="middle" wrap>
         <Select
           className={styles.scopeSelect}

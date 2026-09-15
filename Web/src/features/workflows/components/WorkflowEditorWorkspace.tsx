@@ -1,4 +1,5 @@
-import { Alert, Button, Drawer, Form, Input, Space } from 'antd'
+import { ArrowLeftOutlined } from '@ant-design/icons'
+import { Alert, Button, Flex, Form, Input, Typography } from 'antd'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -6,7 +7,7 @@ import { useGetReleaseWorkflowReviewOptions } from '@/generated/api'
 import type { ReleaseWorkflowDocument } from '@/generated/model'
 
 import { WorkflowGraphEditor } from './WorkflowGraphEditor'
-import styles from './WorkflowEditorDrawer.module.css'
+import styles from './WorkflowEditorWorkspace.module.css'
 
 export interface WorkflowEditorValue {
   name: string
@@ -15,7 +16,7 @@ export interface WorkflowEditorValue {
 }
 
 interface Props {
-  open: boolean
+  mode: 'create' | 'copy' | 'version'
   title: string
   initial: WorkflowEditorValue
   submitting: boolean
@@ -23,8 +24,8 @@ interface Props {
   onSubmit: (value: WorkflowEditorValue) => void
 }
 
-export function WorkflowEditorDrawer({
-  open,
+export function WorkflowEditorWorkspace({
+  mode,
   title,
   initial,
   submitting,
@@ -48,57 +49,97 @@ export function WorkflowEditorDrawer({
     const fields = await form.validateFields()
     if (!validation) onSubmit({ ...fields, document })
   }
+
   return (
-    <Drawer
-      open={open}
-      size="100%"
-      title={title}
-      rootClassName={styles.drawer}
-      destroyOnHidden
-      onClose={onClose}
-      extra={
-        <Space>
+    <section
+      className={styles.workspace}
+      aria-labelledby="workflow-editor-title"
+    >
+      <header className={styles.header}>
+        <div className={styles.headingGroup}>
+          <Button
+            type="text"
+            icon={<ArrowLeftOutlined />}
+            className={styles.back}
+            aria-label={t('workflows.editor.back')}
+            onClick={onClose}
+          >
+            {t('workflows.editor.back')}
+          </Button>
+          <div className={styles.headingCopy}>
+            <Typography.Text className={styles.eyebrow}>
+              {t(`workflows.editor.${mode}Eyebrow`)}
+            </Typography.Text>
+            <Typography.Title
+              id="workflow-editor-title"
+              level={2}
+              className={styles.title}
+            >
+              {title}
+            </Typography.Title>
+            <Typography.Paragraph
+              type="secondary"
+              className={styles.description}
+            >
+              {t(`workflows.editor.${mode}Description`)}
+            </Typography.Paragraph>
+          </div>
+        </div>
+        <Flex className={styles.actions} gap="small" wrap>
           <Button onClick={onClose}>{t('workflows.actions.cancel')}</Button>
           <Button
             type="primary"
             loading={submitting}
-            disabled={Boolean(validation)}
+            disabled={Boolean(validation) || submitting}
             onClick={() => void submit()}
           >
             {t('workflows.actions.save')}
           </Button>
-        </Space>
-      }
-    >
-      <div className={styles.content}>
-        <Form
-          form={form}
-          layout="vertical"
+        </Flex>
+      </header>
+
+      <div className={styles.body}>
+        <section
           className={styles.metadata}
-          initialValues={{
-            name: initial.name,
-            description: initial.description,
-          }}
+          aria-labelledby="workflow-editor-details-title"
         >
-          <Form.Item
-            name="name"
-            label={t('workflows.fields.workflowName')}
-            rules={[
-              { required: true, message: t('workflows.validation.name') },
-            ]}
+          <Typography.Title
+            id="workflow-editor-details-title"
+            level={4}
+            className={styles.metadataTitle}
           >
-            <Input maxLength={128} />
-          </Form.Item>
-          <Form.Item
-            name="description"
-            label={t('workflows.fields.description')}
+            {t('workflows.editor.detailsTitle')}
+          </Typography.Title>
+          <Form
+            form={form}
+            layout="vertical"
+            className={styles.form}
+            initialValues={{
+              name: initial.name,
+              description: initial.description,
+            }}
           >
-            <Input.TextArea
-              maxLength={4096}
-              autoSize={{ minRows: 1, maxRows: 3 }}
-            />
-          </Form.Item>
-        </Form>
+            <Form.Item
+              name="name"
+              label={t('workflows.fields.workflowName')}
+              rules={[
+                { required: true, message: t('workflows.validation.name') },
+              ]}
+            >
+              <Input maxLength={128} />
+            </Form.Item>
+            <Form.Item
+              name="description"
+              label={t('workflows.fields.description')}
+            >
+              <Input.TextArea
+                maxLength={4096}
+                autoSize={{ minRows: 2, maxRows: 5 }}
+              />
+            </Form.Item>
+          </Form>
+        </section>
+
         {validation && (
           <Alert
             className={styles.validation}
@@ -107,7 +148,11 @@ export function WorkflowEditorDrawer({
             title={validation}
           />
         )}
-        <div className={styles.workspace}>
+
+        <section
+          className={styles.graphRegion}
+          aria-label={t('workflows.editor.workspace')}
+        >
           <WorkflowGraphEditor
             initialDocument={initial.document}
             reviewOptions={reviewOptions}
@@ -115,9 +160,9 @@ export function WorkflowEditorDrawer({
             reviewOptionsError={reviewOptionsError}
             onChange={setDocument}
           />
-        </div>
+        </section>
       </div>
-    </Drawer>
+    </section>
   )
 }
 

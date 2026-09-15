@@ -21,6 +21,7 @@ type applicationStatusReader interface {
 type catalogService interface {
 	CreateOrganization(context.Context, catalogapp.Principal, catalogapp.Mutation, string) (catalog.Organization, error)
 	RenameOrganization(context.Context, catalogapp.Principal, catalogapp.Mutation, uuid.UUID, string, uint64) (catalog.Organization, error)
+	DeleteOrganization(context.Context, catalogapp.Principal, catalogapp.Mutation, uuid.UUID, uint64) error
 	CreateProject(context.Context, catalogapp.Principal, catalogapp.Mutation, uuid.UUID, string) (catalog.Project, error)
 	CreateEnvironment(context.Context, catalogapp.Principal, catalogapp.Mutation, uuid.UUID, uuid.UUID, string, catalog.EnvironmentType) (catalog.Environment, error)
 	CreateEnvironmentLabelMapping(context.Context, catalogapp.Principal, catalogapp.Mutation, uuid.UUID, uuid.UUID, uuid.UUID, string, string) (catalog.EnvironmentLabelMapping, error)
@@ -52,6 +53,29 @@ func (h *catalogHandler) CreateCatalogOrganization(c *gin.Context, params contra
 		return
 	}
 	c.JSON(http.StatusCreated, contract.CatalogOrganizationResponse{Data: contract.CatalogOrganizationResource{Id: value.ID, Name: value.Name, Active: value.Active, Version: int64(value.Version)}, Meta: responseMeta(c)})
+}
+
+// DeleteCatalogOrganization deactivates an empty non-default tenant boundary.
+func (h *catalogHandler) DeleteCatalogOrganization(c *gin.Context, organizationID uuid.UUID, params contract.DeleteCatalogOrganizationParams) {
+	_, user, ok := h.authn.authenticateMutation(c, string(params.XCSRFToken))
+	if !ok {
+		return
+	}
+	if params.ExpectedVersion < 1 {
+		respondError(c, http.StatusBadRequest, "INVALID_REQUEST", "Organization deletion request is invalid")
+		return
+	}
+	err := h.service.DeleteOrganization(
+		c.Request.Context(),
+		catalogapp.Principal{UserID: user.ID, Disabled: user.Disabled},
+		catalogapp.Mutation{RequestID: c.GetHeader(requestIDHeader)},
+		organizationID,
+		uint64(params.ExpectedVersion),
+	)
+	if !h.respondCatalogMutationError(c, err) {
+		return
+	}
+	c.Status(http.StatusNoContent)
 }
 
 // CreateCatalogProject creates a Project under an existing Organization.
@@ -140,6 +164,7 @@ func (h *catalogHandler) GetCatalogResourceTree(c *gin.Context) {
 	}
 	tree, err := h.service.ListResourceTree(c.Request.Context(), catalogapp.Principal{UserID: user.ID, Disabled: user.Disabled})
 	if err != nil {
+		recordRequestError(c, "list catalog resource tree", err)
 		respondError(c, http.StatusInternalServerError, "CATALOG_READ_FAILED", "Unable to read resource catalog")
 		return
 	}
@@ -151,7 +176,7 @@ func organizationNodes(values []catalogapp.OrganizationNode) []contract.CatalogO
 	for _, value := range values {
 		result = append(result, contract.CatalogOrganizationNode{
 			Id: value.Organization.ID, Name: value.Organization.Name, Version: int64(value.Organization.Version),
-			IsDefault: value.IsDefault, CanRename: value.CanRename,
+			IsDefault: value.IsDefault, CanRename: value.CanRename, CanDelete: value.CanDelete,
 			CanCreateProject: value.CanCreateProject, Projects: projectNodes(value.Projects),
 		})
 	}

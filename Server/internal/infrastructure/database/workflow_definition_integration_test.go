@@ -54,6 +54,29 @@ func TestWorkflowDefinitionRepositoryPreservesVersionLifecycle(t *testing.T) {
 	assertCountWhere(t, db, "outbox_events", "aggregate_id = ?", workflow.ID.String(), 3)
 }
 
+func TestWorkflowDefinitionRepositoryMapsDuplicateNameConflict(t *testing.T) {
+	ctx := context.Background()
+	db := workflowTestDatabase(t, ctx)
+	actorID := uuid.New()
+	if err := db.Exec(`INSERT INTO users (id, username) VALUES (?, 'workflow-name-admin')`, actorID).Error; err != nil {
+		t.Fatalf("seed workflow administrator: %v", err)
+	}
+	repository, err := deployinfra.NewWorkflowDefinitionRepository(db)
+	if err != nil {
+		t.Fatalf("create workflow repository: %v", err)
+	}
+	now := time.Date(2026, 9, 15, 6, 0, 0, 0, time.UTC)
+	mutation := deployapp.WorkflowMutation{ActorID: actorID, RequestID: "workflow-name-conflict", OccurredAt: now}
+	if err := repository.Create(ctx, mutation, workflowAggregateNamed(t, actorID, now, "Production approval")); err != nil {
+		t.Fatalf("create first workflow: %v", err)
+	}
+
+	err = repository.Create(ctx, mutation, workflowAggregateNamed(t, actorID, now, "production APPROVAL"))
+	if !errors.Is(err, deployapp.ErrWorkflowNameConflict) {
+		t.Fatalf("duplicate workflow name error = %v", err)
+	}
+}
+
 func TestWorkflowDefinitionRepositoryRestrictsDeletionToUnusedDrafts(t *testing.T) {
 	ctx := context.Background()
 	db := workflowTestDatabase(t, ctx)

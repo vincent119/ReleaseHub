@@ -71,20 +71,20 @@ func (s *LocalAuthService) Bootstrap(ctx context.Context, password string) error
 	return nil
 }
 
-func (s *LocalAuthService) Login(ctx context.Context, username, password string) (identity.User, bool, string, string, error) {
+func (s *LocalAuthService) Login(ctx context.Context, username, password string) (identity.User, bool, identity.Session, string, string, error) {
 	username = strings.TrimSpace(username)
 	if username == "" || len(username) > 128 || password == "" || len(password) > 72 {
-		return identity.User{}, false, "", "", fmt.Errorf("invalid local credentials")
+		return identity.User{}, false, identity.Session{}, "", "", fmt.Errorf("invalid local credentials")
 	}
 	credential, err := s.repository.FindLocalCredential(ctx, username)
 	if err != nil || credential.Disabled || bcrypt.CompareHashAndPassword(credential.PasswordHash, []byte(password)) != nil {
-		return identity.User{}, false, "", "", fmt.Errorf("invalid local credentials")
+		return identity.User{}, false, identity.Session{}, "", "", fmt.Errorf("invalid local credentials")
 	}
-	sessionToken, csrfToken, err := s.sessions.CreateLocal(ctx, credential.UserID)
+	session, sessionToken, csrfToken, err := s.sessions.CreateLocal(ctx, credential.UserID)
 	if err != nil {
-		return identity.User{}, false, "", "", err
+		return identity.User{}, false, identity.Session{}, "", "", err
 	}
-	return identity.User{ID: credential.UserID, Username: credential.Username}, credential.MustChangePassword, sessionToken, csrfToken, nil
+	return identity.User{ID: credential.UserID, Username: credential.Username}, credential.MustChangePassword, session, sessionToken, csrfToken, nil
 }
 
 func (s *LocalAuthService) ChangePassword(ctx context.Context, userID uuid.UUID, currentPassword, newPassword string) error {

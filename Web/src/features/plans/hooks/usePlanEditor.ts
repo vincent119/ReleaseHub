@@ -15,6 +15,7 @@ import {
   edgeIdentity,
   orderPlanNodes,
   planGraphToDocument,
+  planStageClassName,
   type PlanEdge,
   type PlanGraph,
   type PlanNode,
@@ -95,6 +96,7 @@ function addNode(graph: PlanGraph): PlanGraph {
       ...graph.nodes,
       {
         id: key,
+        className: planStageClassName(node.order),
         position: {
           x: 80 + graph.nodes.length * 32,
           y: 80 + graph.nodes.length * 24,
@@ -117,6 +119,7 @@ function updateNode(
         ? {
             ...item,
             id: node.key,
+            className: planStageClassName(node.order),
             data: { node, label: `${node.applicationKey}\n#${node.order}` },
           }
         : item,

@@ -19,12 +19,14 @@ const api = vi.hoisted(() => ({
   useResources: vi.fn(),
   useSystem: vi.fn(),
   updateOrganization: vi.fn(),
+  deleteOrganization: vi.fn(),
 }))
 
 vi.mock('@/generated/api', () => ({
   useGetCatalogResourceTree: api.useResources,
   useGetSystemStatus: api.useSystem,
   updateCatalogOrganization: api.updateOrganization,
+  deleteCatalogOrganization: api.deleteOrganization,
   createCatalogOrganization: vi.fn(),
   createCatalogProject: vi.fn(),
   createCatalogEnvironment: vi.fn(),
@@ -37,6 +39,7 @@ describe('ResourcesPage', () => {
   beforeEach(async () => {
     api.refetch.mockReset()
     api.updateOrganization.mockReset()
+    api.deleteOrganization.mockReset()
     await i18n.changeLanguage('zh-TW')
     Object.defineProperty(window, 'matchMedia', {
       configurable: true,
@@ -70,6 +73,7 @@ describe('ResourcesPage', () => {
               version: 1,
               isDefault: true,
               canRename: true,
+              canDelete: false,
               canCreateProject: true,
               projects: [
                 {
@@ -85,6 +89,7 @@ describe('ResourcesPage', () => {
       },
     })
     api.updateOrganization.mockResolvedValue({ status: 200 })
+    api.deleteOrganization.mockResolvedValue({ status: 204 })
   })
 
   it('hides the Organization presentation layer in single-tenant mode', () => {
@@ -171,6 +176,159 @@ describe('ResourcesPage', () => {
       screen.getByRole('button', { name: '重新命名 Organization' }),
     ).toBeInTheDocument()
     expect(screen.queryByText('工作區: default')).not.toBeInTheDocument()
+  })
+
+  it('deletes an empty non-default Organization after confirmation', async () => {
+    document.cookie = 'releasehub_csrf=csrf-token'
+    const systemState = api.useSystem()
+    systemState.data.data.data.tenancyMode = 'multi'
+    api.useSystem.mockReturnValue(systemState)
+    const resourceState = api.useResources()
+    resourceState.data.data.data = [
+      {
+        id: '019c1230-0000-7000-8000-000000000009',
+        name: 'Temporary',
+        version: 3,
+        isDefault: false,
+        canRename: true,
+        canDelete: true,
+        canCreateProject: true,
+        projects: [],
+      },
+    ]
+    api.useResources.mockReturnValue(resourceState)
+
+    render(
+      <AntdApp>
+        <MemoryRouter>
+          <I18nextProvider i18n={i18n}>
+            <ResourcesPage />
+          </I18nextProvider>
+        </MemoryRouter>
+      </AntdApp>,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '刪除 Organization' }))
+    expect(
+      screen.getByText(
+        '確定要刪除「Temporary」嗎？刪除後不會再顯示，且無法復原。',
+      ),
+    ).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '確認刪除' }))
+
+    await waitFor(() =>
+      expect(api.deleteOrganization).toHaveBeenCalledWith(
+        '019c1230-0000-7000-8000-000000000009',
+        { expectedVersion: 3 },
+        { headers: { 'X-CSRF-Token': 'csrf-token' } },
+      ),
+    )
+    expect(api.refetch).toHaveBeenCalledOnce()
+  })
+
+  it('does not show delete for the default or non-deletable Organization', () => {
+    const systemState = api.useSystem()
+    systemState.data.data.data.tenancyMode = 'multi'
+    api.useSystem.mockReturnValue(systemState)
+
+    render(
+      <AntdApp>
+        <MemoryRouter>
+          <I18nextProvider i18n={i18n}>
+            <ResourcesPage />
+          </I18nextProvider>
+        </MemoryRouter>
+      </AntdApp>,
+    )
+
+    expect(
+      screen.queryByRole('button', { name: '刪除 Organization' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('shows a conflict when the Organization cannot be deleted anymore', async () => {
+    document.cookie = 'releasehub_csrf=csrf-token'
+    const systemState = api.useSystem()
+    systemState.data.data.data.tenancyMode = 'multi'
+    api.useSystem.mockReturnValue(systemState)
+    const resourceState = api.useResources()
+    resourceState.data.data.data = [
+      {
+        id: '019c1230-0000-7000-8000-000000000009',
+        name: 'Temporary',
+        version: 3,
+        isDefault: false,
+        canRename: true,
+        canDelete: true,
+        canCreateProject: true,
+        projects: [],
+      },
+    ]
+    api.useResources.mockReturnValue(resourceState)
+    api.deleteOrganization.mockResolvedValue({ status: 409 })
+
+    render(
+      <AntdApp>
+        <MemoryRouter>
+          <I18nextProvider i18n={i18n}>
+            <ResourcesPage />
+          </I18nextProvider>
+        </MemoryRouter>
+      </AntdApp>,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '刪除 Organization' }))
+    fireEvent.click(screen.getByRole('button', { name: '確認刪除' }))
+
+    expect(
+      await screen.findByText('資源與目前 Catalog 資料衝突。'),
+    ).toBeInTheDocument()
+    expect(api.refetch).not.toHaveBeenCalled()
+  })
+
+  it('keeps the delete confirmation loading while the request is pending', async () => {
+    document.cookie = 'releasehub_csrf=csrf-token'
+    const systemState = api.useSystem()
+    systemState.data.data.data.tenancyMode = 'multi'
+    api.useSystem.mockReturnValue(systemState)
+    const resourceState = api.useResources()
+    resourceState.data.data.data = [
+      {
+        id: '019c1230-0000-7000-8000-000000000009',
+        name: 'Temporary',
+        version: 3,
+        isDefault: false,
+        canRename: true,
+        canDelete: true,
+        canCreateProject: true,
+        projects: [],
+      },
+    ]
+    api.useResources.mockReturnValue(resourceState)
+    let resolveDelete!: (value: { status: number }) => void
+    api.deleteOrganization.mockReturnValue(
+      new Promise((resolve) => {
+        resolveDelete = resolve
+      }),
+    )
+
+    render(
+      <AntdApp>
+        <MemoryRouter>
+          <I18nextProvider i18n={i18n}>
+            <ResourcesPage />
+          </I18nextProvider>
+        </MemoryRouter>
+      </AntdApp>,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '刪除 Organization' }))
+    const confirm = screen.getByRole('button', { name: '確認刪除' })
+    fireEvent.click(confirm)
+    await waitFor(() => expect(confirm).toHaveClass('ant-btn-loading'))
+
+    resolveDelete({ status: 204 })
+    await waitFor(() => expect(api.refetch).toHaveBeenCalledOnce())
   })
 
   it('shows a conflict message when the workspace version is stale', async () => {

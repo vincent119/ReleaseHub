@@ -8,6 +8,7 @@ export function WorkflowStateNode({ data, selected }: NodeProps<WorkflowNode>) {
     <div
       className={`${styles.node} ${selected ? styles.selected : ''}`}
       data-state-type={data.state.type}
+      data-terminal-outcome={data.terminalOutcome}
     >
       <Handle type="target" position={Position.Left} />
       <span className={styles.type}>{data.state.type}</span>

@@ -2,6 +2,7 @@ package httpserver_test
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -13,6 +14,7 @@ import (
 	"go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest/observer"
 
 	argoapp "github.com/vincent119/ReleaseHub/Server/internal/argocd/application"
@@ -35,6 +37,88 @@ func TestAuthDefaultDenyWithoutSession(t *testing.T) {
 	}
 	if !strings.Contains(response.Body.String(), `"code":"SESSION_REQUIRED"`) {
 		t.Fatalf("unexpected response: %s", response.Body.String())
+	}
+}
+
+func TestAuthSessionDistinguishesInvalidSessionFromInfrastructureFailure(t *testing.T) {
+	tests := []struct {
+		name             string
+		authenticateErr  error
+		wantStatus       int
+		wantCode         string
+		wantClearedCount int
+		wantLogLevel     zapcore.Level
+		wantLoggedError  string
+	}{
+		{
+			name:             "terminal invalid session",
+			authenticateErr:  identityapp.ErrSessionInvalid,
+			wantStatus:       http.StatusUnauthorized,
+			wantCode:         "SESSION_INVALID",
+			wantClearedCount: 2,
+			wantLogLevel:     zap.WarnLevel,
+		},
+		{
+			name:            "authentication infrastructure failure",
+			authenticateErr: errors.New("identity database unavailable"),
+			wantStatus:      http.StatusServiceUnavailable,
+			wantCode:        "SESSION_STATE_UNAVAILABLE",
+			wantLogLevel:    zap.ErrorLevel,
+			wantLoggedError: "authenticate session: identity database unavailable",
+		},
+		{
+			name:            "authentication deadline exceeded",
+			authenticateErr: context.DeadlineExceeded,
+			wantStatus:      http.StatusServiceUnavailable,
+			wantCode:        "SESSION_STATE_UNAVAILABLE",
+			wantLogLevel:    zap.ErrorLevel,
+			wantLoggedError: "authenticate session: context deadline exceeded",
+		},
+		{
+			name:            "client canceled authentication",
+			authenticateErr: context.Canceled,
+			wantStatus:      499,
+			wantLogLevel:    zap.InfoLevel,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			router, recorded, _, _, _ := newTestRouterFromOptionsWithState(t, testAPIOptions(&fakeAuthFlow{authenticateErr: test.authenticateErr}))
+			request := httptest.NewRequest(http.MethodGet, "/api/v1/auth/session", nil)
+			request.AddCookie(&http.Cookie{Name: "releasehub_session", Value: "session-token"})
+			response := httptest.NewRecorder()
+
+			router.ServeHTTP(response, request)
+
+			if response.Code != test.wantStatus {
+				t.Fatalf("auth session = %d %s", response.Code, response.Body.String())
+			}
+			if test.wantCode == "" {
+				if response.Body.Len() != 0 {
+					t.Fatalf("canceled auth session body = %q, want empty", response.Body.String())
+				}
+			} else if !strings.Contains(response.Body.String(), `"code":"`+test.wantCode+`"`) {
+				t.Fatalf("auth session body = %s, want code %s", response.Body.String(), test.wantCode)
+			}
+			clearedCount := 0
+			for _, cookie := range response.Result().Cookies() {
+				if cookie.MaxAge == -1 {
+					clearedCount++
+				}
+			}
+			if clearedCount != test.wantClearedCount {
+				t.Fatalf("cleared cookies = %d, want %d", clearedCount, test.wantClearedCount)
+			}
+			entries := recorded.All()
+			if len(entries) != 1 || entries[0].Level != test.wantLogLevel {
+				t.Fatalf("request logs = %#v, want level %s", entries, test.wantLogLevel)
+			}
+			loggedError, _ := entries[0].ContextMap()["error"].(string)
+			if loggedError != test.wantLoggedError || strings.Contains(loggedError, "session-token") {
+				t.Fatalf("logged error = %q, want %q", loggedError, test.wantLoggedError)
+			}
+		})
 	}
 }
 
@@ -64,11 +148,76 @@ func TestLocalLoginSetsSessionCookiesAndRequiresPasswordChange(t *testing.T) {
 
 	router.ServeHTTP(response, request)
 
-	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"mustChangePassword":true`) {
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"mustChangePassword":true`) || !strings.Contains(response.Body.String(), `"passwordChangeAvailable":true`) || !strings.Contains(response.Body.String(), `"idleExpiresAt":"2026-09-14T08:30:00Z"`) || !strings.Contains(response.Body.String(), `"absoluteExpiresAt":"2026-09-14T20:00:00Z"`) {
 		t.Fatalf("local login = %d %s", response.Code, response.Body.String())
 	}
 	if local.loginCalls != 1 || len(response.Result().Cookies()) != 2 {
 		t.Fatalf("local login calls=%d cookies=%d", local.loginCalls, len(response.Result().Cookies()))
+	}
+}
+
+func TestAuthSessionReportsPasswordChangeCapabilityFromAuthenticationMethod(t *testing.T) {
+	userID := uuid.New()
+	tests := []struct {
+		name                        string
+		authenticationMethod        string
+		local                       *fakeLocalAuth
+		wantMustChange              bool
+		wantPasswordChangeAvailable bool
+	}{
+		{
+			name:                        "local session",
+			authenticationMethod:        "local",
+			local:                       &fakeLocalAuth{mustChange: true},
+			wantMustChange:              true,
+			wantPasswordChangeAvailable: true,
+		},
+		{
+			name:                        "OIDC session",
+			authenticationMethod:        "oidc",
+			local:                       &fakeLocalAuth{mustChange: true},
+			wantMustChange:              false,
+			wantPasswordChangeAvailable: false,
+		},
+		{
+			name:                        "local session without local authentication service",
+			authenticationMethod:        "local",
+			wantMustChange:              false,
+			wantPasswordChangeAvailable: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			idleExpiresAt := time.Date(2026, time.September, 14, 8, 30, 0, 0, time.UTC)
+			absoluteExpiresAt := time.Date(2026, time.September, 14, 20, 0, 0, 0, time.UTC)
+			flow := &fakeAuthFlow{
+				session: identity.Session{ID: uuid.New(), UserID: userID, AuthenticationMethod: tt.authenticationMethod, IdleExpiresAt: idleExpiresAt, AbsoluteExpiresAt: absoluteExpiresAt},
+				user:    identity.User{ID: userID, Username: "vincent"},
+			}
+			options := testAPIOptions(flow)
+			if tt.local != nil {
+				options.Auth.Local = tt.local
+			}
+			router := newTestRouterFromOptions(t, options)
+			request := httptest.NewRequest(http.MethodGet, "/api/v1/auth/session", nil)
+			request.AddCookie(&http.Cookie{Name: "releasehub_session", Value: "session-token"})
+			response := httptest.NewRecorder()
+
+			router.ServeHTTP(response, request)
+
+			wantMustChange := `"mustChangePassword":false`
+			if tt.wantMustChange {
+				wantMustChange = `"mustChangePassword":true`
+			}
+			wantAvailable := `"passwordChangeAvailable":false`
+			if tt.wantPasswordChangeAvailable {
+				wantAvailable = `"passwordChangeAvailable":true`
+			}
+			if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), wantMustChange) || !strings.Contains(response.Body.String(), wantAvailable) || !strings.Contains(response.Body.String(), `"idleExpiresAt":"2026-09-14T08:30:00Z"`) || !strings.Contains(response.Body.String(), `"absoluteExpiresAt":"2026-09-14T20:00:00Z"`) {
+				t.Fatalf("auth session = %d %s", response.Code, response.Body.String())
+			}
+		})
 	}
 }
 
@@ -183,7 +332,7 @@ func TestVisibleCatalogApplicationsRequireSession(t *testing.T) {
 func TestCatalogResourceTreeRequiresSessionAndPreservesAuthorizedAncestors(t *testing.T) {
 	organizationID, projectID, environmentID := uuid.New(), uuid.New(), uuid.New()
 	service := &fakeCatalogService{tree: catalogapp.ResourceTree{Organizations: []catalogapp.OrganizationNode{{
-		Organization: catalog.Organization{ID: organizationID, Name: "Tenant A", Version: 2}, IsDefault: true, CanRename: true,
+		Organization: catalog.Organization{ID: organizationID, Name: "Tenant A", Version: 2}, IsDefault: false, CanRename: true, CanDelete: true,
 		Projects: []catalogapp.ProjectNode{{Project: catalog.Project{ID: projectID, OrganizationID: organizationID, Name: "Payment"}, Environments: []catalogapp.EnvironmentNode{{
 			Environment:  catalog.Environment{ID: environmentID, OrganizationID: organizationID, ProjectID: projectID, Name: "production", Type: catalog.EnvironmentProduction},
 			Applications: []catalog.Application{},
@@ -196,8 +345,27 @@ func TestCatalogResourceTreeRequiresSessionAndPreservesAuthorizedAncestors(t *te
 	request.AddCookie(&http.Cookie{Name: "releasehub_session", Value: "session-token"})
 	router.ServeHTTP(response, request)
 	body := response.Body.String()
-	if response.Code != http.StatusOK || service.treeCalls != 1 || !strings.Contains(body, `"name":"production"`) || !strings.Contains(body, `"version":2`) || !strings.Contains(body, `"isDefault":true`) || !strings.Contains(body, `"canRename":true`) {
+	if response.Code != http.StatusOK || service.treeCalls != 1 || !strings.Contains(body, `"name":"production"`) || !strings.Contains(body, `"version":2`) || !strings.Contains(body, `"isDefault":false`) || !strings.Contains(body, `"canRename":true`) || !strings.Contains(body, `"canDelete":true`) {
 		t.Fatalf("resource tree = %d %s calls=%d", response.Code, response.Body.String(), service.treeCalls)
+	}
+}
+
+func TestCatalogResourceTreeFailureKeepsResponseGenericAndLogsCause(t *testing.T) {
+	service := &fakeCatalogService{treeError: errors.New("database unavailable")}
+	router, recorded, _, _, _ := newTestRouterWithCatalog(t, &fakeAuthFlow{}, service)
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/catalog/resource-tree", nil)
+	request.AddCookie(&http.Cookie{Name: "releasehub_session", Value: "session-secret"})
+	response := httptest.NewRecorder()
+
+	router.ServeHTTP(response, request)
+
+	if response.Code != http.StatusInternalServerError || !strings.Contains(response.Body.String(), `"code":"CATALOG_READ_FAILED"`) || strings.Contains(response.Body.String(), "database unavailable") {
+		t.Fatalf("resource tree failure = %d %s", response.Code, response.Body.String())
+	}
+	entry := recorded.FilterMessage("HTTP request failed").All()[0]
+	loggedError, _ := entry.ContextMap()["error"].(string)
+	if !strings.Contains(loggedError, "list catalog resource tree: database unavailable") || strings.Contains(loggedError, "session-secret") {
+		t.Fatalf("logged error = %q", loggedError)
 	}
 }
 
@@ -265,6 +433,53 @@ func TestCatalogOrganizationRenameMapsValidationAndConflictErrors(t *testing.T) 
 			router.ServeHTTP(response, request)
 			if response.Code != test.status || !strings.Contains(response.Body.String(), `"code":"`+test.code+`"`) {
 				t.Fatalf("rename error = %d %s", response.Code, response.Body.String())
+			}
+		})
+	}
+}
+
+func TestCatalogOrganizationDeleteUsesVersionedMutation(t *testing.T) {
+	organizationID := uuid.New()
+	service := &fakeCatalogService{}
+	router, _, _, _, _ := newTestRouterWithCatalog(t, &fakeAuthFlow{}, service)
+	request := httptest.NewRequest(http.MethodDelete, "/api/v1/catalog/organizations/"+organizationID.String()+"?expectedVersion=2", nil)
+	request.AddCookie(&http.Cookie{Name: "releasehub_session", Value: "session-token"})
+	request.Header.Set("Origin", "https://releasehub.example")
+	request.Header.Set("X-CSRF-Token", "csrf-token")
+	response := httptest.NewRecorder()
+
+	router.ServeHTTP(response, request)
+
+	if response.Code != http.StatusNoContent || service.organizationDeletes != 1 || service.deleteID != organizationID || service.deleteVersion != 2 {
+		t.Fatalf("delete Organization = %d %s calls=%d input=%s/%d", response.Code, response.Body.String(), service.organizationDeletes, service.deleteID, service.deleteVersion)
+	}
+}
+
+func TestCatalogOrganizationDeleteMapsValidationAndConflictErrors(t *testing.T) {
+	organizationID := uuid.New()
+	tests := []struct {
+		name       string
+		query      string
+		serviceErr error
+		status     int
+		code       string
+	}{
+		{name: "invalid version", query: "?expectedVersion=0", status: http.StatusBadRequest, code: "INVALID_REQUEST"},
+		{name: "hidden resource", query: "?expectedVersion=1", serviceErr: catalogapp.ErrResourceNotFound, status: http.StatusNotFound, code: "RESOURCE_NOT_FOUND"},
+		{name: "conflict", query: "?expectedVersion=1", serviceErr: catalogapp.ErrResourceConflict, status: http.StatusConflict, code: "RESOURCE_MUTATION_CONFLICT"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			service := &fakeCatalogService{deleteError: test.serviceErr}
+			router, _, _, _, _ := newTestRouterWithCatalog(t, &fakeAuthFlow{}, service)
+			request := httptest.NewRequest(http.MethodDelete, "/api/v1/catalog/organizations/"+organizationID.String()+test.query, nil)
+			request.AddCookie(&http.Cookie{Name: "releasehub_session", Value: "session-token"})
+			request.Header.Set("Origin", "https://releasehub.example")
+			request.Header.Set("X-CSRF-Token", "csrf-token")
+			response := httptest.NewRecorder()
+			router.ServeHTTP(response, request)
+			if response.Code != test.status || !strings.Contains(response.Body.String(), `"code":"`+test.code+`"`) {
+				t.Fatalf("delete error = %d %s", response.Code, response.Body.String())
 			}
 		})
 	}
@@ -744,6 +959,8 @@ type fakeAuthFlow struct {
 	loggedOut, backchannelLoggedOut bool
 	session                         identity.Session
 	user                            identity.User
+	authenticateErr                 error
+	mutationErr                     error
 }
 
 func (*fakeAuthFlow) Begin() (string, string, error) {
@@ -753,6 +970,9 @@ func (*fakeAuthFlow) Complete(context.Context, string, string, string) (identity
 	return identity.User{ID: uuid.New(), Username: "vincent"}, "session-token", "csrf-token", nil
 }
 func (f *fakeAuthFlow) Authenticate(context.Context, string) (identity.Session, identity.User, error) {
+	if f.authenticateErr != nil {
+		return identity.Session{}, identity.User{}, f.authenticateErr
+	}
 	if f.session.ID != uuid.Nil {
 		return f.session, f.user, nil
 	}
@@ -760,6 +980,9 @@ func (f *fakeAuthFlow) Authenticate(context.Context, string) (identity.Session, 
 }
 
 func (f *fakeAuthFlow) ValidateMutation(ctx context.Context, token, _ string) (identity.Session, identity.User, error) {
+	if f.mutationErr != nil {
+		return identity.Session{}, identity.User{}, f.mutationErr
+	}
 	return f.Authenticate(ctx, token)
 }
 func (f *fakeAuthFlow) Logout(context.Context, string, string) (string, error) {
@@ -777,9 +1000,12 @@ type fakeLocalAuth struct {
 	loginCalls, changeCalls int
 }
 
-func (f *fakeLocalAuth) Login(context.Context, string, string) (identity.User, bool, string, string, error) {
+func (f *fakeLocalAuth) Login(context.Context, string, string) (identity.User, bool, identity.Session, string, string, error) {
 	f.loginCalls++
-	return f.user, f.mustChange, "local-session-token", "local-csrf-token", nil
+	return f.user, f.mustChange, identity.Session{
+		IdleExpiresAt:     time.Date(2026, time.September, 14, 8, 30, 0, 0, time.UTC),
+		AbsoluteExpiresAt: time.Date(2026, time.September, 14, 20, 0, 0, 0, time.UTC),
+	}, "local-session-token", "local-csrf-token", nil
 }
 
 func (f *fakeLocalAuth) ChangePassword(context.Context, uuid.UUID, string, string) error {
@@ -793,12 +1019,16 @@ func (f *fakeLocalAuth) MustChangePassword(context.Context, uuid.UUID) (bool, er
 }
 
 type fakeCatalogService struct {
-	listCalls, visibleCalls, treeCalls, environmentCreates, organizationRenames int
-	tree                                                                        catalogapp.ResourceTree
-	renameID                                                                    uuid.UUID
-	renameName                                                                  string
-	renameVersion                                                               uint64
-	renameError                                                                 error
+	listCalls, visibleCalls, treeCalls, environmentCreates, organizationRenames, organizationDeletes int
+	tree                                                                                             catalogapp.ResourceTree
+	renameID                                                                                         uuid.UUID
+	renameName                                                                                       string
+	renameVersion                                                                                    uint64
+	renameError                                                                                      error
+	deleteID                                                                                         uuid.UUID
+	deleteVersion                                                                                    uint64
+	deleteError                                                                                      error
+	treeError                                                                                        error
 }
 
 func (*fakeCatalogService) CreateOrganization(_ context.Context, _ catalogapp.Principal, _ catalogapp.Mutation, name string) (catalog.Organization, error) {
@@ -812,6 +1042,12 @@ func (s *fakeCatalogService) RenameOrganization(_ context.Context, _ catalogapp.
 		return catalog.Organization{}, s.renameError
 	}
 	return catalog.Organization{ID: organizationID, Name: name, Active: true, Version: expectedVersion + 1}, nil
+}
+
+func (s *fakeCatalogService) DeleteOrganization(_ context.Context, _ catalogapp.Principal, _ catalogapp.Mutation, organizationID uuid.UUID, expectedVersion uint64) error {
+	s.organizationDeletes++
+	s.deleteID, s.deleteVersion = organizationID, expectedVersion
+	return s.deleteError
 }
 
 func (*fakeCatalogService) CreateProject(_ context.Context, _ catalogapp.Principal, _ catalogapp.Mutation, organizationID uuid.UUID, name string) (catalog.Project, error) {
@@ -970,7 +1206,7 @@ func (s *fakeCatalogService) ListVisibleApplications(_ context.Context, _ catalo
 
 func (s *fakeCatalogService) ListResourceTree(context.Context, catalogapp.Principal) (catalogapp.ResourceTree, error) {
 	s.treeCalls++
-	return s.tree, nil
+	return s.tree, s.treeError
 }
 
 func requestMetricCount(t *testing.T, registry *prometheus.Registry) float64 {

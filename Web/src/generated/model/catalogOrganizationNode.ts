@@ -15,6 +15,7 @@ export interface CatalogOrganizationNode {
   version: number;
   isDefault: boolean;
   canRename: boolean;
+  canDelete: boolean;
   canCreateProject: boolean;
   projects: CatalogProjectNode[];
 }

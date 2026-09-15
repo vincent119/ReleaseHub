@@ -1,3 +1,17 @@
+.scopeCard {
+  overflow: hidden;
+  background: color-mix(
+    in srgb,
+    var(--rh-color-surface) 90%,
+    var(--rh-color-surface-soft)
+  );
+  border-color: color-mix(in srgb, var(--rh-color-border) 72%, transparent);
+}
+
+.scopeCard :global(.ant-card-body) {
+  padding: var(--rh-space-4) var(--rh-space-5);
+}
+
 .scopeRow {
   width: 100%;
 }

@@ -10,7 +10,10 @@ import type {
 export interface WorkflowNodeData extends Record<string, unknown> {
   state: ReleaseWorkflowState
   label: string
+  terminalOutcome?: WorkflowTerminalOutcome
 }
+
+export type WorkflowTerminalOutcome = 'success' | 'failure'
 
 export interface WorkflowEdgeData extends Record<string, unknown> {
   transition: ReleaseWorkflowTransition
@@ -43,7 +46,11 @@ export function documentToGraph(
   return {
     initialState: document.initialState,
     nodes: document.states.map((state) =>
-      graphNode(state, layout.node(state.key)),
+      graphNode(
+        state,
+        layout.node(state.key),
+        terminalOutcome(state, document.transitions),
+      ),
     ),
     edges: document.transitions.map(graphEdge),
   }
@@ -141,15 +148,75 @@ function transition(
 function graphNode(
   state: ReleaseWorkflowState,
   point: { x: number; y: number },
+  outcome?: WorkflowTerminalOutcome,
 ): WorkflowNode {
   return {
     id: state.key,
     type: 'workflowState',
     position: { x: point.x - nodeWidth / 2, y: point.y - nodeHeight / 2 },
-    data: { state, label: `${state.name}\n${state.type}` },
+    data: {
+      state,
+      label: `${state.name}\n${state.type}`,
+      ...(outcome ? { terminalOutcome: outcome } : {}),
+    },
     sourcePosition: Position.Right,
     targetPosition: Position.Left,
   }
+}
+
+const successfulDeploymentStatuses = new Set(['Succeeded'])
+const failedDeploymentStatuses = new Set([
+  'Failed',
+  'PartialFailed',
+  'Blocked',
+  'Terminated',
+])
+
+function terminalOutcome(
+  state: ReleaseWorkflowState,
+  transitions: ReleaseWorkflowTransition[],
+): WorkflowTerminalOutcome | undefined {
+  if (state.type !== 'Terminal') return undefined
+
+  const candidates = transitions.filter(
+    (transition) =>
+      transition.to === state.key && transition.trigger === 'DeploymentResult',
+  )
+  if (candidates.length === 0) return undefined
+
+  const outcomes = candidates.map((transition) => {
+    const statusConditions = transition.conditions.filter(
+      (condition) =>
+        condition.fact === 'deployment.status' &&
+        (condition.operator === 'Equals' || condition.operator === 'In'),
+    )
+    if (statusConditions.length === 0) return undefined
+    return outcomeFromStatuses(
+      statusConditions.flatMap((condition) =>
+        Array.isArray(condition.value) ? condition.value : [condition.value],
+      ),
+    )
+  })
+  if (outcomes.some((outcome) => !outcome)) return undefined
+
+  return new Set(outcomes).size === 1 ? outcomes[0] : undefined
+}
+
+function outcomeFromStatuses(
+  value: string | string[],
+): WorkflowTerminalOutcome | undefined {
+  const statuses = Array.isArray(value) ? value : [value]
+  if (
+    statuses.length > 0 &&
+    statuses.every((status) => successfulDeploymentStatuses.has(status))
+  )
+    return 'success'
+  if (
+    statuses.length > 0 &&
+    statuses.every((status) => failedDeploymentStatuses.has(status))
+  )
+    return 'failure'
+  return undefined
 }
 
 function graphEdge(value: ReleaseWorkflowTransition): WorkflowEdge {

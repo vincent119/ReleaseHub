@@ -47,6 +47,13 @@ const semanticTokens = [
   '--rh-shadow-floating',
 ] as const
 
+const feedbackComponentTokens = [
+  '--rh-feedback-success-bg',
+  '--rh-feedback-info-bg',
+  '--rh-feedback-warning-bg',
+  '--rh-feedback-error-bg',
+] as const
+
 describe.each([
   ['light', ':root'],
   ['dark', ":root[data-theme='dark']"],
@@ -54,6 +61,13 @@ describe.each([
   it('provides every required semantic value', () => {
     const declarations = getRule(selector)
     for (const token of semanticTokens) {
+      expect(readToken(declarations, token), token).not.toBe('')
+    }
+  })
+
+  it('provides every feedback component background', () => {
+    const declarations = getRule(selector)
+    for (const token of feedbackComponentTokens) {
       expect(readToken(declarations, token), token).not.toBe('')
     }
   })

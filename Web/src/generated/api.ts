@@ -71,6 +71,7 @@ import type {
   CreateReleaseWorkflowRequest,
   CreateReleaseWorkflowVersionRequest,
   DefinitionLifecycleRequest,
+  DeleteCatalogOrganizationParams,
   DeleteReleaseWorkflowParams,
   DeploymentBindingResponse,
   DeploymentExecutionResponse,
@@ -3286,14 +3287,24 @@ export type getCatalogResourceTreeResponse200 = {
 }
 
 export type getCatalogResourceTreeResponse401 = {
-  data: void
+  data: ErrorResponse
   status: 401
+}
+
+export type getCatalogResourceTreeResponse500 = {
+  data: ErrorResponse
+  status: 500
+}
+
+export type getCatalogResourceTreeResponse503 = {
+  data: ErrorResponse
+  status: 503
 }
 
 export type getCatalogResourceTreeResponseSuccess = (getCatalogResourceTreeResponse200) & {
   headers: Headers;
 };
-export type getCatalogResourceTreeResponseError = (getCatalogResourceTreeResponse401) & {
+export type getCatalogResourceTreeResponseError = (getCatalogResourceTreeResponse401 | getCatalogResourceTreeResponse500 | getCatalogResourceTreeResponse503) & {
   headers: Headers;
 };
 
@@ -3339,7 +3350,7 @@ export const getGetCatalogResourceTreeQueryKey = () => {
     }
 
 
-export const getGetCatalogResourceTreeQueryOptions = <TData = Awaited<ReturnType<typeof getCatalogResourceTree>>, TError = void>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCatalogResourceTree>>, TError, TData>>, fetch?: RequestInit}
+export const getGetCatalogResourceTreeQueryOptions = <TData = Awaited<ReturnType<typeof getCatalogResourceTree>>, TError = ErrorResponse>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCatalogResourceTree>>, TError, TData>>, fetch?: RequestInit}
 ) => {
 
 const {query: queryOptions, fetch: fetchOptions} = options ?? {};
@@ -3358,10 +3369,10 @@ const {query: queryOptions, fetch: fetchOptions} = options ?? {};
 }
 
 export type GetCatalogResourceTreeQueryResult = NonNullable<Awaited<ReturnType<typeof getCatalogResourceTree>>>
-export type GetCatalogResourceTreeQueryError = void
+export type GetCatalogResourceTreeQueryError = ErrorResponse
 
 
-export function useGetCatalogResourceTree<TData = Awaited<ReturnType<typeof getCatalogResourceTree>>, TError = void>(
+export function useGetCatalogResourceTree<TData = Awaited<ReturnType<typeof getCatalogResourceTree>>, TError = ErrorResponse>(
   options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCatalogResourceTree>>, TError, TData>> & Pick<
         DefinedInitialDataOptions<
           Awaited<ReturnType<typeof getCatalogResourceTree>>,
@@ -3371,7 +3382,7 @@ export function useGetCatalogResourceTree<TData = Awaited<ReturnType<typeof getC
       >, fetch?: RequestInit}
  , queryClient?: QueryClient
   ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useGetCatalogResourceTree<TData = Awaited<ReturnType<typeof getCatalogResourceTree>>, TError = void>(
+export function useGetCatalogResourceTree<TData = Awaited<ReturnType<typeof getCatalogResourceTree>>, TError = ErrorResponse>(
   options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCatalogResourceTree>>, TError, TData>> & Pick<
         UndefinedInitialDataOptions<
           Awaited<ReturnType<typeof getCatalogResourceTree>>,
@@ -3381,7 +3392,7 @@ export function useGetCatalogResourceTree<TData = Awaited<ReturnType<typeof getC
       >, fetch?: RequestInit}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useGetCatalogResourceTree<TData = Awaited<ReturnType<typeof getCatalogResourceTree>>, TError = void>(
+export function useGetCatalogResourceTree<TData = Awaited<ReturnType<typeof getCatalogResourceTree>>, TError = ErrorResponse>(
   options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCatalogResourceTree>>, TError, TData>>, fetch?: RequestInit}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
@@ -3389,7 +3400,7 @@ export function useGetCatalogResourceTree<TData = Awaited<ReturnType<typeof getC
  * @summary Get the resource hierarchy visible to the current user
  */
 
-export function useGetCatalogResourceTree<TData = Awaited<ReturnType<typeof getCatalogResourceTree>>, TError = void>(
+export function useGetCatalogResourceTree<TData = Awaited<ReturnType<typeof getCatalogResourceTree>>, TError = ErrorResponse>(
   options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCatalogResourceTree>>, TError, TData>>, fetch?: RequestInit}
  , queryClient?: QueryClient
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
@@ -3638,6 +3649,130 @@ export const useUpdateCatalogOrganization = <TError = void,
         TContext
       > => {
       return useMutation(getUpdateCatalogOrganizationMutationOptions(options), queryClient);
+    }
+
+export type deleteCatalogOrganizationResponse204 = {
+  data: void
+  status: 204
+}
+
+export type deleteCatalogOrganizationResponse400 = {
+  data: void
+  status: 400
+}
+
+export type deleteCatalogOrganizationResponse401 = {
+  data: void
+  status: 401
+}
+
+export type deleteCatalogOrganizationResponse404 = {
+  data: void
+  status: 404
+}
+
+export type deleteCatalogOrganizationResponse409 = {
+  data: void
+  status: 409
+}
+
+export type deleteCatalogOrganizationResponseSuccess = (deleteCatalogOrganizationResponse204) & {
+  headers: Headers;
+};
+export type deleteCatalogOrganizationResponseError = (deleteCatalogOrganizationResponse400 | deleteCatalogOrganizationResponse401 | deleteCatalogOrganizationResponse404 | deleteCatalogOrganizationResponse409) & {
+  headers: Headers;
+};
+
+export type deleteCatalogOrganizationResponse = (deleteCatalogOrganizationResponseSuccess | deleteCatalogOrganizationResponseError)
+
+export const getDeleteCatalogOrganizationUrl = (organizationId: string,
+    params: DeleteCatalogOrganizationParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/v1/catalog/organizations/${organizationId}?${stringifiedParams}` : `/api/v1/catalog/organizations/${organizationId}`
+}
+
+/**
+ * @summary Deactivate an empty non-default Organization
+ */
+export const deleteCatalogOrganization = async (organizationId: string,
+    params: DeleteCatalogOrganizationParams, options?: RequestInit): Promise<deleteCatalogOrganizationResponse> => {
+
+  const res = await fetch(getDeleteCatalogOrganizationUrl(organizationId,params),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: deleteCatalogOrganizationResponse['data'] = body ? JSON.parse(body) : undefined
+  return { data, status: res.status, headers: res.headers } as deleteCatalogOrganizationResponse
+}
+
+
+
+
+
+export const getDeleteCatalogOrganizationMutationKey = () => ['deleteCatalogOrganization'] as const;
+
+export const getDeleteCatalogOrganizationMutationOptions = <TError = void,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteCatalogOrganization>>, TError,DeleteCatalogOrganizationMutationVariables, TContext>, fetch?: RequestInit}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteCatalogOrganization>>, TError,DeleteCatalogOrganizationMutationVariables, TContext> => {
+
+const mutationKey = getDeleteCatalogOrganizationMutationKey();
+const {mutation: mutationOptions, fetch: fetchOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, fetch: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteCatalogOrganization>>, DeleteCatalogOrganizationMutationVariables> = (props) => {
+          const {organizationId,params} = props ?? {};
+
+          return  deleteCatalogOrganization(organizationId,params,fetchOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteCatalogOrganizationMutationResult = NonNullable<Awaited<ReturnType<typeof deleteCatalogOrganization>>>
+
+    export type DeleteCatalogOrganizationMutationError = void
+    export type DeleteCatalogOrganizationMutationVariables = {organizationId: string;params: DeleteCatalogOrganizationParams}
+
+    /**
+ * @summary Deactivate an empty non-default Organization
+ */
+export const useDeleteCatalogOrganization = <TError = void,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteCatalogOrganization>>, TError,DeleteCatalogOrganizationMutationVariables, TContext>, fetch?: RequestInit}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof deleteCatalogOrganization>>,
+        TError,
+        DeleteCatalogOrganizationMutationVariables,
+        TContext
+      > => {
+      return useMutation(getDeleteCatalogOrganizationMutationOptions(options), queryClient);
     }
 
 export type createCatalogProjectResponse201 = {
@@ -5739,14 +5874,24 @@ export type listReleaseWorkflowsResponse200 = {
 }
 
 export type listReleaseWorkflowsResponse401 = {
-  data: void
+  data: ErrorResponse
   status: 401
+}
+
+export type listReleaseWorkflowsResponse500 = {
+  data: ErrorResponse
+  status: 500
+}
+
+export type listReleaseWorkflowsResponse503 = {
+  data: ErrorResponse
+  status: 503
 }
 
 export type listReleaseWorkflowsResponseSuccess = (listReleaseWorkflowsResponse200) & {
   headers: Headers;
 };
-export type listReleaseWorkflowsResponseError = (listReleaseWorkflowsResponse401) & {
+export type listReleaseWorkflowsResponseError = (listReleaseWorkflowsResponse401 | listReleaseWorkflowsResponse500 | listReleaseWorkflowsResponse503) & {
   headers: Headers;
 };
 
@@ -5792,7 +5937,7 @@ export const getListReleaseWorkflowsQueryKey = () => {
     }
 
 
-export const getListReleaseWorkflowsQueryOptions = <TData = Awaited<ReturnType<typeof listReleaseWorkflows>>, TError = void>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listReleaseWorkflows>>, TError, TData>>, fetch?: RequestInit}
+export const getListReleaseWorkflowsQueryOptions = <TData = Awaited<ReturnType<typeof listReleaseWorkflows>>, TError = ErrorResponse>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listReleaseWorkflows>>, TError, TData>>, fetch?: RequestInit}
 ) => {
 
 const {query: queryOptions, fetch: fetchOptions} = options ?? {};
@@ -5811,10 +5956,10 @@ const {query: queryOptions, fetch: fetchOptions} = options ?? {};
 }
 
 export type ListReleaseWorkflowsQueryResult = NonNullable<Awaited<ReturnType<typeof listReleaseWorkflows>>>
-export type ListReleaseWorkflowsQueryError = void
+export type ListReleaseWorkflowsQueryError = ErrorResponse
 
 
-export function useListReleaseWorkflows<TData = Awaited<ReturnType<typeof listReleaseWorkflows>>, TError = void>(
+export function useListReleaseWorkflows<TData = Awaited<ReturnType<typeof listReleaseWorkflows>>, TError = ErrorResponse>(
   options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listReleaseWorkflows>>, TError, TData>> & Pick<
         DefinedInitialDataOptions<
           Awaited<ReturnType<typeof listReleaseWorkflows>>,
@@ -5824,7 +5969,7 @@ export function useListReleaseWorkflows<TData = Awaited<ReturnType<typeof listRe
       >, fetch?: RequestInit}
  , queryClient?: QueryClient
   ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useListReleaseWorkflows<TData = Awaited<ReturnType<typeof listReleaseWorkflows>>, TError = void>(
+export function useListReleaseWorkflows<TData = Awaited<ReturnType<typeof listReleaseWorkflows>>, TError = ErrorResponse>(
   options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listReleaseWorkflows>>, TError, TData>> & Pick<
         UndefinedInitialDataOptions<
           Awaited<ReturnType<typeof listReleaseWorkflows>>,
@@ -5834,7 +5979,7 @@ export function useListReleaseWorkflows<TData = Awaited<ReturnType<typeof listRe
       >, fetch?: RequestInit}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useListReleaseWorkflows<TData = Awaited<ReturnType<typeof listReleaseWorkflows>>, TError = void>(
+export function useListReleaseWorkflows<TData = Awaited<ReturnType<typeof listReleaseWorkflows>>, TError = ErrorResponse>(
   options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listReleaseWorkflows>>, TError, TData>>, fetch?: RequestInit}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
@@ -5842,7 +5987,7 @@ export function useListReleaseWorkflows<TData = Awaited<ReturnType<typeof listRe
  * @summary List Release Workflows and versions
  */
 
-export function useListReleaseWorkflows<TData = Awaited<ReturnType<typeof listReleaseWorkflows>>, TError = void>(
+export function useListReleaseWorkflows<TData = Awaited<ReturnType<typeof listReleaseWorkflows>>, TError = ErrorResponse>(
   options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listReleaseWorkflows>>, TError, TData>>, fetch?: RequestInit}
  , queryClient?: QueryClient
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
@@ -5866,19 +6011,29 @@ export type createReleaseWorkflowResponse201 = {
 }
 
 export type createReleaseWorkflowResponse401 = {
-  data: void
+  data: ErrorResponse
   status: 401
 }
 
 export type createReleaseWorkflowResponse409 = {
-  data: void
+  data: ErrorResponse
   status: 409
+}
+
+export type createReleaseWorkflowResponse500 = {
+  data: ErrorResponse
+  status: 500
+}
+
+export type createReleaseWorkflowResponse503 = {
+  data: ErrorResponse
+  status: 503
 }
 
 export type createReleaseWorkflowResponseSuccess = (createReleaseWorkflowResponse201) & {
   headers: Headers;
 };
-export type createReleaseWorkflowResponseError = (createReleaseWorkflowResponse401 | createReleaseWorkflowResponse409) & {
+export type createReleaseWorkflowResponseError = (createReleaseWorkflowResponse401 | createReleaseWorkflowResponse409 | createReleaseWorkflowResponse500 | createReleaseWorkflowResponse503) & {
   headers: Headers;
 };
 
@@ -5925,7 +6080,7 @@ const res = await fetch(getCreateReleaseWorkflowUrl(),
 
 export const getCreateReleaseWorkflowMutationKey = () => ['createReleaseWorkflow'] as const;
 
-export const getCreateReleaseWorkflowMutationOptions = <TError = void,
+export const getCreateReleaseWorkflowMutationOptions = <TError = ErrorResponse,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createReleaseWorkflow>>, TError,CreateReleaseWorkflowMutationVariables, TContext>, fetch?: RequestInit}
 ): UseMutationOptions<Awaited<ReturnType<typeof createReleaseWorkflow>>, TError,CreateReleaseWorkflowMutationVariables, TContext> => {
 
@@ -5954,13 +6109,13 @@ const {mutation: mutationOptions, fetch: fetchOptions} = options ?
 
     export type CreateReleaseWorkflowMutationResult = NonNullable<Awaited<ReturnType<typeof createReleaseWorkflow>>>
     export type CreateReleaseWorkflowMutationBody = CreateReleaseWorkflowRequest
-    export type CreateReleaseWorkflowMutationError = void
+    export type CreateReleaseWorkflowMutationError = ErrorResponse
     export type CreateReleaseWorkflowMutationVariables = {data: CreateReleaseWorkflowRequest}
 
     /**
  * @summary Create a Release Workflow and its first Draft Version
  */
-export const useCreateReleaseWorkflow = <TError = void,
+export const useCreateReleaseWorkflow = <TError = ErrorResponse,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createReleaseWorkflow>>, TError,CreateReleaseWorkflowMutationVariables, TContext>, fetch?: RequestInit}
  , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof createReleaseWorkflow>>,
@@ -6612,6 +6767,11 @@ export type createDeploymentPlanResponse401 = {
   status: 401
 }
 
+export type createDeploymentPlanResponse404 = {
+  data: void
+  status: 404
+}
+
 export type createDeploymentPlanResponse409 = {
   data: void
   status: 409
@@ -6620,7 +6780,7 @@ export type createDeploymentPlanResponse409 = {
 export type createDeploymentPlanResponseSuccess = (createDeploymentPlanResponse201) & {
   headers: Headers;
 };
-export type createDeploymentPlanResponseError = (createDeploymentPlanResponse401 | createDeploymentPlanResponse409) & {
+export type createDeploymentPlanResponseError = (createDeploymentPlanResponse401 | createDeploymentPlanResponse404 | createDeploymentPlanResponse409) & {
   headers: Headers;
 };
 
@@ -8470,10 +8630,15 @@ export type getAuthSessionResponse401 = {
   status: 401
 }
 
+export type getAuthSessionResponse503 = {
+  data: ErrorResponse
+  status: 503
+}
+
 export type getAuthSessionResponseSuccess = (getAuthSessionResponse200) & {
   headers: Headers;
 };
-export type getAuthSessionResponseError = (getAuthSessionResponse401) & {
+export type getAuthSessionResponseError = (getAuthSessionResponse401 | getAuthSessionResponse503) & {
   headers: Headers;
 };
 

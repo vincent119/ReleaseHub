@@ -47,6 +47,22 @@ func TestOrganizationRenameRejectsInvalidState(t *testing.T) {
 	}
 }
 
+func TestOrganizationDeactivateProtectsDefaultAndAdvancesVersion(t *testing.T) {
+	organizationID := uuid.New()
+	organization := domain.Organization{ID: organizationID, Name: "Tenant", Active: true, Version: 2}
+
+	deactivated, err := organization.Deactivate(uuid.New())
+	if err != nil {
+		t.Fatalf("deactivate non-default Organization: %v", err)
+	}
+	if deactivated.Active || deactivated.Version != 3 || deactivated.ID != organizationID {
+		t.Fatalf("deactivated Organization = %#v", deactivated)
+	}
+	if _, err := organization.Deactivate(organizationID); !errors.Is(err, domain.ErrDefaultOrganizationProtected) {
+		t.Fatalf("deactivate default Organization = %v", err)
+	}
+}
+
 func TestCustomEnvironmentFixedType(t *testing.T) {
 	environment, err := domain.NewEnvironment(uuid.New(), uuid.New(), "uat-tw", domain.EnvironmentTesting)
 	if err != nil {

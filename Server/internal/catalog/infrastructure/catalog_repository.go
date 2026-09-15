@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgconn"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"github.com/vincent119/ReleaseHub/Server/internal/catalog/application"
 	catalog "github.com/vincent119/ReleaseHub/Server/internal/catalog/domain"
@@ -86,9 +87,94 @@ func (r *CatalogRepository) RenameOrganization(ctx context.Context, mutation app
 	return classifyCatalogMutationError(err)
 }
 
+// DeleteOrganization deactivates an empty non-default tenant boundary atomically with audit records.
+func (r *CatalogRepository) DeleteOrganization(ctx context.Context, mutation application.Mutation, current, deactivated catalog.Organization, defaultOrganizationID uuid.UUID) error {
+	if current.ID == uuid.Nil || current.ID != deactivated.ID || deactivated.Active || deactivated.Version != current.Version+1 || defaultOrganizationID == uuid.Nil {
+		return application.ErrResourceConflict
+	}
+	now := time.Now().UTC()
+	payload, err := json.Marshal(map[string]any{"resourceId": current.ID.String(), "version": deactivated.Version})
+	if err != nil {
+		return fmt.Errorf("marshal Organization deletion event: %w", err)
+	}
+	event, err := platform.NewEvent("catalog.organization.deleted", "organization", current.ID.String(), payload, now)
+	if err != nil {
+		return fmt.Errorf("create Organization deletion event: %w", err)
+	}
+	err = database.WithinTransaction(ctx, r.db, func(tx *gorm.DB) error {
+		var locked organizationModel
+		if err := tx.WithContext(ctx).Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND active", current.ID).Take(&locked).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return application.ErrResourceConflict
+			}
+			return fmt.Errorf("lock Organization for deletion: %w", err)
+		}
+		if locked.Version != current.Version || locked.ID == defaultOrganizationID {
+			return application.ErrResourceConflict
+		}
+		var projectCount int64
+		if err := tx.WithContext(ctx).Model(&projectModel{}).Where("organization_id = ?", current.ID).Count(&projectCount).Error; err != nil {
+			return fmt.Errorf("count Organization Projects: %w", err)
+		}
+		if projectCount != 0 {
+			return application.ErrResourceConflict
+		}
+		result := tx.WithContext(ctx).Model(&organizationModel{}).
+			Where("id = ? AND version = ? AND active", current.ID, current.Version).
+			Updates(map[string]any{"active": false, "version": deactivated.Version, "updated_at": now})
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected != 1 {
+			return application.ErrResourceConflict
+		}
+		if err := database.AppendAudit(ctx, tx, database.AuditRecord{
+			OccurredAt: now, ActorID: mutation.ActorID, OrganizationID: &current.ID,
+			Action: "organization.delete", ResourceType: "organization", ResourceID: current.ID.String(),
+			RequestID: mutation.RequestID,
+			Metadata:  map[string]any{"fromVersion": current.Version, "toVersion": deactivated.Version},
+		}); err != nil {
+			return err
+		}
+		return database.AppendOutbox(ctx, tx, event)
+	})
+	return classifyCatalogMutationError(err)
+}
+
 func (r *CatalogRepository) CreateProject(ctx context.Context, mutation application.Mutation, value catalog.Project) error {
 	model := projectModel{ID: value.ID, OrganizationID: value.OrganizationID, Name: value.Name, Active: value.Active, Version: value.Version}
-	return r.create(ctx, mutation, &value.OrganizationID, "project", value.ID, "catalog.project.created", model)
+	now := time.Now().UTC()
+	payload, err := json.Marshal(map[string]string{"resourceId": value.ID.String()})
+	if err != nil {
+		return fmt.Errorf("marshal catalog event: %w", err)
+	}
+	event, err := platform.NewEvent("catalog.project.created", "project", value.ID.String(), payload, now)
+	if err != nil {
+		return fmt.Errorf("create Project event: %w", err)
+	}
+	err = database.WithinTransaction(ctx, r.db, func(tx *gorm.DB) error {
+		var parent organizationModel
+		parentResult := tx.WithContext(ctx).Clauses(clause.Locking{Strength: "KEY SHARE"}).
+			Where("id = ? AND active", value.OrganizationID).Take(&parent)
+		if errors.Is(parentResult.Error, gorm.ErrRecordNotFound) {
+			return application.ErrResourceConflict
+		}
+		if parentResult.Error != nil {
+			return fmt.Errorf("lock Project Organization: %w", parentResult.Error)
+		}
+		if err := tx.WithContext(ctx).Create(&model).Error; err != nil {
+			return fmt.Errorf("create project: %w", err)
+		}
+		if err := database.AppendAudit(ctx, tx, database.AuditRecord{
+			OccurredAt: now, ActorID: mutation.ActorID, OrganizationID: &value.OrganizationID,
+			Action: "project.create", ResourceType: "project", ResourceID: value.ID.String(),
+			RequestID: mutation.RequestID, Metadata: map[string]any{},
+		}); err != nil {
+			return err
+		}
+		return database.AppendOutbox(ctx, tx, event)
+	})
+	return classifyCatalogMutationError(err)
 }
 
 func (r *CatalogRepository) CreateEnvironment(ctx context.Context, mutation application.Mutation, value catalog.Environment) error {
@@ -142,6 +228,23 @@ func (r *CatalogRepository) ListActiveProjects(ctx context.Context) ([]catalog.P
 	result := make([]catalog.Project, 0, len(models))
 	for _, model := range models {
 		result = append(result, catalog.Project{ID: model.ID, OrganizationID: model.OrganizationID, Name: model.Name, Active: model.Active, Version: model.Version})
+	}
+	return result, nil
+}
+
+// ListOrganizationProjectCounts reports all Project rows so delete capabilities never depend on visibility or active state.
+func (r *CatalogRepository) ListOrganizationProjectCounts(ctx context.Context) (map[uuid.UUID]uint64, error) {
+	var rows []struct {
+		OrganizationID uuid.UUID
+		Total          uint64
+	}
+	if err := r.db.WithContext(ctx).Model(&projectModel{}).
+		Select("organization_id, COUNT(*) AS total").Group("organization_id").Scan(&rows).Error; err != nil {
+		return nil, fmt.Errorf("list Organization Project counts: %w", err)
+	}
+	result := make(map[uuid.UUID]uint64, len(rows))
+	for _, row := range rows {
+		result[row.OrganizationID] = row.Total
 	}
 	return result, nil
 }

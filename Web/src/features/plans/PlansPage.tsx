@@ -1,18 +1,21 @@
 import { PlusOutlined } from '@ant-design/icons'
+import { useQueryClient } from '@tanstack/react-query'
 import { Alert, Button, Empty, Flex, Space, Typography } from 'antd'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import {
   changeDeploymentPlanVersionLifecycle,
   createDeploymentPlan,
   createDeploymentPlanVersion,
+  getGetAuthSessionQueryKey,
   useGetCatalogResourceTree,
   useListDeploymentPlans,
   useListReleaseWorkflows,
 } from '@/generated/api'
 import type { DeploymentPlan, DeploymentPlanVersion } from '@/generated/model'
 import { useFeedback } from '@/shared/feedback/useFeedback'
+import definitionStyles from '@/shared/definition/DefinitionWorkspace.module.css'
 
 import { DeploymentBindingPanel } from './components/DeploymentBindingPanel'
 import { PlanDetail } from './components/PlanDetail'
@@ -34,10 +37,12 @@ interface EditorState {
   plan?: DeploymentPlan
   initial: PlanEditorValue
 }
+type PlanMutationOperation = 'create' | 'version' | 'lifecycle'
 
 export function PlansPage() {
   const { t } = useTranslation()
   const feedback = useFeedback()
+  const queryClient = useQueryClient()
   const resources = useGetCatalogResourceTree()
   const workflows = useListReleaseWorkflows()
   const [scope, setScope] = useState<PlanScopeChoice>()
@@ -49,10 +54,25 @@ export function PlansPage() {
   const [versionID, setVersionID] = useState<string>()
   const [editor, setEditor] = useState<EditorState>()
   const [submitting, setSubmitting] = useState(false)
+  const planListStatus = plansQuery.data?.status
+  const planListAvailable = planListStatus === 200 && !plansQuery.isError
+  const planListUnavailable = Boolean(
+    scope &&
+    (plansQuery.isError ||
+      (planListStatus !== undefined && planListStatus !== 200)),
+  )
   const plans = plansQuery.data?.status === 200 ? plansQuery.data.data.data : []
   const plan = plans.find((item) => item.id === planID) ?? plans[0]
   const version = selectedVersion(plan, versionID)
+  useEffect(() => {
+    if (planListStatus !== 401) return
+    void queryClient.invalidateQueries({
+      queryKey: getGetAuthSessionQueryKey(),
+      exact: true,
+    })
+  }, [planListStatus, queryClient])
   const mutate = async (
+    mutationOperation: PlanMutationOperation,
     operation: (options: RequestInit) => Promise<{ status: number }>,
   ) => {
     const csrf = browserCookie('releasehub_csrf')
@@ -60,8 +80,16 @@ export function PlansPage() {
     setSubmitting(true)
     try {
       const response = await operation({ headers: { 'X-CSRF-Token': csrf } })
-      if (response.status < 200 || response.status >= 300)
-        return void feedback.error(t('plans.mutation.rejected'))
+      if (response.status < 200 || response.status >= 300) {
+        if (response.status === 401)
+          await queryClient.invalidateQueries({
+            queryKey: getGetAuthSessionQueryKey(),
+            exact: true,
+          })
+        return void feedback.error(
+          t(planMutationErrorKey(mutationOperation, response.status)),
+        )
+      }
       setEditor(undefined)
       feedback.success(t('plans.mutation.saved'))
       await plansQuery.refetch()
@@ -74,7 +102,7 @@ export function PlansPage() {
   const save = (value: PlanEditorValue) => {
     if (!scope || !editor) return
     if (editor.mode === 'create') {
-      return mutate((options) =>
+      return mutate('create', (options) =>
         createDeploymentPlan(
           {
             ownerKind: value.ownerKind,
@@ -88,7 +116,7 @@ export function PlansPage() {
         ),
       )
     }
-    return mutate((options) =>
+    return mutate('version', (options) =>
       createDeploymentPlanVersion(
         editor.plan!.id,
         {
@@ -122,7 +150,13 @@ export function PlansPage() {
     workflows.data?.status === 200 ? workflows.data.data.data : []
   return (
     <Space orientation="vertical" size="large" className={styles.page}>
-      <Flex justify="space-between" align="start" gap="middle" wrap>
+      <Flex
+        className={styles.pageHeader}
+        justify="space-between"
+        align="start"
+        gap="middle"
+        wrap
+      >
         <div>
           <Typography.Title level={2}>{t('plans.title')}</Typography.Title>
           <Typography.Paragraph type="secondary">
@@ -132,7 +166,7 @@ export function PlansPage() {
         <Button
           type="primary"
           icon={<PlusOutlined />}
-          disabled={!scope}
+          disabled={!scope || !planListAvailable}
           onClick={() => setEditor(createEditor(t))}
         >
           {t('plans.actions.create')}
@@ -147,11 +181,13 @@ export function PlansPage() {
           setVersionID(undefined)
         }}
       />
-      {!scope ? (
+      {planListUnavailable ? (
+        <Alert type="error" showIcon message={t('plans.unavailable')} />
+      ) : !scope ? (
         <Empty description={t('plans.scope.select')} />
       ) : (
         <>
-          <div className={styles.workspace}>
+          <div className={definitionStyles.workspace}>
             <PlanList
               plans={plans}
               selected={plan?.id}
@@ -173,7 +209,7 @@ export function PlansPage() {
               onLifecycle={(lifecycle) =>
                 plan &&
                 version &&
-                void mutate((options) =>
+                void mutate('lifecycle', (options) =>
                   changeDeploymentPlanVersionLifecycle(
                     plan.id,
                     version.id,
@@ -246,4 +282,19 @@ function browserCookie(name: string): string | undefined {
     .split('; ')
     .find((value) => value.startsWith(`${name}=`))
     ?.slice(name.length + 1)
+}
+
+function planMutationErrorKey(
+  operation: PlanMutationOperation,
+  status: number,
+) {
+  if (status === 401) return 'plans.mutation.unauthenticated'
+  if (status === 404) return 'plans.mutation.notFound'
+  if (status === 409)
+    return operation === 'create'
+      ? 'plans.mutation.nameConflict'
+      : 'plans.mutation.versionConflict'
+  if (status === 422 && operation === 'lifecycle')
+    return 'plans.mutation.invalidLifecycle'
+  return 'plans.mutation.error'
 }

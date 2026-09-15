@@ -29,12 +29,92 @@
   font-size: 0.625rem;
 }
 
-.themeSettings {
-  width: min(22rem, calc(100vw - 3rem));
-  padding-block: var(--rh-space-1);
+.preferenceSettings {
+  width: min(18rem, calc(100vw - 2rem));
+}
+
+.fullWidth {
+  width: 100%;
+}
+
+.personalSettingsContent {
+  display: grid;
+  gap: var(--rh-space-5);
+}
+
+.personalSettingsModal :global(.ant-modal-body) {
+  max-height: calc(100dvh - 10rem);
+  overflow-y: auto;
+}
+
+.identityDetails :global(.ant-descriptions-view) {
+  overflow: hidden;
+  background: var(--rh-color-surface);
+  border-color: var(--rh-color-border);
+  border-radius: var(--rh-radius-lg);
+}
+
+.identityDetails :global(.ant-descriptions-item-label) {
+  width: 8.5rem;
+  color: var(--rh-color-text-secondary);
+  font-weight: 600;
+  background: var(--rh-color-surface-soft) !important;
+}
+
+.identityDetails :global(.ant-descriptions-item-content) {
+  min-width: 0;
+  color: var(--rh-color-text-primary);
+  background: var(--rh-color-surface) !important;
+}
+
+.passwordSection {
+  padding: var(--rh-space-5);
+  background: var(--rh-color-surface-soft);
+  border: 1px solid var(--rh-color-border);
+  border-radius: var(--rh-radius-lg);
+  box-shadow: var(--rh-shadow-card);
+}
+
+.passwordSectionHeader {
+  display: flex;
+  gap: var(--rh-space-3);
+  align-items: flex-start;
+}
+
+.passwordSectionIcon {
+  display: inline-flex;
+  flex: 0 0 2.5rem;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  color: var(--rh-color-primary);
+  background: color-mix(in srgb, var(--rh-color-primary) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--rh-color-primary) 34%, transparent);
+  border-radius: var(--rh-radius-md);
+}
+
+.passwordSectionTitle {
+  margin: 0 0 var(--rh-space-1) !important;
+}
+
+.passwordForm {
+  margin-top: var(--rh-space-5);
+}
+
+.passwordError {
+  margin-bottom: var(--rh-space-4);
+}
+
+.passwordActions {
+  display: flex;
+  gap: var(--rh-space-2);
+  justify-content: flex-end;
 }
 
 .userId {
+  display: block;
+  max-width: 100%;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   overflow-wrap: anywhere;
   user-select: text;
@@ -49,5 +129,28 @@
   .accountTrigger {
     width: 2.5rem;
     padding-inline: 0;
+  }
+
+  .preferenceSettings {
+    width: 100%;
+  }
+}
+
+@media (max-width: 30rem) {
+  .identityDetails :global(.ant-descriptions-item-label) {
+    width: 6.75rem;
+  }
+
+  .passwordSection {
+    padding: var(--rh-space-4);
+  }
+
+  .passwordActions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .passwordActions > button {
+    width: 100%;
   }
 }

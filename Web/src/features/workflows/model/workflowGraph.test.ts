@@ -63,13 +63,60 @@ describe('workflow graph mapping', () => {
   })
 
   it('routes production deployment results by execution status', () => {
-    const resultTransitions = productionApprovalTemplate().transitions.filter(
+    const template = productionApprovalTemplate()
+    const resultTransitions = template.transitions.filter(
       (transition) => transition.trigger === 'DeploymentResult',
     )
+    const graph = documentToGraph(template)
 
     expect(resultTransitions).toHaveLength(2)
     expect(
       resultTransitions.every((transition) => transition.conditions.length > 0),
     ).toBe(true)
+    expect(graph.nodes.find((node) => node.id === 'succeeded')?.data).toEqual(
+      expect.objectContaining({ terminalOutcome: 'success' }),
+    )
+    expect(graph.nodes.find((node) => node.id === 'failed')?.data).toEqual(
+      expect.objectContaining({ terminalOutcome: 'failure' }),
+    )
+    expect(graphToDocument(graph)).toEqual(template)
+  })
+
+  it('does not infer terminal outcomes from a state name or key', () => {
+    const document: ReleaseWorkflowDocument = {
+      initialState: 'deploying',
+      states: [
+        { key: 'deploying', name: 'Deploying', type: 'Deployment' },
+        { key: 'failed', name: 'Succeeded', type: 'Terminal' },
+      ],
+      transitions: [
+        {
+          key: 'finish',
+          from: 'deploying',
+          to: 'failed',
+          trigger: 'Manual',
+          permission: 'deployment_request.update',
+          conditions: [],
+        },
+      ],
+    }
+
+    const terminal = documentToGraph(document).nodes.find(
+      (node) => node.id === 'failed',
+    )
+    expect(terminal?.data.terminalOutcome).toBeUndefined()
+  })
+
+  it('keeps mixed deployment outcomes visually neutral', () => {
+    const document = productionApprovalTemplate()
+    const succeeded = document.transitions.find(
+      (transition) => transition.to === 'succeeded',
+    )!
+    succeeded.conditions[0].value = ['Succeeded', 'Failed']
+
+    const terminal = documentToGraph(document).nodes.find(
+      (node) => node.id === 'succeeded',
+    )
+    expect(terminal?.data.terminalOutcome).toBeUndefined()
   })
 })

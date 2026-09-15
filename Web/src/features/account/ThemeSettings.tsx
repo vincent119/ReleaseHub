@@ -2,29 +2,44 @@ import { Modal, Popover } from 'antd'
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { PreferenceControls } from '@/features/preferences'
+import {
+  LanguagePreferenceControl,
+  ThemePreferenceControl,
+} from '@/features/preferences'
 
 import styles from './AccountMenu.module.css'
 
-interface ThemeSettingsProps {
+export type PreferenceSettingsKind = 'language' | 'theme'
+
+interface PreferenceSettingsProps {
   anchor: ReactNode
   desktop: boolean
+  kind: PreferenceSettingsKind
   open: boolean
   onClose: () => void
   onAfterClose: () => void
 }
 
-export function ThemeSettings({
+export function PreferenceSettings({
   anchor,
   desktop,
+  kind,
   open,
   onClose,
   onAfterClose,
-}: ThemeSettingsProps) {
+}: PreferenceSettingsProps) {
   const { t } = useTranslation()
+  const title =
+    kind === 'language'
+      ? t('account.languageSettings')
+      : t('account.themeSettings')
   const controls = (
-    <div className={styles.themeSettings}>
-      <PreferenceControls />
+    <div className={styles.preferenceSettings}>
+      {kind === 'language' ? (
+        <LanguagePreferenceControl />
+      ) : (
+        <ThemePreferenceControl />
+      )}
     </div>
   )
 
@@ -32,7 +47,7 @@ export function ThemeSettings({
     <>
       <Popover
         open={desktop && open}
-        title={t('account.themeSettings')}
+        title={title}
         content={controls}
         placement="bottomRight"
         trigger="click"
@@ -44,7 +59,7 @@ export function ThemeSettings({
       </Popover>
       <Modal
         open={!desktop && open}
-        title={t('account.themeSettings')}
+        title={title}
         footer={null}
         onCancel={onClose}
         afterClose={onAfterClose}

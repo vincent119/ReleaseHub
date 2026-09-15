@@ -22,6 +22,7 @@ import type { Notification } from '@/generated/model'
 import { useFeedback } from '@/shared/feedback/useFeedback'
 
 import { useNotificationEvents } from './useNotificationEvents'
+import styles from './NotificationCenter.module.css'
 
 export function NotificationCenter() {
   const { t } = useTranslation()
@@ -53,7 +54,7 @@ export function NotificationCenter() {
       <Badge count={unread} size="small">
         <Button
           type="text"
-          icon={<BellOutlined />}
+          icon={<BellOutlined className={styles.icon} />}
           aria-label={t('notifications.open')}
           onClick={() => setOpen(true)}
         />

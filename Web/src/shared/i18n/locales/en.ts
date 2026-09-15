@@ -126,6 +126,7 @@ export const en = {
       createMapping: 'Add label mapping',
       renameWorkspace: 'Rename workspace',
       renameOrganization: 'Rename Organization',
+      deleteOrganization: 'Delete Organization',
     },
     modal: {
       organization: 'Create Organization',
@@ -136,6 +137,12 @@ export const en = {
       submit: 'Create',
       save: 'Save',
       cancel: 'Cancel',
+    },
+    deleteModal: {
+      title: 'Delete Organization',
+      description:
+        'Delete “{{name}}”? It will no longer appear and cannot be restored.',
+      confirm: 'Delete',
     },
     fields: {
       name: 'Name',
@@ -152,10 +159,11 @@ export const en = {
     mutation: {
       success: 'Resource created.',
       renamed: 'Name updated.',
+      deleted: 'Organization deleted.',
       invalid: 'Enter a valid name.',
       conflict: 'The resource conflicts with current catalog data.',
       notAuthorized: 'The resource does not exist or you cannot manage it.',
-      error: 'The resource could not be created.',
+      error: 'The resource operation could not be completed.',
     },
   },
   access: {
@@ -415,6 +423,23 @@ export const en = {
       createTitle: 'Create Release Workflow',
       copyTitle: 'Copy Release Workflow',
       versionTitle: 'Create Workflow Version',
+      back: 'Back to Workflow list',
+      createEyebrow: 'Create flow',
+      copyEyebrow: 'Copy flow',
+      versionEyebrow: 'Create version',
+      createDescription:
+        'Define the Workflow details, states, and transitions.',
+      copyDescription:
+        'Create an independent Workflow draft from an existing version.',
+      versionDescription:
+        'Keep the existing Workflow and create a separately publishable version.',
+      detailsTitle: 'Workflow details',
+      workspace: 'Workflow editor workspace',
+      toolbar: 'Workflow structure toolbar',
+      structureGroup: 'Structure',
+      startingPointGroup: 'Starting point',
+      inspectorTitle: 'Settings panel',
+      nothingSelected: 'Nothing selected',
       canvas: 'Workflow graph editor',
       selectElement: 'Select a state or transition to configure it.',
       deleteHint: 'Removal only affects the unsaved draft.',
@@ -453,6 +478,9 @@ export const en = {
     },
     mutation: {
       saved: 'Workflow saved.',
+      nameConflict: 'The Workflow name already exists. Use another name.',
+      versionConflict:
+        'The Workflow version changed or already has a Draft. Refresh and try again.',
       rejected:
         'The operation was rejected. Refresh and verify access and version.',
       error: 'The Workflow could not be saved.',
@@ -485,6 +513,8 @@ export const en = {
     actions: {
       create: 'Create Plan',
       newVersion: 'Create new version',
+      newVersionDraftHint:
+        'A Draft already exists. Publish the current version first.',
       publish: 'Publish version',
       disable: 'Disable version',
       save: 'Save Plan',
@@ -535,6 +565,11 @@ export const en = {
       detailsTitle: 'Plan details',
       workspace: 'Deployment Plan workspace',
       canvas: 'Deployment Plan graph editor',
+      toolbar: 'Deployment Plan structure toolbar',
+      structureGroup: 'Structure',
+      executionGroup: 'Execution',
+      inspectorTitle: 'Settings panel',
+      nothingSelected: 'Nothing selected',
       selectElement: 'Select an Application or dependency to configure it.',
     },
     template: {
@@ -553,8 +588,14 @@ export const en = {
     dependency: { title: 'Add Application dependency', add: 'Add dependency' },
     mutation: {
       saved: 'Deployment Plan saved.',
-      rejected:
-        'The Plan operation was rejected. Refresh and check the version.',
+      nameConflict:
+        'A Plan with this name already exists in the current scope. Use another name.',
+      versionConflict:
+        'The Plan version changed or a Draft already exists. Refresh and try again.',
+      notFound: 'The Plan does not exist or you cannot perform this operation.',
+      invalidLifecycle:
+        'The current Plan version state does not allow this operation.',
+      unauthenticated: 'Your session has expired. Sign in again.',
       error: 'Deployment Plan could not be saved.',
     },
     binding: {
@@ -729,12 +770,27 @@ export const en = {
   account: {
     openMenu: 'Open account menu for {{username}}',
     personalSettings: 'Personal settings',
+    languageSettings: 'Language',
     themeSettings: 'Theme settings',
     signOut: 'Sign out',
     signOutError: 'Sign out failed. Try again.',
     fields: {
       username: 'Username',
       userId: 'User ID',
+    },
+    password: {
+      title: 'Change password',
+      description: 'Choose a new password for your local ReleaseHub account.',
+      current: 'Current password',
+      new: 'New password',
+      confirm: 'Confirm new password',
+      submit: 'Confirm',
+      cancel: 'Cancel',
+      currentLengthError: 'The current password must not exceed 72 bytes.',
+      lengthError: 'Use a password between 8 and 72 bytes.',
+      mismatch: 'The passwords do not match.',
+      error:
+        'The password could not be changed. Check the current password and try again.',
     },
   },
 } as const

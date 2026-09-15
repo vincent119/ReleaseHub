@@ -35,11 +35,12 @@ import type {
   ReleaseWorkflowVersion,
 } from '@/generated/model'
 import { useFeedback } from '@/shared/feedback/useFeedback'
+import definitionStyles from '@/shared/definition/DefinitionWorkspace.module.css'
 
 import {
-  WorkflowEditorDrawer,
+  WorkflowEditorWorkspace,
   type WorkflowEditorValue,
-} from './components/WorkflowEditorDrawer'
+} from './components/WorkflowEditorWorkspace'
 import { WorkflowGraphEditor } from './components/WorkflowGraphEditor'
 import { productionApprovalTemplate } from './model/workflowGraph'
 import styles from './WorkflowsPage.module.css'
@@ -49,6 +50,13 @@ interface EditorState {
   workflow?: ReleaseWorkflow
   initial: WorkflowEditorValue
 }
+
+interface WorkflowMutationResponse {
+  status: number
+  data: unknown
+}
+
+type WorkflowConflictContext = 'create' | 'version'
 
 export function WorkflowsPage() {
   const { t } = useTranslation()
@@ -67,13 +75,22 @@ export function WorkflowsPage() {
       : (workflows.find((item) => item.id === workflowID) ?? workflows[0])
   const version = selectedVersion(workflow, versionID)
   const mutate = async (
-    operation: (options: RequestInit) => Promise<{ status: number }>,
+    operation: (options: RequestInit) => Promise<WorkflowMutationResponse>,
+    conflictContext?: WorkflowConflictContext,
   ) => {
     const csrf = browserCookie('releasehub_csrf')
     if (!csrf) return void feedback.error(t('workflows.mutation.error'))
     setSubmitting(true)
     try {
       const response = await operation({ headers: { 'X-CSRF-Token': csrf } })
+      if (
+        response.status === 409 &&
+        conflictContext === 'create' &&
+        responseErrorCode(response.data) === 'WORKFLOW_NAME_CONFLICT'
+      )
+        return void feedback.error(t('workflows.mutation.nameConflict'))
+      if (response.status === 409 && conflictContext === 'version')
+        return void feedback.error(t('workflows.mutation.versionConflict'))
       if (response.status < 200 || response.status >= 300)
         return void feedback.error(t('workflows.mutation.rejected'))
       setEditor(undefined)
@@ -87,16 +104,18 @@ export function WorkflowsPage() {
   }
   const save = (value: WorkflowEditorValue) =>
     editor?.mode !== 'version'
-      ? mutate((options) => createReleaseWorkflow(value, options))
-      : mutate((options) =>
-          createReleaseWorkflowVersion(
-            editor!.workflow!.id,
-            {
-              expectedVersion: latestLock(editor!.workflow!),
-              document: value.document,
-            },
-            options,
-          ),
+      ? mutate((options) => createReleaseWorkflow(value, options), 'create')
+      : mutate(
+          (options) =>
+            createReleaseWorkflowVersion(
+              editor!.workflow!.id,
+              {
+                expectedVersion: latestVersionNumber(editor!.workflow!),
+                document: value.document,
+              },
+              options,
+            ),
+          'version',
         )
   const removeWorkflow = async () => {
     if (!workflow) return
@@ -134,9 +153,32 @@ export function WorkflowsPage() {
         description={t('workflows.unavailable.description')}
       />
     )
+  if (editor)
+    return (
+      <WorkflowEditorWorkspace
+        mode={editor.mode}
+        title={
+          editor.mode === 'create'
+            ? t('workflows.editor.createTitle')
+            : editor.mode === 'copy'
+              ? t('workflows.editor.copyTitle')
+              : t('workflows.editor.versionTitle')
+        }
+        initial={editor.initial}
+        submitting={submitting}
+        onClose={() => setEditor(undefined)}
+        onSubmit={(value) => void save(value)}
+      />
+    )
   return (
     <Space orientation="vertical" size="large" className={styles.page}>
-      <Flex justify="space-between" align="start" gap="middle" wrap>
+      <Flex
+        className={styles.pageHeader}
+        justify="space-between"
+        align="start"
+        gap="middle"
+        wrap
+      >
         <div>
           <Typography.Title level={2}>{t('workflows.title')}</Typography.Title>
           <Typography.Paragraph type="secondary">
@@ -151,8 +193,12 @@ export function WorkflowsPage() {
           {t('workflows.actions.create')}
         </Button>
       </Flex>
-      <div className={styles.workspace}>
-        <Card title={t('workflows.list.title')} loading={query.isPending}>
+      <div className={definitionStyles.workspace}>
+        <Card
+          className={definitionStyles.listCard}
+          title={t('workflows.list.title')}
+          loading={query.isPending}
+        >
           {workflows.length === 0 ? (
             <Empty description={t('workflows.list.empty')} />
           ) : (
@@ -160,10 +206,17 @@ export function WorkflowsPage() {
               dataSource={workflows}
               renderItem={(item) => (
                 <List.Item
-                  className={
-                    item.id === workflow?.id ? styles.selected : undefined
-                  }
+                  className={`${definitionStyles.listItem} ${item.id === workflow?.id ? definitionStyles.selected : ''}`}
+                  role="button"
+                  tabIndex={0}
+                  aria-current={item.id === workflow?.id ? 'page' : undefined}
                   onClick={() => {
+                    setWorkflowID(item.id)
+                    setVersionID(undefined)
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key !== 'Enter' && event.key !== ' ') return
+                    event.preventDefault()
                     setWorkflowID(item.id)
                     setVersionID(undefined)
                   }}
@@ -216,22 +269,6 @@ export function WorkflowsPage() {
           }
         />
       </div>
-      {editor && (
-        <WorkflowEditorDrawer
-          open
-          title={
-            editor.mode === 'create'
-              ? t('workflows.editor.createTitle')
-              : editor.mode === 'copy'
-                ? t('workflows.editor.copyTitle')
-                : t('workflows.editor.versionTitle')
-          }
-          initial={editor.initial}
-          submitting={submitting}
-          onClose={() => setEditor(undefined)}
-          onSubmit={(value) => void save(value)}
-        />
-      )}
       <Modal
         open={deleteOpen && Boolean(workflow)}
         title={t('workflows.delete.title')}
@@ -301,71 +338,87 @@ function WorkflowDetail({
     )
   return (
     <Card
-      title={workflow.name}
+      className={definitionStyles.detailCard}
+      title={
+        <div className={definitionStyles.detailHeading}>
+          <span className={definitionStyles.detailTitle}>{workflow.name}</span>
+          <span className={definitionStyles.detailMeta}>
+            <Tag color={lifecycleColor(version.lifecycle)}>
+              {version.lifecycle}
+            </Tag>
+            <span>v{version.versionNumber}</span>
+          </span>
+        </div>
+      }
       extra={
-        <Space>
-          <Select
-            value={versionID ?? version.id}
-            options={workflow.versions.map((item) => ({
-              value: item.id,
-              label: `v${item.versionNumber} · ${item.lifecycle}`,
-            }))}
-            onChange={setVersionID}
-          />
-          <Button onClick={onNewVersion}>
-            {t('workflows.actions.newVersion')}
-          </Button>
-          <Button icon={<CopyOutlined />} onClick={onCopy}>
-            {t('workflows.actions.copy')}
-          </Button>
-          {version.lifecycle === 'Draft' && (
-            <Button
-              type="primary"
-              loading={submitting}
-              onClick={() => onLifecycle('Published')}
-            >
-              {t('workflows.actions.publish')}
+        <Flex className={definitionStyles.actions}>
+          <div className={definitionStyles.actionGroup}>
+            <Select
+              value={versionID ?? version.id}
+              options={workflow.versions.map((item) => ({
+                value: item.id,
+                label: `v${item.versionNumber} · ${item.lifecycle}`,
+              }))}
+              onChange={setVersionID}
+            />
+            <Button onClick={onNewVersion}>
+              {t('workflows.actions.newVersion')}
             </Button>
-          )}
-          {version.lifecycle === 'Published' && (
-            <Button
-              danger
-              loading={submitting}
-              onClick={() => onLifecycle('Disabled')}
-            >
-              {t('workflows.actions.disable')}
+            <Button icon={<CopyOutlined />} onClick={onCopy}>
+              {t('workflows.actions.copy')}
             </Button>
-          )}
-          <Tooltip
-            title={
-              isDraftOnly(workflow)
-                ? undefined
-                : t('workflows.delete.publishedReason')
-            }
-          >
-            <span>
+          </div>
+          <div className={definitionStyles.actionGroup}>
+            {version.lifecycle === 'Draft' && (
+              <Button
+                type="primary"
+                loading={submitting}
+                onClick={() => onLifecycle('Published')}
+              >
+                {t('workflows.actions.publish')}
+              </Button>
+            )}
+            {version.lifecycle === 'Published' && (
               <Button
                 danger
-                icon={<DeleteOutlined />}
-                disabled={!isDraftOnly(workflow)}
                 loading={submitting}
-                onClick={onDelete}
+                onClick={() => onLifecycle('Disabled')}
               >
-                {t('workflows.actions.delete')}
+                {t('workflows.actions.disable')}
               </Button>
-            </span>
-          </Tooltip>
-        </Space>
+            )}
+          </div>
+          <div className={definitionStyles.dangerGroup}>
+            <Tooltip
+              title={
+                isDraftOnly(workflow)
+                  ? undefined
+                  : t('workflows.delete.publishedReason')
+              }
+            >
+              <span>
+                <Button
+                  danger
+                  icon={<DeleteOutlined />}
+                  disabled={!isDraftOnly(workflow)}
+                  loading={submitting}
+                  onClick={onDelete}
+                >
+                  {t('workflows.actions.delete')}
+                </Button>
+              </span>
+            </Tooltip>
+          </div>
+        </Flex>
       }
     >
-      <Space orientation="vertical" className={styles.detail}>
-        <Tag color={lifecycleColor(version.lifecycle)}>{version.lifecycle}</Tag>
+      <div className={definitionStyles.detail}>
         <WorkflowGraphEditor
           key={version.id}
           initialDocument={version.document}
           readOnly
         />
-      </Space>
+      </div>
     </Card>
   )
 }
@@ -377,12 +430,14 @@ function selectedVersion(workflow?: ReleaseWorkflow, versionID?: string) {
   )
 }
 
-function latestLock(workflow: ReleaseWorkflow) {
-  return workflow.versions.at(-1)?.lockVersion ?? 1
-}
-
 function latestVersionNumber(workflow: ReleaseWorkflow) {
   return workflow.versions.at(-1)?.versionNumber ?? 1
+}
+
+function responseErrorCode(data: unknown) {
+  if (typeof data !== 'object' || data === null || !('code' in data))
+    return undefined
+  return typeof data.code === 'string' ? data.code : undefined
 }
 
 function isDraftOnly(workflow: ReleaseWorkflow) {
