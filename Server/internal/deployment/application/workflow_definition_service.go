@@ -19,6 +19,8 @@ var (
 	ErrWorkflowNotFound = errors.New("workflow was not found")
 	// ErrWorkflowConflict identifies stale versions and duplicate drafts.
 	ErrWorkflowConflict = errors.New("workflow changed concurrently")
+	// ErrWorkflowNameConflict identifies a case-insensitive duplicate workflow name.
+	ErrWorkflowNameConflict = errors.New("workflow name already exists")
 	// ErrWorkflowInvalid identifies a workflow document or lifecycle rejected by domain rules.
 	ErrWorkflowInvalid = errors.New("workflow definition is invalid")
 )

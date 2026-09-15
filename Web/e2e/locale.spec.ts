@@ -29,12 +29,16 @@ test('Ant Design built-in copy follows the ReleaseHub language preference', asyn
   await page
     .getByRole('button', { name: 'Open account menu for vincent' })
     .click()
-  await page.getByRole('menuitem', { name: 'Theme settings' }).click()
+  await page.getByRole('menuitem', { name: 'Language' }).click()
+  await page.getByRole('combobox', { name: 'Language' }).click()
   await page.getByText('繁體中文', { exact: true }).click()
   await expect(page.locator('html')).toHaveAttribute('lang', 'zh-TW')
   await expect(traditionalChineseEmpty).toHaveCount(2)
   await expect(englishEmpty).toHaveCount(0)
 
+  const languageSelect = page.getByRole('combobox', { name: '語言' })
+  await expect(languageSelect.locator('..')).toHaveText('繁體中文')
+  await languageSelect.click()
   await page.getByText('English', { exact: true }).click()
   await expect(page.locator('html')).toHaveAttribute('lang', 'en')
   await expect(englishEmpty).toHaveCount(2)
@@ -48,6 +52,7 @@ async function mockApplication(page: Page) {
           userId: '019c1230-0000-7000-8000-000000000302',
           username: 'vincent',
           mustChangePassword: false,
+          passwordChangeAvailable: true,
         },
         meta: meta(),
       }),

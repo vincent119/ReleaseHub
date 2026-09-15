@@ -230,15 +230,15 @@ func marshalStringSlice(values []string) datatypes.JSON {
 const requestSummaryQuery = `
 SELECT request.id, request.organization_id, request.project_id, request.environment_id,
        request.classification, request.status, request.updated_at, version.version_number,
-       version.status AS version_status, version.title, COUNT(application.id) AS application_count
+       version.status AS version_status, version.title,
+       (SELECT COUNT(*) FROM deployment_request_applications application
+        WHERE application.request_version_id = version.id) AS application_count
 FROM deployment_requests request
 JOIN LATERAL (
   SELECT * FROM deployment_request_versions
   WHERE request_id = request.id ORDER BY version_number DESC LIMIT 1
 ) version ON true
-LEFT JOIN deployment_request_applications application ON application.request_version_id = version.id
 WHERE request.organization_id = ? AND request.project_id = ? AND request.environment_id = ?
-GROUP BY request.id, version.id
 ORDER BY request.updated_at DESC`
 
 type requestSummaryModel struct {

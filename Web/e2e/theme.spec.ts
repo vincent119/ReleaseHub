@@ -69,6 +69,7 @@ async function prepareTheme(page: Page, theme: 'light' | 'dark') {
           userId: '019c1230-0000-7000-8000-000000000001',
           username: 'vincent',
           mustChangePassword: false,
+          passwordChangeAvailable: true,
         },
         meta: meta(),
       }),

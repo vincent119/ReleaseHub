@@ -159,6 +159,81 @@ func TestRenameOrganizationRejectsUnauthorizedInvalidAndStaleRequests(t *testing
 	}
 }
 
+func TestDeleteOrganizationRequiresPlatformPermissionAndCurrentNonDefaultVersion(t *testing.T) {
+	organizationID := uuid.New()
+	defaultOrganizationID := uuid.New()
+	base := domain.Organization{ID: organizationID, Name: "Tenant", Active: true, Version: 2}
+
+	repository := &repositoryStub{organizations: []domain.Organization{base}, applications: map[uuid.UUID]domain.Application{}}
+	service, err := application.NewService(repository, authorizerStub{platformAllowed: true}, defaultOrganizationID)
+	if err != nil {
+		t.Fatalf("create catalog service: %v", err)
+	}
+	principal := application.Principal{UserID: uuid.New()}
+	if err := service.DeleteOrganization(context.Background(), principal, application.Mutation{RequestID: "delete-organization"}, organizationID, 2); err != nil {
+		t.Fatalf("delete Organization: %v", err)
+	}
+	if repository.organizationDeletes != 1 || repository.lastMutation.ActorID == nil || *repository.lastMutation.ActorID != principal.UserID {
+		t.Fatalf("delete calls = %d, actor = %#v", repository.organizationDeletes, repository.lastMutation.ActorID)
+	}
+
+	tests := []struct {
+		name       string
+		id         uuid.UUID
+		version    uint64
+		authorizer authorizerStub
+		wantError  error
+	}{
+		{name: "unauthorized", id: organizationID, version: 2, wantError: application.ErrResourceNotFound},
+		{name: "missing ID", version: 2, authorizer: authorizerStub{platformAllowed: true}, wantError: application.ErrInvalidResource},
+		{name: "missing version", id: organizationID, authorizer: authorizerStub{platformAllowed: true}, wantError: application.ErrInvalidResource},
+		{name: "stale version", id: organizationID, version: 1, authorizer: authorizerStub{platformAllowed: true}, wantError: application.ErrResourceConflict},
+		{name: "default", id: defaultOrganizationID, version: 2, authorizer: authorizerStub{platformAllowed: true}, wantError: application.ErrResourceConflict},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			organizations := []domain.Organization{base, {ID: defaultOrganizationID, Name: "default", Active: true, Version: 2}}
+			repository := &repositoryStub{organizations: organizations, applications: map[uuid.UUID]domain.Application{}}
+			service, err := application.NewService(repository, test.authorizer, defaultOrganizationID)
+			if err != nil {
+				t.Fatalf("create catalog service: %v", err)
+			}
+			err = service.DeleteOrganization(context.Background(), application.Principal{UserID: uuid.New()}, application.Mutation{}, test.id, test.version)
+			if !errors.Is(err, test.wantError) || repository.organizationDeletes != 0 {
+				t.Fatalf("delete error = %v, calls = %d", err, repository.organizationDeletes)
+			}
+		})
+	}
+}
+
+func TestResourceTreeExposesDeleteCapabilityOnlyForEmptyNonDefaultOrganization(t *testing.T) {
+	defaultID, emptyID, populatedID := uuid.New(), uuid.New(), uuid.New()
+	repository := &repositoryStub{
+		organizations: []domain.Organization{
+			{ID: defaultID, Name: "default", Active: true, Version: 1},
+			{ID: emptyID, Name: "Empty", Active: true, Version: 1},
+			{ID: populatedID, Name: "Populated", Active: true, Version: 1},
+		},
+		projectCounts: map[uuid.UUID]uint64{populatedID: 1},
+		applications:  map[uuid.UUID]domain.Application{},
+	}
+	service, err := application.NewService(repository, authorizerStub{platformAllowed: true}, defaultID)
+	if err != nil {
+		t.Fatalf("create catalog service: %v", err)
+	}
+	tree, err := service.ListResourceTree(context.Background(), application.Principal{UserID: uuid.New()})
+	if err != nil {
+		t.Fatalf("list resource tree: %v", err)
+	}
+	capabilities := make(map[uuid.UUID]bool, len(tree.Organizations))
+	for _, organization := range tree.Organizations {
+		capabilities[organization.Organization.ID] = organization.CanDelete
+	}
+	if capabilities[defaultID] || !capabilities[emptyID] || capabilities[populatedID] {
+		t.Fatalf("delete capabilities = %#v", capabilities)
+	}
+}
+
 type repositoryStub struct {
 	organizations       []domain.Organization
 	projects            []domain.Project
@@ -166,6 +241,8 @@ type repositoryStub struct {
 	applications        map[uuid.UUID]domain.Application
 	environmentCreates  int
 	organizationRenames int
+	organizationDeletes int
+	projectCounts       map[uuid.UUID]uint64
 	lastMutation        application.Mutation
 }
 
@@ -215,6 +292,14 @@ func (r *repositoryStub) RenameOrganization(_ context.Context, mutation applicat
 		}
 	}
 	return application.ErrResourceConflict
+}
+func (r *repositoryStub) DeleteOrganization(_ context.Context, mutation application.Mutation, current, _ domain.Organization, defaultOrganizationID uuid.UUID) error {
+	r.organizationDeletes++
+	r.lastMutation = mutation
+	return current.ValidateDeletion(defaultOrganizationID)
+}
+func (r *repositoryStub) ListOrganizationProjectCounts(context.Context) (map[uuid.UUID]uint64, error) {
+	return r.projectCounts, nil
 }
 func (r *repositoryStub) FindApplication(_ context.Context, id uuid.UUID) (domain.Application, error) {
 	value, ok := r.applications[id]

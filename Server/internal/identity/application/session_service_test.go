@@ -17,20 +17,29 @@ type fixedClock struct{ now time.Time }
 
 func (c fixedClock) Now() time.Time { return c.now }
 
-type memorySessions struct{ sessions map[string]identity.Session }
+type memorySessions struct {
+	sessions              map[string]identity.Session
+	findError, touchError error
+}
 
 func (m *memorySessions) CreateSession(_ context.Context, session identity.Session) error {
 	m.sessions[string(session.TokenHash)] = session
 	return nil
 }
 func (m *memorySessions) FindSessionByTokenHash(_ context.Context, hash []byte) (identity.Session, error) {
+	if m.findError != nil {
+		return identity.Session{}, m.findError
+	}
 	session, ok := m.sessions[string(hash)]
 	if !ok {
-		return identity.Session{}, errors.New("not found")
+		return identity.Session{}, application.ErrSessionInvalid
 	}
 	return session, nil
 }
 func (m *memorySessions) TouchSession(_ context.Context, id uuid.UUID, lastSeenAt, idleExpiresAt time.Time) error {
+	if m.touchError != nil {
+		return m.touchError
+	}
 	for key, session := range m.sessions {
 		if session.ID == id {
 			session.LastSeenAt, session.IdleExpiresAt = lastSeenAt, idleExpiresAt
@@ -92,6 +101,7 @@ func TestSessionServiceCreatesOpaqueTokensAndHonorsAbsoluteExpiry(t *testing.T) 
 	require.NoError(t, service.Revoke(context.Background(), session.ID))
 	_, err = service.Authenticate(context.Background(), sessionToken)
 	require.ErrorContains(t, err, "inactive")
+	require.ErrorIs(t, err, application.ErrSessionInvalid)
 }
 
 func TestSessionServiceRejectsIdleAndAbsoluteExpiry(t *testing.T) {
@@ -105,4 +115,24 @@ func TestSessionServiceRejectsIdleAndAbsoluteExpiry(t *testing.T) {
 	clock.now = now.Add(30 * time.Minute)
 	_, err = service.Authenticate(context.Background(), token)
 	require.ErrorContains(t, err, "inactive")
+	require.ErrorIs(t, err, application.ErrSessionInvalid)
+}
+
+func TestSessionServicePreservesTerminalAndInfrastructureErrorClassification(t *testing.T) {
+	now := time.Date(2026, 9, 15, 4, 0, 0, 0, time.UTC)
+	repository := &memorySessions{sessions: map[string]identity.Session{}}
+	service, err := application.NewSessionService(repository, fixedClock{now: now}, 30*time.Minute, time.Hour)
+	require.NoError(t, err)
+	_, token, _, err := service.CreateLocal(context.Background(), uuid.New())
+	require.NoError(t, err)
+
+	repository.touchError = application.ErrSessionInvalid
+	_, err = service.Authenticate(context.Background(), token)
+	require.ErrorIs(t, err, application.ErrSessionInvalid)
+
+	repository.touchError = nil
+	repository.findError = errors.New("database unavailable")
+	_, err = service.Authenticate(context.Background(), token)
+	require.ErrorContains(t, err, "database unavailable")
+	require.NotErrorIs(t, err, application.ErrSessionInvalid)
 }

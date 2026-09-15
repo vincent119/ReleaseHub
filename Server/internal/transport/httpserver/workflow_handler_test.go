@@ -17,6 +17,7 @@ import (
 
 	deployapp "github.com/vincent119/ReleaseHub/Server/internal/deployment/application"
 	deploydomain "github.com/vincent119/ReleaseHub/Server/internal/deployment/domain"
+	identityapp "github.com/vincent119/ReleaseHub/Server/internal/identity/application"
 	"github.com/vincent119/ReleaseHub/Server/internal/observability"
 	"github.com/vincent119/ReleaseHub/Server/internal/transport/httpserver"
 )
@@ -79,6 +80,83 @@ func TestReleaseWorkflowUnexpectedMutationFailureIsInternalError(t *testing.T) {
 	router.ServeHTTP(response, request)
 	if response.Code != http.StatusInternalServerError || !strings.Contains(response.Body.String(), `"code":"WORKFLOW_MUTATION_FAILED"`) {
 		t.Fatalf("unexpected workflow failure = %d %s", response.Code, response.Body.String())
+	}
+}
+
+func TestCreateReleaseWorkflowReturnsNamedConflict(t *testing.T) {
+	service := &fakeWorkflowDefinitionService{createError: deployapp.ErrWorkflowNameConflict}
+	router := newTestRouterWithWorkflow(t, &fakeAuthFlow{}, service)
+	request := workflowMutationRequest(http.MethodPost, "/api/v1/release-workflows", workflowRequestBody())
+	response := httptest.NewRecorder()
+
+	router.ServeHTTP(response, request)
+
+	if response.Code != http.StatusConflict || !strings.Contains(response.Body.String(), `"code":"WORKFLOW_NAME_CONFLICT"`) {
+		t.Fatalf("workflow name conflict = %d %s", response.Code, response.Body.String())
+	}
+}
+
+func TestReleaseWorkflowReadFailureKeepsResponseGenericAndLogsCause(t *testing.T) {
+	service := &fakeWorkflowDefinitionService{listError: errors.New("database unavailable")}
+	options := testAPIOptions(&fakeAuthFlow{})
+	options.Workflow.Definitions = service
+	router, recorded, _, _, _ := newTestRouterFromOptionsWithState(t, options)
+	request := workflowMutationRequest(http.MethodGet, "/api/v1/release-workflows", "")
+	request.Header.Set("Cookie", "releasehub_session=session-secret")
+	response := httptest.NewRecorder()
+
+	router.ServeHTTP(response, request)
+
+	if response.Code != http.StatusInternalServerError || !strings.Contains(response.Body.String(), `"code":"WORKFLOW_READ_FAILED"`) || strings.Contains(response.Body.String(), "database unavailable") {
+		t.Fatalf("workflow read failure = %d %s", response.Code, response.Body.String())
+	}
+	entry := recorded.FilterMessage("HTTP request failed").All()[0]
+	loggedError, _ := entry.ContextMap()["error"].(string)
+	if !strings.Contains(loggedError, "list release workflows: database unavailable") || strings.Contains(loggedError, "session-secret") {
+		t.Fatalf("logged error = %q", loggedError)
+	}
+}
+
+func TestReleaseWorkflowMutationAuthenticationErrorMapping(t *testing.T) {
+	tests := []struct {
+		name             string
+		err              error
+		wantStatus       int
+		wantCode         string
+		wantClearedCount int
+	}{
+		{name: "invalid session", err: identityapp.ErrSessionInvalid, wantStatus: http.StatusUnauthorized, wantCode: "SESSION_INVALID", wantClearedCount: 2},
+		{name: "invalid CSRF", err: identityapp.ErrCSRFInvalid, wantStatus: http.StatusForbidden, wantCode: "MUTATION_REJECTED"},
+		{name: "infrastructure failure", err: errors.New("database unavailable"), wantStatus: http.StatusServiceUnavailable, wantCode: "SESSION_STATE_UNAVAILABLE"},
+		{name: "deadline exceeded", err: context.DeadlineExceeded, wantStatus: http.StatusServiceUnavailable, wantCode: "SESSION_STATE_UNAVAILABLE"},
+		{name: "client canceled request", err: context.Canceled, wantStatus: 499},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			router := newTestRouterWithWorkflow(t, &fakeAuthFlow{mutationErr: test.err}, &fakeWorkflowDefinitionService{})
+			response := httptest.NewRecorder()
+			router.ServeHTTP(response, workflowMutationRequest(http.MethodPost, "/api/v1/release-workflows", workflowRequestBody()))
+			if response.Code != test.wantStatus {
+				t.Fatalf("mutation authentication = %d %s", response.Code, response.Body.String())
+			}
+			if test.wantCode == "" {
+				if response.Body.Len() != 0 {
+					t.Fatalf("canceled mutation body = %q, want empty", response.Body.String())
+				}
+			} else if !strings.Contains(response.Body.String(), `"code":"`+test.wantCode+`"`) {
+				t.Fatalf("mutation authentication body = %s, want code %s", response.Body.String(), test.wantCode)
+			}
+			clearedCount := 0
+			for _, cookie := range response.Result().Cookies() {
+				if cookie.MaxAge == -1 {
+					clearedCount++
+				}
+			}
+			if clearedCount != test.wantClearedCount {
+				t.Fatalf("cleared cookies = %d, want %d", clearedCount, test.wantClearedCount)
+			}
+		})
 	}
 }
 
@@ -191,6 +269,7 @@ func workflowRequestBody() string {
 type fakeWorkflowDefinitionService struct {
 	created       deployapp.CreateWorkflowInput
 	deleted       deployapp.DeleteWorkflowInput
+	listError     error
 	createError   error
 	changeError   error
 	deleteError   error
@@ -198,7 +277,7 @@ type fakeWorkflowDefinitionService struct {
 }
 
 func (s *fakeWorkflowDefinitionService) List(context.Context, deployapp.WorkflowPrincipal) ([]deploydomain.ReleaseWorkflow, error) {
-	return []deploydomain.ReleaseWorkflow{}, nil
+	return []deploydomain.ReleaseWorkflow{}, s.listError
 }
 
 func (s *fakeWorkflowDefinitionService) ReviewOptions(context.Context, deployapp.WorkflowPrincipal) (deployapp.WorkflowReviewOptions, error) {

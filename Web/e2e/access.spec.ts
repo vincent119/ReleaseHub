@@ -174,6 +174,7 @@ async function mockShell(page: Page) {
           userId: 'access-manager',
           username: 'vincent',
           mustChangePassword: false,
+          passwordChangeAvailable: true,
         },
         meta: meta(),
       }),

@@ -40,6 +40,17 @@ func TestDeploymentPlanLifecycleMapsCycleValidation(t *testing.T) {
 	}
 }
 
+func TestDeploymentPlanCreateHidesForbiddenAsNotFound(t *testing.T) {
+	service := &fakePlanDefinitionService{changeError: deployapp.ErrPlanForbidden}
+	router := newTestRouterWithPlan(t, &fakeAuthFlow{}, service)
+	request := workflowMutationRequest(http.MethodPost, "/api/v1/deployment-plans", planRequestBody(uuid.New()))
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+	if response.Code != http.StatusNotFound || !strings.Contains(response.Body.String(), `"code":"DEPLOYMENT_PLAN_NOT_FOUND"`) {
+		t.Fatalf("deployment plan forbidden error = %d %s", response.Code, response.Body.String())
+	}
+}
+
 func TestDeploymentPlanUnavailableStillRequiresAuthentication(t *testing.T) {
 	router := newTestHTTPRouter(t, testAPIOptions(nil))
 	response := httptest.NewRecorder()

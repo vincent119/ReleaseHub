@@ -99,6 +99,7 @@ export * from './cursorParameter';
 export * from './definitionLifecycle';
 export * from './definitionLifecycleRequest';
 export * from './definitionLifecycleRequestLifecycle';
+export * from './deleteCatalogOrganizationParams';
 export * from './deleteReleaseWorkflowParams';
 export * from './deploymentActualStateConfirmation';
 export * from './deploymentBinding';

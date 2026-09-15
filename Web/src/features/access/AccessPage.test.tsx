@@ -213,6 +213,7 @@ describe('AccessPage', () => {
         version: 1,
         isDefault: true,
         canRename: true,
+        canDelete: false,
         canCreateProject: true,
         projects: [
           {

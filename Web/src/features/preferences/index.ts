@@ -1,1 +1,4 @@
-export { PreferenceControls } from './PreferenceControls'
+export {
+  LanguagePreferenceControl,
+  ThemePreferenceControl,
+} from './PreferenceControls'

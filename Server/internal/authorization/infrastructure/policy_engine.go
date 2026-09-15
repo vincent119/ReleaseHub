@@ -25,7 +25,7 @@ p = sub, tenant, obj, act, eft
 e = some(where (p.eft == allow)) && !some(where (p.eft == deny))
 
 [matchers]
-m = r.sub == p.sub && r.tenant == p.tenant && scopeMatch(r.obj, p.obj) && r.act == p.act
+m = r.sub == p.sub && r.act == p.act && (((r.act == "deployment_plan.manage" || r.act == "deployment_request.view") && p.tenant == "platform" && p.obj == "/platform") || (r.tenant == p.tenant && scopeMatch(r.obj, p.obj)))
 `
 
 // PolicySource is the read-only contract required by the cached Casbin engine.

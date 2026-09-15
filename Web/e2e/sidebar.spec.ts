@@ -64,6 +64,27 @@ test('collapses, persists, navigates, and expands on desktop', async ({
     .toBe('false')
 })
 
+test('updates the selected item after client-side navigation', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await preparePreferences(page, 'en', 'dark', false)
+  await page.goto('/')
+
+  const sidebar = page.locator('.ant-layout-sider')
+  const selectedItem = sidebar.locator('.ant-menu-item-selected')
+
+  await expect(selectedItem).toContainText('Overview')
+  await sidebar.getByRole('link', { name: 'Deployment Requests' }).click()
+
+  await expect(page).toHaveURL(/\/requests$/)
+  await expect(selectedItem).toContainText('Requests')
+  await expect(selectedItem).not.toContainText('Overview')
+
+  await page.goto('/requests/sidebar-request')
+  await expect(selectedItem).toContainText('Requests')
+})
+
 test('keeps the desktop preference across the responsive breakpoint', async ({
   page,
 }) => {
@@ -159,6 +180,7 @@ async function mockShell(page: Page) {
           userId: 'sidebar-user',
           username: 'vincent',
           mustChangePassword: false,
+          passwordChangeAvailable: true,
         },
         meta: meta(),
       }),

@@ -11,4 +11,10 @@ export interface AuthSession {
   /** @minLength 1 */
   username: string;
   mustChangePassword: boolean;
+  /** Indicates whether the current session may change a local password. */
+  passwordChangeAvailable: boolean;
+  /** UTC deadline after which an idle session is no longer valid. */
+  idleExpiresAt: string;
+  /** UTC deadline after which the session is no longer valid. */
+  absoluteExpiresAt: string;
 }

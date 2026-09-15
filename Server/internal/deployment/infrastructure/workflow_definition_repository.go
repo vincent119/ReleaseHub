@@ -89,7 +89,7 @@ func (r *WorkflowDefinitionRepository) Create(ctx context.Context, mutation depl
 	return database.WithinTransaction(ctx, r.db, func(tx *gorm.DB) error {
 		model := workflowToModel(workflow)
 		if err := tx.Create(&model).Error; err != nil {
-			return workflowWriteError("create release workflow", err)
+			return workflowCreateError(err)
 		}
 		version, err := workflowVersionToModel(workflow.Versions[0])
 		if err != nil {
@@ -265,4 +265,12 @@ func workflowWriteError(operation string, err error) error {
 		return deployapp.ErrWorkflowConflict
 	}
 	return fmt.Errorf("%s: %w", operation, err)
+}
+
+func workflowCreateError(err error) error {
+	var postgresError *pgconn.PgError
+	if errors.As(err, &postgresError) && postgresError.Code == "23505" && postgresError.ConstraintName == "release_workflows_name_idx" {
+		return deployapp.ErrWorkflowNameConflict
+	}
+	return workflowWriteError("create release workflow", err)
 }

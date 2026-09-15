@@ -22,8 +22,8 @@
   color: var(--rh-color-text-secondary);
 }
 
-.success {
-  background: var(--rh-color-success-soft);
+.feedback.success:global(.ant-notification-notice-success) {
+  background: var(--rh-feedback-success-bg);
   border-color: var(--rh-color-success);
 }
 
@@ -31,8 +31,8 @@
   color: var(--rh-color-success);
 }
 
-.info {
-  background: var(--rh-color-info-soft);
+.feedback.info:global(.ant-notification-notice-info) {
+  background: var(--rh-feedback-info-bg);
   border-color: var(--rh-color-info);
 }
 
@@ -40,8 +40,8 @@
   color: var(--rh-color-info);
 }
 
-.warning {
-  background: var(--rh-color-warning-soft);
+.feedback.warning:global(.ant-notification-notice-warning) {
+  background: var(--rh-feedback-warning-bg);
   border-color: var(--rh-color-warning);
 }
 
@@ -49,8 +49,8 @@
   color: var(--rh-color-warning);
 }
 
-.error {
-  background: var(--rh-color-error-soft);
+.feedback.error:global(.ant-notification-notice-error) {
+  background: var(--rh-feedback-error-bg);
   border-color: var(--rh-color-error);
 }
 

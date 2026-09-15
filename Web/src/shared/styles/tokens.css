@@ -49,6 +49,10 @@
   --rh-color-error-soft: #fff1f0;
   --rh-color-info: #2563eb;
   --rh-color-info-soft: #eaf2ff;
+  --rh-feedback-success-bg: #e2f6ec;
+  --rh-feedback-info-bg: #e4efff;
+  --rh-feedback-warning-bg: #fff1cf;
+  --rh-feedback-error-bg: #ffe5e8;
   --rh-ambient-page: none;
   --rh-shadow-card: 0 8px 24px rgb(15 23 42 / 8%);
   --rh-shadow-floating: 0 18px 48px rgb(15 23 42 / 14%);
@@ -90,6 +94,10 @@
   --rh-color-error-soft: rgb(251 113 133 / 14%);
   --rh-color-info: #60a5fa;
   --rh-color-info-soft: rgb(96 165 250 / 14%);
+  --rh-feedback-success-bg: #123b31;
+  --rh-feedback-info-bg: #162f52;
+  --rh-feedback-warning-bg: #3b2c13;
+  --rh-feedback-error-bg: #451f2a;
   --rh-ambient-page: radial-gradient(
     circle at 15% 5%,
     rgb(99 102 241 / 6%),

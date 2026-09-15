@@ -42,8 +42,10 @@ func TestResourceCatalogTenantBoundariesAndMappings(t *testing.T) {
 
 	organizationA := mustOrganization(t, "tenant-a")
 	organizationB := mustOrganization(t, "tenant-b")
+	organizationC := mustOrganization(t, "tenant-empty")
 	mustCreate(t, repository.CreateOrganization(ctx, mutation, organizationA))
 	mustCreate(t, repository.CreateOrganization(ctx, mutation, organizationB))
+	mustCreate(t, repository.CreateOrganization(ctx, mutation, organizationC))
 	renamedOrganizationA, err := organizationA.Rename("tenant-a-renamed")
 	if err != nil {
 		t.Fatalf("rename Organization domain value: %v", err)
@@ -63,10 +65,59 @@ func TestResourceCatalogTenantBoundariesAndMappings(t *testing.T) {
 	if err := repository.RenameOrganization(ctx, mutation, persistedOrganizationA, duplicateName); !errors.Is(err, application.ErrResourceConflict) {
 		t.Fatalf("duplicate Organization rename should conflict: %v", err)
 	}
+	deactivatedOrganizationC, err := organizationC.Deactivate(uuid.MustParse("00000000-0000-0000-0000-000000000001"))
+	if err != nil {
+		t.Fatalf("deactivate empty Organization domain value: %v", err)
+	}
+	staleOrganizationC := organizationC
+	staleOrganizationC.Version++
+	staleDeactivatedOrganizationC := deactivatedOrganizationC
+	staleDeactivatedOrganizationC.Version++
+	if err := repository.DeleteOrganization(ctx, mutation, staleOrganizationC, staleDeactivatedOrganizationC, uuid.MustParse("00000000-0000-0000-0000-000000000001")); !errors.Is(err, application.ErrResourceConflict) {
+		t.Fatalf("stale Organization deletion should conflict: %v", err)
+	}
+	defaultOrganization, err := repository.FindOrganization(ctx, uuid.MustParse("00000000-0000-0000-0000-000000000001"))
+	if err != nil {
+		t.Fatalf("find default Organization: %v", err)
+	}
+	defaultDeactivated := defaultOrganization
+	defaultDeactivated.Active = false
+	defaultDeactivated.Version++
+	if err := repository.DeleteOrganization(ctx, mutation, defaultOrganization, defaultDeactivated, defaultOrganization.ID); !errors.Is(err, application.ErrResourceConflict) {
+		t.Fatalf("default Organization deletion should conflict: %v", err)
+	}
+	mustCreate(t, repository.DeleteOrganization(ctx, mutation, organizationC, deactivatedOrganizationC, defaultOrganization.ID))
+	if _, err := repository.FindOrganization(ctx, organizationC.ID); err == nil {
+		t.Fatal("deactivated Organization should not remain active")
+	}
+	var deletedState struct {
+		Active  bool
+		Version uint64
+	}
+	if err := db.Table("organizations").Select("active, version").Where("id = ?", organizationC.ID).Take(&deletedState).Error; err != nil || deletedState.Active || deletedState.Version != 2 {
+		t.Fatalf("deactivated Organization state = %#v, %v", deletedState, err)
+	}
+	var deleteAuditCount, deleteOutboxCount int64
+	if err := db.Table("audit_logs").Where("action = ? AND resource_id = ?", "organization.delete", organizationC.ID.String()).Count(&deleteAuditCount).Error; err != nil || deleteAuditCount != 1 {
+		t.Fatalf("Organization delete audit count = %d, %v", deleteAuditCount, err)
+	}
+	if err := db.Table("outbox_events").Where("event_type = ? AND aggregate_id = ?", "catalog.organization.deleted", organizationC.ID.String()).Count(&deleteOutboxCount).Error; err != nil || deleteOutboxCount != 1 {
+		t.Fatalf("Organization delete outbox count = %d, %v", deleteOutboxCount, err)
+	}
+	if err := repository.CreateProject(ctx, mutation, mustProject(t, organizationC.ID, "orphan")); !errors.Is(err, application.ErrResourceConflict) {
+		t.Fatalf("inactive Organization should reject new Projects: %v", err)
+	}
 	projectA := mustProject(t, organizationA.ID, "payment")
 	projectB := mustProject(t, organizationB.ID, "payment")
 	mustCreate(t, repository.CreateProject(ctx, mutation, projectA))
 	mustCreate(t, repository.CreateProject(ctx, mutation, projectB))
+	deactivatedOrganizationA, err := persistedOrganizationA.Deactivate(defaultOrganization.ID)
+	if err != nil {
+		t.Fatalf("deactivate populated Organization domain value: %v", err)
+	}
+	if err := repository.DeleteOrganization(ctx, mutation, persistedOrganizationA, deactivatedOrganizationA, defaultOrganization.ID); !errors.Is(err, application.ErrResourceConflict) {
+		t.Fatalf("populated Organization deletion should conflict: %v", err)
+	}
 
 	devops := mustEnvironment(t, organizationA.ID, projectA.ID, "devops", catalog.EnvironmentProduction)
 	uat := mustEnvironment(t, organizationA.ID, projectA.ID, "uat-tw", catalog.EnvironmentTesting)
@@ -115,8 +166,8 @@ func TestResourceCatalogTenantBoundariesAndMappings(t *testing.T) {
 		t.Fatalf("cross-tenant list should be empty: %#v %v", values, err)
 	}
 
-	assertCount(t, db, "audit_logs", 11)
-	assertCount(t, db, "outbox_events", 11)
+	assertCount(t, db, "audit_logs", 13)
+	assertCount(t, db, "outbox_events", 13)
 }
 
 func mustOrganization(t *testing.T, name string) catalog.Organization {

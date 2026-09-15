@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -147,6 +148,10 @@ func (f *AuthFlow) Authenticate(ctx context.Context, token string) (identity.Ses
 	}
 	user, err := f.identity.FindUser(ctx, session.UserID)
 	if err != nil {
+		if errors.Is(err, ErrUserDisabled) {
+			_ = f.sessions.Revoke(ctx, session.ID)
+			return identity.Session{}, identity.User{}, terminalSessionError(err)
+		}
 		return identity.Session{}, identity.User{}, err
 	}
 	if session.AuthenticationMethod == "local" {
@@ -154,7 +159,7 @@ func (f *AuthFlow) Authenticate(ctx context.Context, token string) (identity.Ses
 	}
 	if f.provider == nil {
 		_ = f.sessions.Revoke(ctx, session.ID)
-		return identity.Session{}, identity.User{}, fmt.Errorf("OIDC authentication is unavailable")
+		return identity.Session{}, identity.User{}, terminalSessionError(fmt.Errorf("OIDC authentication is unavailable"))
 	}
 	if !f.sessions.IdentitySyncDue(session, f.identitySyncInterval) {
 		return session, user, nil
@@ -162,34 +167,38 @@ func (f *AuthFlow) Authenticate(ctx context.Context, token string) (identity.Ses
 	refreshToken, err := f.protector.Decrypt(session.RefreshTokenCiphertext)
 	if err != nil {
 		_ = f.sessions.Revoke(ctx, session.ID)
-		return identity.Session{}, identity.User{}, err
+		return identity.Session{}, identity.User{}, terminalSessionError(err)
 	}
 	authentication, err := f.provider.RefreshAndVerify(ctx, refreshToken)
 	if err != nil {
 		_ = f.sessions.Revoke(ctx, session.ID)
-		return identity.Session{}, identity.User{}, fmt.Errorf("refresh OIDC identity: %w", err)
+		return identity.Session{}, identity.User{}, terminalSessionError(fmt.Errorf("refresh OIDC identity: %w", err))
 	}
 	claims := authentication.Claims
 	refreshedUser, err := f.identity.ResolveOIDCIdentity(ctx, claims.Issuer, claims.Subject, claims.Username)
 	if err != nil || refreshedUser.ID != user.ID {
 		_ = f.sessions.Revoke(ctx, session.ID)
-		return identity.Session{}, identity.User{}, fmt.Errorf("refreshed OIDC identity does not match session")
+		return identity.Session{}, identity.User{}, terminalSessionError(fmt.Errorf("refreshed OIDC identity does not match session"))
 	}
 	if f.groups != nil {
 		if err := f.groups.SyncOIDCGroups(ctx, refreshedUser.ID, claims.Issuer, claims.Groups); err != nil {
 			_ = f.sessions.Revoke(ctx, session.ID)
-			return identity.Session{}, identity.User{}, fmt.Errorf("synchronize refreshed OIDC group claims: %w", err)
+			return identity.Session{}, identity.User{}, terminalSessionError(fmt.Errorf("synchronize refreshed OIDC group claims: %w", err))
 		}
 	}
 	ciphertext, err := f.protector.Encrypt(authentication.RefreshToken)
 	if err != nil {
 		_ = f.sessions.Revoke(ctx, session.ID)
-		return identity.Session{}, identity.User{}, err
+		return identity.Session{}, identity.User{}, terminalSessionError(err)
 	}
 	if err := f.sessions.UpdateProviderCredential(ctx, session.ID, ciphertext); err != nil {
 		return identity.Session{}, identity.User{}, err
 	}
 	return session, refreshedUser, nil
+}
+
+func terminalSessionError(err error) error {
+	return fmt.Errorf("%w: %v", ErrSessionInvalid, err)
 }
 
 // Logout validates CSRF, revokes the local session, and returns the provider logout URL when available.

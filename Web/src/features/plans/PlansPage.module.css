@@ -1,21 +1,16 @@
-.page,
-.detail {
+.page {
   width: 100%;
 }
 
-.workspace {
-  display: grid;
-  grid-template-columns: minmax(16rem, 22rem) minmax(0, 1fr);
-  gap: var(--rh-space-4);
+.pageHeader {
+  padding: var(--rh-space-2) 0 var(--rh-space-1);
 }
 
-.selected {
-  background: var(--ant-color-primary-bg);
-  cursor: pointer;
+.pageHeader :global(.ant-typography) {
+  text-wrap: pretty;
 }
 
-@media (max-width: 960px) {
-  .workspace {
-    grid-template-columns: 1fr;
-  }
+.pageHeader :global(h2.ant-typography) {
+  margin-block-end: var(--rh-space-2);
+  letter-spacing: -0.025em;
 }

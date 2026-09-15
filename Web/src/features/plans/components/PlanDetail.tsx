@@ -1,4 +1,4 @@
-import { Button, Card, Empty, Select, Space, Tag } from 'antd'
+import { Button, Card, Empty, Flex, Select, Tag, Tooltip } from 'antd'
 import { useTranslation } from 'react-i18next'
 
 import type {
@@ -6,8 +6,8 @@ import type {
   DeploymentPlan,
   DeploymentPlanVersion,
 } from '@/generated/model'
+import definitionStyles from '@/shared/definition/DefinitionWorkspace.module.css'
 
-import styles from '../PlansPage.module.css'
 import { PlanGraphEditor } from './PlanGraphEditor'
 
 interface Props {
@@ -29,17 +29,30 @@ export function PlanDetail(props: Props) {
       </Card>
     )
   return (
-    <Card title={props.plan.name} extra={<PlanActions {...props} />}>
-      <Space orientation="vertical" className={styles.detail}>
-        <Tag color={lifecycleColor(props.version.lifecycle)}>
-          {props.version.lifecycle}
-        </Tag>
+    <Card
+      className={definitionStyles.detailCard}
+      title={
+        <div className={definitionStyles.detailHeading}>
+          <span className={definitionStyles.detailTitle}>
+            {props.plan.name}
+          </span>
+          <span className={definitionStyles.detailMeta}>
+            <Tag color={lifecycleColor(props.version.lifecycle)}>
+              {props.version.lifecycle}
+            </Tag>
+            <span>v{props.version.versionNumber}</span>
+          </span>
+        </div>
+      }
+      extra={<PlanActions {...props} />}
+    >
+      <div className={definitionStyles.detail}>
         <PlanGraphEditor
           key={props.version.id}
           initialDocument={props.version.document}
           readOnly
         />
-      </Space>
+      </div>
     </Card>
   )
 }
@@ -48,38 +61,49 @@ function PlanActions(props: Props) {
   const { t } = useTranslation()
   const plan = props.plan!
   const version = props.version!
+  const hasDraft = plan.versions.some((item) => item.lifecycle === 'Draft')
   return (
-    <Space>
-      <Select
-        value={props.versionID ?? version.id}
-        options={plan.versions.map((item) => ({
-          value: item.id,
-          label: `v${item.versionNumber} · ${item.lifecycle}`,
-        }))}
-        onChange={props.onVersion}
-      />
-      <Button onClick={props.onNewVersion}>
-        {t('plans.actions.newVersion')}
-      </Button>
-      {version.lifecycle === 'Draft' && (
-        <Button
-          type="primary"
-          loading={props.submitting}
-          onClick={() => props.onLifecycle('Published')}
+    <Flex className={definitionStyles.actions}>
+      <div className={definitionStyles.actionGroup}>
+        <Select
+          value={props.versionID ?? version.id}
+          options={plan.versions.map((item) => ({
+            value: item.id,
+            label: `v${item.versionNumber} · ${item.lifecycle}`,
+          }))}
+          onChange={props.onVersion}
+        />
+        <Tooltip
+          title={hasDraft ? t('plans.actions.newVersionDraftHint') : undefined}
         >
-          {t('plans.actions.publish')}
-        </Button>
-      )}
-      {version.lifecycle === 'Published' && (
-        <Button
-          danger
-          loading={props.submitting}
-          onClick={() => props.onLifecycle('Disabled')}
-        >
-          {t('plans.actions.disable')}
-        </Button>
-      )}
-    </Space>
+          <span>
+            <Button disabled={hasDraft} onClick={props.onNewVersion}>
+              {t('plans.actions.newVersion')}
+            </Button>
+          </span>
+        </Tooltip>
+      </div>
+      <div className={definitionStyles.actionGroup}>
+        {version.lifecycle === 'Draft' && (
+          <Button
+            type="primary"
+            loading={props.submitting}
+            onClick={() => props.onLifecycle('Published')}
+          >
+            {t('plans.actions.publish')}
+          </Button>
+        )}
+        {version.lifecycle === 'Published' && (
+          <Button
+            danger
+            loading={props.submitting}
+            onClick={() => props.onLifecycle('Disabled')}
+          >
+            {t('plans.actions.disable')}
+          </Button>
+        )}
+      </div>
+    </Flex>
   )
 }
 

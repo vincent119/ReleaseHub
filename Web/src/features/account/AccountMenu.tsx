@@ -1,5 +1,6 @@
 import {
   DownOutlined,
+  GlobalOutlined,
   LogoutOutlined,
   SkinOutlined,
   UserOutlined,
@@ -17,11 +18,15 @@ import { useFeedback } from '@/shared/feedback/useFeedback'
 
 import styles from './AccountMenu.module.css'
 import { PersonalSettings } from './PersonalSettings'
-import { ThemeSettings } from './ThemeSettings'
+import {
+  PreferenceSettings,
+  type PreferenceSettingsKind,
+} from './ThemeSettings'
 
 interface AccountMenuProps {
   userId: string
   username: string
+  passwordChangeAvailable: boolean
   desktopOverride?: boolean
   navigateTo?: (url: string) => void
 }
@@ -29,6 +34,7 @@ interface AccountMenuProps {
 export function AccountMenu({
   userId,
   username,
+  passwordChangeAvailable,
   desktopOverride,
   navigateTo = (url) => window.location.assign(url),
 }: AccountMenuProps) {
@@ -40,7 +46,9 @@ export function AccountMenu({
   const triggerRef = useRef<HTMLButtonElement>(null)
   const [menuOpen, setMenuOpen] = useState(false)
   const [personalOpen, setPersonalOpen] = useState(false)
-  const [themeOpen, setThemeOpen] = useState(false)
+  const [preferenceOpen, setPreferenceOpen] = useState(false)
+  const [preferenceKind, setPreferenceKind] =
+    useState<PreferenceSettingsKind>('theme')
   const csrfToken = browserCookie('releasehub_csrf')
   const logout = useLogoutAuthSession(
     csrfToken
@@ -49,8 +57,8 @@ export function AccountMenu({
   )
 
   const focusTrigger = () => triggerRef.current?.focus()
-  const closeTheme = () => {
-    setThemeOpen(false)
+  const closePreference = () => {
+    setPreferenceOpen(false)
     if (desktop) requestAnimationFrame(focusTrigger)
   }
   const signOut = async () => {
@@ -95,6 +103,11 @@ export function AccountMenu({
             label: t('account.personalSettings'),
           },
           {
+            key: 'language',
+            icon: <GlobalOutlined aria-hidden="true" />,
+            label: t('account.languageSettings'),
+          },
+          {
             key: 'theme',
             icon: <SkinOutlined aria-hidden="true" />,
             label: t('account.themeSettings'),
@@ -115,7 +128,10 @@ export function AccountMenu({
         onClick: ({ key }) => {
           setMenuOpen(false)
           if (key === 'personal') setPersonalOpen(true)
-          if (key === 'theme') setThemeOpen(true)
+          if (key === 'language' || key === 'theme') {
+            setPreferenceKind(key)
+            setPreferenceOpen(true)
+          }
           if (key === 'logout') void signOut()
         },
       }}
@@ -139,17 +155,20 @@ export function AccountMenu({
 
   return (
     <>
-      <ThemeSettings
+      <PreferenceSettings
         anchor={trigger}
         desktop={desktop}
-        open={themeOpen}
-        onClose={closeTheme}
+        kind={preferenceKind}
+        open={preferenceOpen}
+        onClose={closePreference}
         onAfterClose={focusTrigger}
       />
       <PersonalSettings
         open={personalOpen}
         userId={userId}
         username={username}
+        passwordChangeAvailable={passwordChangeAvailable}
+        csrfToken={csrfToken}
         onClose={() => setPersonalOpen(false)}
         onAfterClose={focusTrigger}
       />

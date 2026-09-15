@@ -1,4 +1,4 @@
-import { Segmented, Space, Typography } from 'antd'
+import { Select } from 'antd'
 import { useTranslation } from 'react-i18next'
 
 import {
@@ -6,44 +6,47 @@ import {
   useThemePreference,
 } from '@/shared/theme/useThemePreference'
 
-export function PreferenceControls() {
+import styles from './PreferenceControls.module.css'
+
+type SupportedLanguage = 'en' | 'zh-TW'
+
+export function LanguagePreferenceControl() {
   const { i18n, t } = useTranslation()
+  const language: SupportedLanguage =
+    i18n.resolvedLanguage === 'zh-TW' ? 'zh-TW' : 'en'
+
+  return (
+    <Select<SupportedLanguage>
+      aria-label={t('preferences.language.label')}
+      className={styles.select}
+      options={[
+        { label: t('preferences.language.english'), value: 'en' },
+        {
+          label: t('preferences.language.traditionalChinese'),
+          value: 'zh-TW',
+        },
+      ]}
+      value={language}
+      onChange={(nextLanguage) => void i18n.changeLanguage(nextLanguage)}
+    />
+  )
+}
+
+export function ThemePreferenceControl() {
+  const { t } = useTranslation()
   const { preference, setPreference } = useThemePreference()
 
   return (
-    <Space orientation="vertical" size="middle">
-      <div>
-        <Typography.Text strong>
-          {t('preferences.language.label')}
-        </Typography.Text>
-        <Segmented
-          aria-label={t('preferences.language.label')}
-          block
-          options={[
-            { label: t('preferences.language.english'), value: 'en' },
-            {
-              label: t('preferences.language.traditionalChinese'),
-              value: 'zh-TW',
-            },
-          ]}
-          value={i18n.resolvedLanguage}
-          onChange={(language) => void i18n.changeLanguage(language)}
-        />
-      </div>
-      <div>
-        <Typography.Text strong>{t('preferences.theme.label')}</Typography.Text>
-        <Segmented<ThemePreference>
-          aria-label={t('preferences.theme.label')}
-          block
-          options={[
-            { label: t('preferences.theme.system'), value: 'system' },
-            { label: t('preferences.theme.light'), value: 'light' },
-            { label: t('preferences.theme.dark'), value: 'dark' },
-          ]}
-          value={preference}
-          onChange={setPreference}
-        />
-      </div>
-    </Space>
+    <Select<ThemePreference>
+      aria-label={t('preferences.theme.label')}
+      className={styles.select}
+      options={[
+        { label: t('preferences.theme.system'), value: 'system' },
+        { label: t('preferences.theme.light'), value: 'light' },
+        { label: t('preferences.theme.dark'), value: 'dark' },
+      ]}
+      value={preference}
+      onChange={setPreference}
+    />
   )
 }

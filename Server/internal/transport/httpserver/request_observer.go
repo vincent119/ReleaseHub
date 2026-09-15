@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -20,6 +21,8 @@ type httpObserver struct {
 	probePaths map[string]struct{}
 	tracer     trace.Tracer
 }
+
+const statusClientClosedRequest = 499
 
 type requestObservation struct {
 	ctx       context.Context
@@ -92,7 +95,7 @@ func (o *requestObservation) recordSpan(c *gin.Context) {
 		attribute.String("http.route", route),
 		attribute.Int("http.response.status_code", status),
 	)
-	if status >= http.StatusBadRequest {
+	if status >= http.StatusBadRequest && status != statusClientClosedRequest {
 		o.span.SetStatus(codes.Error, http.StatusText(status))
 	}
 	o.span.End(trace.WithTimestamp(time.Now()))
@@ -107,8 +110,16 @@ func (o *httpObserver) recordMetrics(c *gin.Context, observation *requestObserva
 
 func (o *httpObserver) writeLog(c *gin.Context, observation *requestObservation) {
 	fields := observation.logFields(c)
-	if c.Writer.Status() >= http.StatusBadRequest || len(c.Errors) > 0 {
+	if c.Writer.Status() == statusClientClosedRequest {
+		o.options.Logger.Info("HTTP request canceled", fields...)
+		return
+	}
+	if c.Writer.Status() >= http.StatusInternalServerError || len(c.Errors) > 0 {
 		o.options.Logger.Error("HTTP request failed", fields...)
+		return
+	}
+	if c.Writer.Status() >= http.StatusBadRequest {
+		o.options.Logger.Warn("HTTP request rejected", fields...)
 		return
 	}
 	o.options.Logger.Info("HTTP request", fields...)
@@ -125,7 +136,14 @@ func (o *requestObservation) logFields(c *gin.Context) []zlogger.Field {
 	if o.span.SpanContext().HasTraceID() {
 		fields = append(fields, traceLogFields(o.span.SpanContext())...)
 	}
+	if lastError := c.Errors.Last(); lastError != nil {
+		fields = append(fields, zlogger.Err(lastError.Err))
+	}
 	return fields
+}
+
+func recordRequestError(c *gin.Context, operation string, err error) {
+	_ = c.Error(fmt.Errorf("%s: %w", operation, err))
 }
 
 func traceLogFields(span trace.SpanContext) []zlogger.Field {

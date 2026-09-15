@@ -24,6 +24,7 @@ import {
   createCatalogEnvironmentLabelMapping,
   createCatalogOrganization,
   createCatalogProject,
+  deleteCatalogOrganization,
   updateCatalogOrganization,
   useGetCatalogResourceTree,
   useGetSystemStatus,
@@ -63,6 +64,8 @@ export function ResourcesPage() {
   const [form] = Form.useForm<ResourceFields>()
   const [action, setAction] = useState<ResourceAction>()
   const [submitting, setSubmitting] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState<CatalogOrganizationNode>()
+  const [deleteSubmitting, setDeleteSubmitting] = useState(false)
   const resources = useGetCatalogResourceTree()
   const system = useGetSystemStatus()
 
@@ -183,6 +186,39 @@ export function ResourcesPage() {
       setSubmitting(false)
     }
   }
+  const confirmDelete = async () => {
+    if (!deleteTarget) return
+    const csrfToken = browserCookie('releasehub_csrf')
+    if (!csrfToken) {
+      feedback.error(t('resources.mutation.error'))
+      return
+    }
+    setDeleteSubmitting(true)
+    try {
+      const response = await deleteCatalogOrganization(
+        deleteTarget.id,
+        { expectedVersion: deleteTarget.version },
+        { headers: { 'X-CSRF-Token': csrfToken } },
+      )
+      if (response.status !== 204) {
+        feedback.error(
+          response.status === 400
+            ? t('resources.mutation.invalid')
+            : response.status === 404
+              ? t('resources.mutation.notAuthorized')
+              : t('resources.mutation.conflict'),
+        )
+        return
+      }
+      setDeleteTarget(undefined)
+      feedback.success(t('resources.mutation.deleted'))
+      await resources.refetch()
+    } catch {
+      feedback.error(t('resources.mutation.error'))
+    } finally {
+      setDeleteSubmitting(false)
+    }
+  }
 
   return (
     <Space orientation="vertical" size="large" style={{ width: '100%' }}>
@@ -224,12 +260,24 @@ export function ResourcesPage() {
               key={organization.id}
               title={`${t('resources.organization')}: ${organization.name}`}
               extra={
-                organization.canRename ? (
-                  <Button
-                    onClick={() => open({ kind: 'rename', organization })}
-                  >
-                    {t('resources.actions.renameOrganization')}
-                  </Button>
+                organization.canRename || organization.canDelete ? (
+                  <Space wrap>
+                    {organization.canRename && (
+                      <Button
+                        onClick={() => open({ kind: 'rename', organization })}
+                      >
+                        {t('resources.actions.renameOrganization')}
+                      </Button>
+                    )}
+                    {organization.canDelete && (
+                      <Button
+                        danger
+                        onClick={() => setDeleteTarget(organization)}
+                      >
+                        {t('resources.actions.deleteOrganization')}
+                      </Button>
+                    )}
+                  </Space>
                 ) : undefined
               }
             >
@@ -245,6 +293,25 @@ export function ResourcesPage() {
         close={close}
         submit={submit}
       />
+      <Modal
+        open={Boolean(deleteTarget)}
+        title={t('resources.deleteModal.title')}
+        okText={t('resources.deleteModal.confirm')}
+        cancelText={t('resources.modal.cancel')}
+        okButtonProps={{ danger: true }}
+        confirmLoading={deleteSubmitting}
+        onCancel={() => {
+          if (!deleteSubmitting) setDeleteTarget(undefined)
+        }}
+        onOk={() => void confirmDelete()}
+        destroyOnHidden
+      >
+        <Typography.Paragraph>
+          {t('resources.deleteModal.description', {
+            name: deleteTarget?.name ?? '',
+          })}
+        </Typography.Paragraph>
+      </Modal>
     </Space>
   )
 }

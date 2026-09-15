@@ -1,7 +1,7 @@
-import { App as AntdApp, Button } from 'antd'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { App as AntdApp, Button, ConfigProvider } from 'antd'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { I18nextProvider } from 'react-i18next'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import i18n from '@/shared/i18n/config'
 
@@ -15,7 +15,7 @@ const cases = [
   ['success', 4, 'status', false, '操作成功'],
   ['info', 4, 'status', false, '資訊'],
   ['warning', 7, 'status', undefined, '注意'],
-  ['error', 0, 'alert', undefined, '操作失敗'],
+  ['error', 8, 'alert', undefined, '操作失敗'],
 ] as const
 
 describe('useFeedback', () => {
@@ -31,7 +31,10 @@ describe('useFeedback', () => {
     })
   })
 
-  afterEach(cleanup)
+  afterEach(() => {
+    vi.useRealTimers()
+    cleanup()
+  })
 
   it.each(cases)(
     'creates %s notification semantics',
@@ -43,6 +46,7 @@ describe('useFeedback', () => {
         title: 'Title',
         description: 'Description',
         duration,
+        pauseOnHover: false,
         role,
         closeIcon,
         placement: 'topRight',
@@ -69,6 +73,29 @@ describe('useFeedback', () => {
       expect(notice).toHaveTextContent('詳細內容')
     },
   )
+
+  it('removes an error notification after eight seconds', () => {
+    vi.useFakeTimers()
+    render(
+      <I18nextProvider i18n={i18n}>
+        <ConfigProvider theme={{ token: { motion: false } }}>
+          <AntdApp>
+            <FeedbackProbe type="error" />
+          </AntdApp>
+        </ConfigProvider>
+      </I18nextProvider>,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '顯示通知' }))
+    expect(screen.getByRole('alert')).toBeInTheDocument()
+
+    act(() => {
+      vi.advanceTimersByTime(8_000)
+      vi.runAllTimers()
+    })
+
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
 })
 
 function FeedbackProbe({ type }: { type: FeedbackType }) {

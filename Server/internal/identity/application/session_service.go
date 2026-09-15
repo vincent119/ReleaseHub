@@ -7,12 +7,20 @@ import (
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/google/uuid"
 
 	identity "github.com/vincent119/ReleaseHub/Server/internal/identity/domain"
+)
+
+var (
+	// ErrSessionInvalid marks a terminal browser session state that requires a new login.
+	ErrSessionInvalid = errors.New("session is invalid")
+	// ErrCSRFInvalid marks a rejected state-changing request without changing session validity.
+	ErrCSRFInvalid = errors.New("CSRF token is invalid")
 )
 
 // SessionRepository persists opaque browser sessions.
@@ -65,29 +73,30 @@ func (s *SessionService) Create(ctx context.Context, userID uuid.UUID, refreshTo
 	if len(refreshTokenCiphertext) == 0 {
 		return "", "", fmt.Errorf("encrypted provider refresh token is required")
 	}
-	return s.create(ctx, userID, refreshTokenCiphertext, "oidc")
+	_, sessionToken, csrfToken, err = s.create(ctx, userID, refreshTokenCiphertext, "oidc")
+	return sessionToken, csrfToken, err
 }
 
 // CreateLocal issues a session that does not depend on an OIDC refresh credential.
-func (s *SessionService) CreateLocal(ctx context.Context, userID uuid.UUID) (sessionToken, csrfToken string, err error) {
+func (s *SessionService) CreateLocal(ctx context.Context, userID uuid.UUID) (session identity.Session, sessionToken, csrfToken string, err error) {
 	return s.create(ctx, userID, nil, "local")
 }
 
-func (s *SessionService) create(ctx context.Context, userID uuid.UUID, refreshTokenCiphertext []byte, method string) (sessionToken, csrfToken string, err error) {
+func (s *SessionService) create(ctx context.Context, userID uuid.UUID, refreshTokenCiphertext []byte, method string) (session identity.Session, sessionToken, csrfToken string, err error) {
 	sessionToken, err = newOpaqueToken()
 	if err != nil {
-		return "", "", err
+		return identity.Session{}, "", "", err
 	}
 	csrfToken, err = newOpaqueToken()
 	if err != nil {
-		return "", "", err
+		return identity.Session{}, "", "", err
 	}
 	now := s.clock.Now().UTC()
-	session := identity.Session{ID: uuid.New(), UserID: userID, TokenHash: hash(sessionToken), CSRFTokenHash: hash(csrfToken), RefreshTokenCiphertext: append([]byte(nil), refreshTokenCiphertext...), IdentityVerifiedAt: now, CreatedAt: now, LastSeenAt: now, IdleExpiresAt: now.Add(s.idleTimeout), AbsoluteExpiresAt: now.Add(s.absoluteTTL), AuthenticationMethod: method}
+	session = identity.Session{ID: uuid.New(), UserID: userID, TokenHash: hash(sessionToken), CSRFTokenHash: hash(csrfToken), RefreshTokenCiphertext: append([]byte(nil), refreshTokenCiphertext...), IdentityVerifiedAt: now, CreatedAt: now, LastSeenAt: now, IdleExpiresAt: now.Add(s.idleTimeout), AbsoluteExpiresAt: now.Add(s.absoluteTTL), AuthenticationMethod: method}
 	if err := s.repository.CreateSession(ctx, session); err != nil {
-		return "", "", fmt.Errorf("create session: %w", err)
+		return identity.Session{}, "", "", fmt.Errorf("create session: %w", err)
 	}
-	return sessionToken, csrfToken, nil
+	return session, sessionToken, csrfToken, nil
 }
 
 // UpdateProviderCredential rotates the encrypted refresh token after successful identity sync.
@@ -114,7 +123,7 @@ func (s *SessionService) Authenticate(ctx context.Context, token string) (identi
 	}
 	now := s.clock.Now().UTC()
 	if !session.ActiveAt(now) {
-		return identity.Session{}, fmt.Errorf("session is inactive")
+		return identity.Session{}, fmt.Errorf("%w: inactive", ErrSessionInvalid)
 	}
 	idleExpiresAt := now.Add(s.idleTimeout)
 	if idleExpiresAt.After(session.AbsoluteExpiresAt) {
@@ -130,7 +139,7 @@ func (s *SessionService) Authenticate(ctx context.Context, token string) (identi
 // ValidateCSRF verifies a request token against the session-bound token hash.
 func (s *SessionService) ValidateCSRF(session identity.Session, token string) error {
 	if token == "" || subtle.ConstantTimeCompare(session.CSRFTokenHash, hash(token)) != 1 {
-		return fmt.Errorf("CSRF token is invalid")
+		return ErrCSRFInvalid
 	}
 	return nil
 }

@@ -5,6 +5,7 @@ import {
   screen,
   waitFor,
 } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { App as AntdApp } from 'antd'
 import { I18nextProvider } from 'react-i18next'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -23,14 +24,23 @@ const api = vi.hoisted(() => ({
   useResources: vi.fn(),
   useWorkflows: vi.fn(),
 }))
+const feedback = vi.hoisted(() => ({
+  error: vi.fn(),
+  success: vi.fn(),
+}))
 
 vi.mock('@/generated/api', () => ({
   changeDeploymentPlanVersionLifecycle: api.lifecycle,
   createDeploymentPlan: api.createPlan,
   createDeploymentPlanVersion: api.createVersion,
+  getGetAuthSessionQueryKey: () => ['/api/v1/auth/session'],
   useGetCatalogResourceTree: api.useResources,
   useListDeploymentPlans: api.usePlans,
   useListReleaseWorkflows: api.useWorkflows,
+}))
+
+vi.mock('@/shared/feedback/useFeedback', () => ({
+  useFeedback: () => feedback,
 }))
 
 vi.mock('./components/PlanScopeSelector', () => ({
@@ -55,10 +65,21 @@ vi.mock('./components/PlanList', () => ({
 }))
 
 vi.mock('./components/PlanDetail', () => ({
-  PlanDetail: ({ onNewVersion }: { onNewVersion: () => void }) => (
-    <button type="button" onClick={onNewVersion}>
-      建立測試版本
-    </button>
+  PlanDetail: ({
+    onNewVersion,
+    onLifecycle,
+  }: {
+    onNewVersion: () => void
+    onLifecycle: (lifecycle: 'Published') => void
+  }) => (
+    <>
+      <button type="button" onClick={onNewVersion}>
+        建立測試版本
+      </button>
+      <button type="button" onClick={() => onLifecycle('Published')}>
+        發布測試版本
+      </button>
+    </>
   ),
 }))
 
@@ -104,12 +125,19 @@ vi.mock('./components/PlanEditorWorkspace', () => ({
 }))
 
 describe('PlansPage editor mode', () => {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  })
+
   beforeEach(async () => {
     await i18n.changeLanguage('zh-TW')
     api.createPlan.mockReset()
     api.createVersion.mockReset()
     api.lifecycle.mockReset()
     api.refetch.mockReset()
+    feedback.error.mockReset()
+    feedback.success.mockReset()
+    queryClient.clear()
     document.cookie = 'releasehub_csrf=csrf-token; path=/'
     api.useResources.mockReturnValue({
       isError: false,
@@ -121,6 +149,7 @@ describe('PlansPage editor mode', () => {
     })
     api.usePlans.mockReturnValue({
       isPending: false,
+      isError: false,
       refetch: api.refetch,
       data: { status: 200, data: { data: [deploymentPlan] } },
     })
@@ -193,15 +222,126 @@ describe('PlansPage editor mode', () => {
     )
     await waitFor(() => expect(api.refetch).toHaveBeenCalledOnce())
   })
+
+  it('explains a create name conflict and preserves the editor', async () => {
+    api.createPlan.mockResolvedValue({ status: 409 })
+    renderPage(queryClient)
+    selectScope()
+    fireEvent.click(screen.getByRole('button', { name: /建立 Plan/ }))
+    fireEvent.click(screen.getByRole('button', { name: '提交測試 Plan' }))
+
+    await waitFor(() =>
+      expect(feedback.error).toHaveBeenCalledWith(
+        '目前作用域已存在相同名稱的 Plan，請使用其他名稱。',
+      ),
+    )
+    expect(screen.getByTestId('plan-editor-workspace')).toBeInTheDocument()
+    expect(api.refetch).not.toHaveBeenCalled()
+  })
+
+  it('distinguishes a new-version conflict from a create conflict', async () => {
+    api.createVersion.mockResolvedValue({ status: 409 })
+    renderPage(queryClient)
+    selectScope()
+    fireEvent.click(screen.getByRole('button', { name: '建立測試版本' }))
+    fireEvent.click(screen.getByRole('button', { name: '提交測試 Plan' }))
+
+    await waitFor(() =>
+      expect(feedback.error).toHaveBeenCalledWith(
+        'Plan 版本已變更或已有 Draft，請重新整理後再試。',
+      ),
+    )
+    expect(screen.getByTestId('plan-editor-workspace')).toBeInTheDocument()
+  })
+
+  it.each([
+    [404, 'Plan 不存在，或你沒有操作權限。'],
+    [422, '目前 Plan 版本狀態不允許這項操作。'],
+    [500, '無法儲存 Deployment Plan。'],
+  ])(
+    'maps lifecycle status %s to an actionable message',
+    async (status, message) => {
+      api.lifecycle.mockResolvedValue({ status })
+      renderPage(queryClient)
+      selectScope()
+      fireEvent.click(screen.getByRole('button', { name: '發布測試版本' }))
+
+      await waitFor(() => expect(feedback.error).toHaveBeenCalledWith(message))
+      expect(api.refetch).not.toHaveBeenCalled()
+    },
+  )
+
+  it('revalidates Auth Session after a 401 response', async () => {
+    api.createPlan.mockResolvedValue({ status: 401 })
+    const invalidateQueries = vi
+      .spyOn(queryClient, 'invalidateQueries')
+      .mockResolvedValue()
+    renderPage(queryClient)
+    selectScope()
+    fireEvent.click(screen.getByRole('button', { name: /建立 Plan/ }))
+    fireEvent.click(screen.getByRole('button', { name: '提交測試 Plan' }))
+
+    await waitFor(() =>
+      expect(invalidateQueries).toHaveBeenCalledWith({
+        queryKey: ['/api/v1/auth/session'],
+        exact: true,
+      }),
+    )
+    expect(feedback.error).toHaveBeenCalledWith('登入狀態已失效，請重新登入。')
+  })
+
+  it.each([404, 500])(
+    'shows an unavailable state and blocks creation when the list returns %s',
+    async (status) => {
+      api.usePlans.mockReturnValue({
+        isPending: false,
+        isError: false,
+        refetch: api.refetch,
+        data: { status, data: {} },
+      })
+      renderPage(queryClient)
+      selectScope()
+
+      expect(
+        await screen.findByText('無法載入 Deployment Plan 或資源範圍。'),
+      ).toBeInTheDocument()
+      expect(screen.queryByText('Plan 清單測試')).not.toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /建立 Plan/ })).toBeDisabled()
+    },
+  )
+
+  it('revalidates Auth Session and blocks creation when the list returns 401', async () => {
+    api.usePlans.mockReturnValue({
+      isPending: false,
+      isError: false,
+      refetch: api.refetch,
+      data: { status: 401, data: {} },
+    })
+    const invalidateQueries = vi
+      .spyOn(queryClient, 'invalidateQueries')
+      .mockResolvedValue()
+    renderPage(queryClient)
+    selectScope()
+
+    await waitFor(() =>
+      expect(invalidateQueries).toHaveBeenCalledWith({
+        queryKey: ['/api/v1/auth/session'],
+        exact: true,
+      }),
+    )
+    expect(screen.getByRole('button', { name: /建立 Plan/ })).toBeDisabled()
+  })
 })
 
-function renderPage() {
+function renderPage(queryClient = new QueryClient()) {
   return render(
-    <AntdApp>
-      <I18nextProvider i18n={i18n}>
-        <PlansPage />
-      </I18nextProvider>
-    </AntdApp>,
+    <QueryClientProvider client={queryClient}>
+      <AntdApp>
+        <I18nextProvider i18n={i18n}>
+          <PlansPage />
+        </I18nextProvider>
+      </AntdApp>
+    </QueryClientProvider>,
   )
 }
 
@@ -237,7 +377,7 @@ const deploymentPlan = {
       id: 'version-1',
       planId: 'plan-1',
       versionNumber: 1,
-      lifecycle: 'Draft' as const,
+      lifecycle: 'Published' as const,
       document: planDocument,
       lockVersion: 3,
       createdAt: '2026-09-10T00:00:00Z',

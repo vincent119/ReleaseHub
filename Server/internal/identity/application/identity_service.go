@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -9,6 +10,9 @@ import (
 
 	identity "github.com/vincent119/ReleaseHub/Server/internal/identity/domain"
 )
+
+// ErrUserDisabled marks an identity that must not retain an authenticated session.
+var ErrUserDisabled = errors.New("user is disabled")
 
 // IdentityRepository resolves immutable OIDC identity bindings.
 type IdentityRepository interface {
@@ -32,7 +36,7 @@ func (s *IdentityService) FindUser(ctx context.Context, userID uuid.UUID) (ident
 		return identity.User{}, fmt.Errorf("find user: %w", err)
 	}
 	if user.Disabled {
-		return identity.User{}, fmt.Errorf("user is disabled")
+		return identity.User{}, ErrUserDisabled
 	}
 	return user, nil
 }
@@ -59,7 +63,7 @@ func (s *IdentityService) ResolveOIDCIdentity(ctx context.Context, issuer, subje
 		return identity.User{}, fmt.Errorf("resolve OIDC identity: %w", err)
 	}
 	if user.Disabled {
-		return identity.User{}, fmt.Errorf("user is disabled")
+		return identity.User{}, ErrUserDisabled
 	}
 	return user, nil
 }

@@ -12,7 +12,7 @@ import (
 )
 
 type localAuth interface {
-	Login(context.Context, string, string) (identity.User, bool, string, string, error)
+	Login(context.Context, string, string) (identity.User, bool, identity.Session, string, string, error)
 	ChangePassword(context.Context, uuid.UUID, string, string) error
 	MustChangePassword(context.Context, uuid.UUID) (bool, error)
 }
@@ -27,13 +27,20 @@ func (h *authHandler) LoginLocal(c *gin.Context) {
 	if !ok {
 		return
 	}
-	user, mustChange, sessionToken, csrfToken, err := h.local.Login(c.Request.Context(), request.Username, request.Password)
+	user, mustChange, session, sessionToken, csrfToken, err := h.local.Login(c.Request.Context(), request.Username, request.Password)
 	if err != nil {
 		respondError(c, http.StatusUnauthorized, "INVALID_CREDENTIALS", "Username or password is invalid")
 		return
 	}
 	h.setSessionCookies(c, sessionToken, csrfToken)
-	c.JSON(http.StatusOK, contract.AuthSessionResponse{Data: contract.AuthSession{UserId: user.ID, Username: user.Username, MustChangePassword: mustChange}, Meta: responseMeta(c)})
+	c.JSON(http.StatusOK, contract.AuthSessionResponse{Data: contract.AuthSession{
+		UserId:                  user.ID,
+		Username:                user.Username,
+		MustChangePassword:      mustChange,
+		PasswordChangeAvailable: true,
+		IdleExpiresAt:           session.IdleExpiresAt.UTC(),
+		AbsoluteExpiresAt:       session.AbsoluteExpiresAt.UTC(),
+	}, Meta: responseMeta(c)})
 }
 
 func (h *authHandler) localLoginRequest(c *gin.Context) (contract.LocalLoginRequest, bool) {

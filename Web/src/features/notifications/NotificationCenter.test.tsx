@@ -12,6 +12,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import i18n from '@/shared/i18n/config'
 
 import { NotificationCenter } from './NotificationCenter'
+import styles from './NotificationCenter.module.css'
 
 const api = vi.hoisted(() => ({
   list: vi.fn(),
@@ -61,6 +62,14 @@ describe('NotificationCenter', () => {
   })
 
   afterEach(cleanup)
+
+  it('uses the enlarged outlined bell without changing the trigger semantics', () => {
+    renderCenter()
+
+    const trigger = screen.getByRole('button', { name: '開啟通知' })
+    expect(trigger.querySelector('.anticon-bell')).toHaveClass(styles.icon)
+    expect(screen.getByText('1')).toBeInTheDocument()
+  })
 
   it('shows unread history, resource link, and marks an item read', async () => {
     render(

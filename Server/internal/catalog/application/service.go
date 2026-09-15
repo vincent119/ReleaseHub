@@ -31,6 +31,7 @@ type Mutation struct {
 type Writer interface {
 	CreateOrganization(context.Context, Mutation, domain.Organization) error
 	RenameOrganization(context.Context, Mutation, domain.Organization, domain.Organization) error
+	DeleteOrganization(context.Context, Mutation, domain.Organization, domain.Organization, uuid.UUID) error
 	CreateProject(context.Context, Mutation, domain.Project) error
 	CreateEnvironment(context.Context, Mutation, domain.Environment) error
 	CreateApplication(context.Context, Mutation, domain.Application) error
@@ -43,6 +44,7 @@ type Reader interface {
 	FindApplication(context.Context, uuid.UUID) (domain.Application, error)
 	ListActiveOrganizations(context.Context) ([]domain.Organization, error)
 	ListActiveProjects(context.Context) ([]domain.Project, error)
+	ListOrganizationProjectCounts(context.Context) (map[uuid.UUID]uint64, error)
 	ListActiveEnvironments(context.Context) ([]domain.Environment, error)
 	ListActiveApplications(context.Context) ([]domain.Application, error)
 	ListApplications(context.Context, uuid.UUID, uuid.UUID, uuid.UUID) ([]domain.Application, error)
@@ -177,6 +179,39 @@ func (s *Service) RenameOrganization(ctx context.Context, principal Principal, m
 	return renamed, nil
 }
 
+// DeleteOrganization deactivates an empty non-default tenant boundary after fresh platform authorization.
+func (s *Service) DeleteOrganization(ctx context.Context, principal Principal, mutation Mutation, organizationID uuid.UUID, expectedVersion uint64) error {
+	allowed, err := s.authorizer.AuthorizeFresh(ctx, authz.AuthorizationRequest{UserID: principal.UserID, Disabled: principal.Disabled, Permission: s.platformManage, Scope: authz.NewPlatformScope()})
+	if err != nil {
+		return fmt.Errorf("authorize Organization deletion: %w", err)
+	}
+	if !allowed {
+		return ErrResourceNotFound
+	}
+	if organizationID == uuid.Nil || expectedVersion == 0 {
+		return ErrInvalidResource
+	}
+	current, err := s.repository.FindOrganization(ctx, organizationID)
+	if err != nil {
+		return ErrResourceNotFound
+	}
+	if current.Version != expectedVersion {
+		return ErrResourceConflict
+	}
+	deactivated, err := current.Deactivate(s.defaultOrganizationID)
+	if errors.Is(err, domain.ErrDefaultOrganizationProtected) {
+		return ErrResourceConflict
+	}
+	if err != nil {
+		return fmt.Errorf("%w: %v", ErrInvalidResource, err)
+	}
+	mutation.ActorID = &principal.UserID
+	if err := s.repository.DeleteOrganization(ctx, mutation, current, deactivated, s.defaultOrganizationID); err != nil {
+		return fmt.Errorf("delete Organization: %w", err)
+	}
+	return nil
+}
+
 // CreateProject creates a Project after platform authorization.
 func (s *Service) CreateProject(ctx context.Context, principal Principal, mutation Mutation, organizationID uuid.UUID, name string) (domain.Project, error) {
 	allowed, err := s.authorizer.AuthorizeFresh(ctx, authz.AuthorizationRequest{UserID: principal.UserID, Disabled: principal.Disabled, Permission: s.platformManage, Scope: authz.NewPlatformScope()})
@@ -265,6 +300,7 @@ type OrganizationNode struct {
 	Projects         []ProjectNode
 	CanCreateProject bool
 	CanRename        bool
+	CanDelete        bool
 	IsDefault        bool
 }
 
@@ -306,6 +342,13 @@ func (s *Service) ListResourceTree(ctx context.Context, principal Principal) (Re
 	if err != nil {
 		return ResourceTree{}, fmt.Errorf("list active Applications: %w", err)
 	}
+	projectCounts := map[uuid.UUID]uint64{}
+	if platformAllowed {
+		projectCounts, err = s.repository.ListOrganizationProjectCounts(ctx)
+		if err != nil {
+			return ResourceTree{}, fmt.Errorf("list Organization Project counts: %w", err)
+		}
+	}
 
 	result := ResourceTree{Organizations: make([]OrganizationNode, 0), CanCreateOrganization: platformAllowed}
 	for _, organization := range organizations {
@@ -314,6 +357,7 @@ func (s *Service) ListResourceTree(ctx context.Context, principal Principal) (Re
 			CanCreateProject: platformAllowed, CanRename: platformAllowed,
 			IsDefault: organization.IsDefault(s.defaultOrganizationID),
 		}
+		organizationNode.CanDelete = platformAllowed && !organizationNode.IsDefault && projectCounts[organization.ID] == 0
 		for _, project := range projects {
 			if project.OrganizationID != organization.ID {
 				continue

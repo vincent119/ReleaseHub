@@ -10,7 +10,7 @@ const durationByType: Record<FeedbackType, number> = {
   success: 4,
   info: 4,
   warning: 7,
-  error: 0,
+  error: 8,
 }
 
 const titleKeyByType = {
@@ -30,6 +30,7 @@ export function createFeedbackOptions(
     title,
     description,
     duration: durationByType[type],
+    pauseOnHover: false,
     placement: 'topRight' as const,
     role: type === 'error' ? ('alert' as const) : ('status' as const),
     closeIcon: type === 'success' || type === 'info' ? false : undefined,

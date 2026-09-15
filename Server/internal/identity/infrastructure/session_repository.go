@@ -35,7 +35,7 @@ func (r *SessionRepository) FindSessionByTokenHash(ctx context.Context, tokenHas
 	var model sessionModel
 	if err := r.db.WithContext(ctx).Where("token_hash = ?", tokenHash).Take(&model).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return identity.Session{}, fmt.Errorf("session not found")
+			return identity.Session{}, fmt.Errorf("find session: %w", application.ErrSessionInvalid)
 		}
 		return identity.Session{}, fmt.Errorf("find session: %w", err)
 	}
@@ -50,7 +50,7 @@ func (r *SessionRepository) TouchSession(ctx context.Context, id uuid.UUID, last
 		return fmt.Errorf("touch session: %w", result.Error)
 	}
 	if result.RowsAffected != 1 {
-		return fmt.Errorf("session not found or revoked")
+		return fmt.Errorf("touch session: %w", application.ErrSessionInvalid)
 	}
 	return nil
 }
