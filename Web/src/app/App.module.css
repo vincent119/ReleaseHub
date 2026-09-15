@@ -321,6 +321,12 @@
   max-width: 70rem;
 }
 
+.routeLoading {
+  display: grid;
+  min-height: calc(100vh - 7rem);
+  place-items: center;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .header {
     backdrop-filter: none;

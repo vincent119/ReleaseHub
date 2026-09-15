@@ -9,9 +9,10 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "tsc -b && vite build && node scripts/check-bundle-budget.mjs",
     "typecheck": "tsc -b --pretty false",
-    "test": "vitest run --passWithNoTests",
+    "test": "vitest run --passWithNoTests && node --test scripts/check-bundle-budget.test.mjs",
+    "test:bundle-budget": "node --test scripts/check-bundle-budget.test.mjs",
     "test:e2e": "playwright test",
     "generate:api": "orval --config orval.config.ts",
     "lint:api": "redocly lint ../API/openapi.yaml",
