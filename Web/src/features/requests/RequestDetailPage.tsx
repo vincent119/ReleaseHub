@@ -41,7 +41,7 @@ export function RequestDetailPage() {
   if (requestQuery.isPending) return <Skeleton active />
   if (!request || requestQuery.isError) {
     return (
-      <Alert type="error" showIcon message={t('requestDetail.unavailable')} />
+      <Alert type="error" showIcon title={t('requestDetail.unavailable')} />
     )
   }
   const workflowValues: ReleaseWorkflow[] =

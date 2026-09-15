@@ -1,14 +1,4 @@
-import {
-  Card,
-  Col,
-  Empty,
-  List,
-  Row,
-  Space,
-  Steps,
-  Tag,
-  Typography,
-} from 'antd'
+import { Card, Col, Empty, Row, Space, Steps, Tag, Typography } from 'antd'
 import { useTranslation } from 'react-i18next'
 
 import type {
@@ -19,6 +9,7 @@ import type {
   ReleaseWorkflow,
   ReleaseWorkflowVersion,
 } from '@/generated/model'
+import { SemanticList, SemanticListItemContent } from '@/shared/list'
 
 import { nodeStatusColor } from '../model/presentation'
 
@@ -74,12 +65,12 @@ function WorkflowProgress({
   return (
     <Card title={t('requestDetail.workflow.title')}>
       <Steps
-        direction="vertical"
+        orientation="vertical"
         size="small"
         current={currentIndex}
         items={states.map((state) => ({
           title: state.name,
-          description: state.type,
+          content: state.type,
         }))}
       />
     </Card>
@@ -103,43 +94,39 @@ function PlanProgress({
   const statuses = new Map(execution?.nodes.map((node) => [node.nodeKey, node]))
   return (
     <Card title={t('requestDetail.plan.title')}>
-      <List
-        dataSource={[...version.document.nodes].sort(
-          (a, b) => a.order - b.order,
-        )}
+      <SemanticList
+        items={[...version.document.nodes].sort((a, b) => a.order - b.order)}
+        rowKey="key"
         renderItem={(node) => {
           const runtime = statuses.get(node.key)
           const upstream = version.document.edges.filter(
             (edge) => edge.to === node.key,
           )
           return (
-            <List.Item
+            <SemanticListItemContent
               extra={
                 <Tag color={nodeStatusColor(runtime?.status ?? 'Waiting')}>
                   {runtime?.status ?? 'Waiting'}
                 </Tag>
               }
-            >
-              <List.Item.Meta
-                title={`${node.order + 1}. ${node.applicationKey}`}
-                description={
-                  <Space orientation="vertical" size={0}>
-                    <Typography.Text type="secondary">
-                      {upstream.length
-                        ? t('requestDetail.plan.dependsOn', {
-                            nodes: upstream.map((edge) => edge.from).join(', '),
-                          })
-                        : t('requestDetail.plan.independent')}
+              title={`${node.order + 1}. ${node.applicationKey}`}
+              description={
+                <Space orientation="vertical" size={0}>
+                  <Typography.Text type="secondary">
+                    {upstream.length
+                      ? t('requestDetail.plan.dependsOn', {
+                          nodes: upstream.map((edge) => edge.from).join(', '),
+                        })
+                      : t('requestDetail.plan.independent')}
+                  </Typography.Text>
+                  {runtime?.healthStatus && (
+                    <Typography.Text>
+                      {runtime.syncStatus} · {runtime.healthStatus}
                     </Typography.Text>
-                    {runtime?.healthStatus && (
-                      <Typography.Text>
-                        {runtime.syncStatus} · {runtime.healthStatus}
-                      </Typography.Text>
-                    )}
-                  </Space>
-                }
-              />
-            </List.Item>
+                  )}
+                </Space>
+              }
+            />
           )
         }}
       />

@@ -204,7 +204,7 @@ function selectedNavigationKey(pathname: string) {
 function OverviewPage() {
   const { t } = useTranslation()
   return (
-    <Space direction="vertical" size="large" className={styles.pageSection}>
+    <Space orientation="vertical" size="large" className={styles.pageSection}>
       <div>
         <Typography.Title level={2}>{t('overview.title')}</Typography.Title>
         <Typography.Paragraph type="secondary">
@@ -214,7 +214,7 @@ function OverviewPage() {
       <Alert
         type="info"
         showIcon
-        message={t('overview.apiBoundary.title')}
+        title={t('overview.apiBoundary.title')}
         description={t('overview.apiBoundary.description')}
       />
     </Space>
@@ -259,14 +259,14 @@ function ApplicationsPage() {
       <Alert
         type="error"
         showIcon
-        message={t('applications.error.title')}
+        title={t('applications.error.title')}
         description={t('applications.error.description')}
       />
     )
   }
 
   return (
-    <Space direction="vertical" size="large" className={styles.pageSection}>
+    <Space orientation="vertical" size="large" className={styles.pageSection}>
       <div>
         <Typography.Title level={2}>{t('applications.title')}</Typography.Title>
         <Typography.Paragraph type="secondary">
@@ -326,7 +326,7 @@ function ApplicationDetailPage() {
       <Alert
         type="error"
         showIcon
-        message={t('applicationDetail.error.title')}
+        title={t('applicationDetail.error.title')}
         description={t('applicationDetail.error.description')}
       />
     )
@@ -335,7 +335,7 @@ function ApplicationDetailPage() {
   const value = application.data.data.data
   const runtime = status.data.data.data
   return (
-    <Space direction="vertical" size="large" className={styles.pageSection}>
+    <Space orientation="vertical" size="large" className={styles.pageSection}>
       <div>
         <Link to="/applications">{t('applicationDetail.back')}</Link>
         <Typography.Title level={2}>{value.name}</Typography.Title>
@@ -456,7 +456,7 @@ function ApplicationDetailPage() {
         <Alert
           type="warning"
           showIcon
-          message={t('applicationDetail.drift.title')}
+          title={t('applicationDetail.drift.title')}
           description={runtime.driftReasons.join(', ')}
         />
       )}
@@ -474,7 +474,7 @@ function browserCookie(name: string): string | undefined {
 function LoadingPage({ label }: { label: string }) {
   return (
     <main className={styles.centered}>
-      <Spin size="large" tip={label} />
+      <Spin size="large" description={label} />
     </main>
   )
 }
@@ -631,10 +631,14 @@ export function ChangePasswordPage() {
         title={t('session.passwordChange.title')}
         className={styles.authCard}
       >
-        <Space direction="vertical" size="middle" className={styles.fullWidth}>
+        <Space
+          orientation="vertical"
+          size="middle"
+          className={styles.fullWidth}
+        >
           <Alert
             type="warning"
-            message={t('session.passwordChange.required')}
+            title={t('session.passwordChange.required')}
             showIcon
           />
           <Form layout="vertical" onFinish={submit}>

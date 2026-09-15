@@ -75,41 +75,6 @@
   content: '';
 }
 
-.listItem :global(.ant-list-item-meta) {
-  min-width: 0;
-  align-items: center;
-}
-
-.listItem :global(.ant-list-item-meta-avatar) {
-  display: grid;
-  width: 2rem;
-  height: 2rem;
-  margin-inline-end: var(--rh-space-3);
-  place-items: center;
-  color: var(--rh-color-primary);
-  background: var(--rh-color-primary-soft);
-  border-radius: var(--rh-radius-md);
-}
-
-.listItem :global(.ant-list-item-meta-title),
-.listItem :global(.ant-list-item-meta-description) {
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.listItem :global(.ant-list-item-meta-title) {
-  margin-block-end: var(--rh-space-1);
-  font-weight: 650;
-  white-space: nowrap;
-}
-
-.listItem :global(.ant-list-item-meta-description) {
-  display: -webkit-box;
-  line-height: 1.45;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-}
-
 .detailCard {
   min-width: 0;
   box-shadow: var(--rh-shadow-card);

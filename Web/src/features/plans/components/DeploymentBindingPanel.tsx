@@ -45,7 +45,7 @@ export function DeploymentBindingPanel(props: Props) {
   }
   if (query.isError || (query.data && query.data.status !== 200))
     return (
-      <Alert type="warning" showIcon message={t('plans.binding.unavailable')} />
+      <Alert type="warning" showIcon title={t('plans.binding.unavailable')} />
     )
   return (
     <Card title={t('plans.binding.title')} loading={query.isPending}>

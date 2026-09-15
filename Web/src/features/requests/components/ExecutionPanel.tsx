@@ -6,7 +6,6 @@ import {
   Descriptions,
   Form,
   Input,
-  List,
   Modal,
   Space,
   Tag,
@@ -26,6 +25,7 @@ import type {
   DeploymentRequestVersion,
 } from '@/generated/model'
 import { useFeedback } from '@/shared/feedback/useFeedback'
+import { SemanticList, SemanticListItemContent } from '@/shared/list'
 
 import {
   nodeStatusColor,
@@ -59,7 +59,7 @@ export function ExecutionPanel({
       <Alert
         type="error"
         showIcon
-        message={t('requestDetail.execution.unavailable')}
+        title={t('requestDetail.execution.unavailable')}
       />
     )
   if (!execution)
@@ -68,7 +68,7 @@ export function ExecutionPanel({
         <Alert
           type="info"
           showIcon
-          message={t('requestDetail.execution.pending')}
+          title={t('requestDetail.execution.pending')}
         />
       </Card>
     )
@@ -110,46 +110,50 @@ export function ExecutionPanel({
           {execution.id}
         </Descriptions.Item>
       </Descriptions>
-      <List
-        dataSource={execution.nodes}
+      <SemanticList
+        items={execution.nodes}
+        rowKey="id"
         renderItem={(node) => (
-          <List.Item
+          <SemanticListItemContent
             extra={
               <Tag color={nodeStatusColor(node.status)}>{node.status}</Tag>
             }
-          >
-            <Checkbox
-              aria-label={t('requestDetail.execution.selectRetry', {
-                application: node.nodeKey,
-              })}
-              disabled={
-                node.status !== 'Failed' ||
-                !capability('deployment_request.retry')
-              }
-              checked={selected.includes(node.applicationId)}
-              onChange={(event) =>
-                setSelected(
-                  toggleValue(
-                    selected,
-                    node.applicationId,
-                    event.target.checked,
-                  ),
-                )
-              }
-            >
-              {node.nodeKey}
-            </Checkbox>
-            <Space orientation="vertical" size={0}>
-              <Typography.Text type="secondary">
-                {node.syncStatus} · {node.healthStatus}
-              </Typography.Text>
-              {node.errorMessage && (
-                <Typography.Text type="danger">
-                  {node.errorMessage}
+            title={
+              <Checkbox
+                aria-label={t('requestDetail.execution.selectRetry', {
+                  application: node.nodeKey,
+                })}
+                disabled={
+                  node.status !== 'Failed' ||
+                  !capability('deployment_request.retry')
+                }
+                checked={selected.includes(node.applicationId)}
+                onChange={(event) =>
+                  setSelected(
+                    toggleValue(
+                      selected,
+                      node.applicationId,
+                      event.target.checked,
+                    ),
+                  )
+                }
+              >
+                {node.nodeKey}
+              </Checkbox>
+            }
+            description={
+              <Space orientation="vertical" size={0}>
+                <Typography.Text type="secondary">
+                  {node.syncStatus} · {node.healthStatus}
                 </Typography.Text>
-              )}
-            </Space>
-          </List.Item>
+                {node.errorMessage && (
+                  <Typography.Text type="danger">
+                    {node.errorMessage}
+                  </Typography.Text>
+                )}
+              </Space>
+            }
+          />
         )}
       />
       <Space wrap>
@@ -226,7 +230,7 @@ function ExecutionCommandModal({
       cancelText={t('requestDetail.metadata.cancel')}
       confirmLoading={submitting}
       closable={!submitting}
-      maskClosable={false}
+      mask={{ closable: false }}
       onCancel={onCancel}
       onOk={() =>
         void form
@@ -238,7 +242,7 @@ function ExecutionCommandModal({
       <Alert
         type="warning"
         showIcon
-        message={t(`requestDetail.commands.${command}.warning`)}
+        title={t(`requestDetail.commands.${command}.warning`)}
       />
       <Form form={form} layout="vertical">
         <Form.Item

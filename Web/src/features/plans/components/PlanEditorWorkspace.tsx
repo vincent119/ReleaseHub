@@ -135,7 +135,7 @@ export function PlanEditorWorkspace(props: Props) {
           </Form>
         </section>
 
-        {validation && <Alert type="error" showIcon message={validation} />}
+        {validation && <Alert type="error" showIcon title={validation} />}
 
         <section
           className={styles.graphRegion}
