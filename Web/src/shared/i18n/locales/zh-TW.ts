@@ -453,7 +453,9 @@ export const zhTW = {
     mutation: {
       saved: 'Workflow 已儲存。',
       nameConflict: 'Workflow 名稱已存在，請使用其他名稱。',
-      versionConflict: 'Workflow 版本已變更或已有 Draft，請重新整理後再試。',
+      versionConflict: 'Workflow 版本已變動，請重新整理後再試。',
+      draftExists: 'Workflow 已有 Draft，請先發布目前 Draft 後再建立新版本。',
+      conflict: 'Workflow 操作發生衝突，請重新整理後再試。',
       rejected: 'Workflow 操作遭拒絕，請重新整理並確認權限與版本。',
       error: '無法儲存 Workflow。',
     },

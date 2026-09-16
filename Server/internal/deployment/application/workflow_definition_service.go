@@ -21,6 +21,10 @@ var (
 	ErrWorkflowConflict = errors.New("workflow changed concurrently")
 	// ErrWorkflowNameConflict identifies a case-insensitive duplicate workflow name.
 	ErrWorkflowNameConflict = errors.New("workflow name already exists")
+	// ErrWorkflowVersionConflict identifies a stale aggregate version during draft creation.
+	ErrWorkflowVersionConflict = errors.New("workflow version changed concurrently")
+	// ErrWorkflowDraftExists identifies a workflow that already has an editable draft.
+	ErrWorkflowDraftExists = errors.New("workflow draft already exists")
 	// ErrWorkflowInvalid identifies a workflow document or lifecycle rejected by domain rules.
 	ErrWorkflowInvalid = errors.New("workflow definition is invalid")
 )
@@ -221,7 +225,13 @@ func (s *WorkflowDefinitionService) authorizeManage(ctx context.Context, princip
 
 func (s *WorkflowDefinitionService) newVersion(workflow deploydomain.ReleaseWorkflow, actorID uuid.UUID, input CreateWorkflowVersionInput) (deploydomain.ReleaseWorkflowVersion, error) {
 	latest, ok := latestWorkflowVersion(workflow)
-	if !ok || latest.VersionNumber != input.ExpectedVersion || latest.Lifecycle == deploydomain.DefinitionDraft {
+	if !ok || latest.VersionNumber != input.ExpectedVersion {
+		return deploydomain.ReleaseWorkflowVersion{}, ErrWorkflowVersionConflict
+	}
+	if latest.Lifecycle == deploydomain.DefinitionDraft {
+		return deploydomain.ReleaseWorkflowVersion{}, ErrWorkflowDraftExists
+	}
+	if latest.Lifecycle != deploydomain.DefinitionPublished && latest.Lifecycle != deploydomain.DefinitionDisabled {
 		return deploydomain.ReleaseWorkflowVersion{}, ErrWorkflowConflict
 	}
 	version, err := deploydomain.NewReleaseWorkflowVersion(deploydomain.WorkflowVersionDraft{

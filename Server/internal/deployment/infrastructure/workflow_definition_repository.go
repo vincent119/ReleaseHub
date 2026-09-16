@@ -222,8 +222,11 @@ func verifyVersionAppend(tx *gorm.DB, workflowID uuid.UUID, expected uint64) err
 	if err := tx.Model(&releaseWorkflowVersionModel{}).Where("workflow_id = ? AND lifecycle = 'Draft'", workflowID).Count(&drafts).Error; err != nil {
 		return fmt.Errorf("count workflow drafts: %w", err)
 	}
-	if uint64(latest) != expected || drafts > 0 {
-		return deployapp.ErrWorkflowConflict
+	if uint64(latest) != expected {
+		return deployapp.ErrWorkflowVersionConflict
+	}
+	if drafts > 0 {
+		return deployapp.ErrWorkflowDraftExists
 	}
 	return nil
 }

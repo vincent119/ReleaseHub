@@ -6393,7 +6393,7 @@ export type createReleaseWorkflowVersionResponse404 = {
 }
 
 export type createReleaseWorkflowVersionResponse409 = {
-  data: void
+  data: ErrorResponse
   status: 409
 }
 
@@ -6448,7 +6448,7 @@ const res = await fetch(getCreateReleaseWorkflowVersionUrl(workflowId),
 
 export const getCreateReleaseWorkflowVersionMutationKey = () => ['createReleaseWorkflowVersion'] as const;
 
-export const getCreateReleaseWorkflowVersionMutationOptions = <TError = void,
+export const getCreateReleaseWorkflowVersionMutationOptions = <TError = void | ErrorResponse,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createReleaseWorkflowVersion>>, TError,CreateReleaseWorkflowVersionMutationVariables, TContext>, fetch?: RequestInit}
 ): UseMutationOptions<Awaited<ReturnType<typeof createReleaseWorkflowVersion>>, TError,CreateReleaseWorkflowVersionMutationVariables, TContext> => {
 
@@ -6477,13 +6477,13 @@ const {mutation: mutationOptions, fetch: fetchOptions} = options ?
 
     export type CreateReleaseWorkflowVersionMutationResult = NonNullable<Awaited<ReturnType<typeof createReleaseWorkflowVersion>>>
     export type CreateReleaseWorkflowVersionMutationBody = CreateReleaseWorkflowVersionRequest
-    export type CreateReleaseWorkflowVersionMutationError = void
+    export type CreateReleaseWorkflowVersionMutationError = void | ErrorResponse
     export type CreateReleaseWorkflowVersionMutationVariables = {workflowId: string;data: CreateReleaseWorkflowVersionRequest}
 
     /**
  * @summary Create the next Release Workflow Draft Version
  */
-export const useCreateReleaseWorkflowVersion = <TError = void,
+export const useCreateReleaseWorkflowVersion = <TError = void | ErrorResponse,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createReleaseWorkflowVersion>>, TError,CreateReleaseWorkflowVersionMutationVariables, TContext>, fetch?: RequestInit}
  , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof createReleaseWorkflowVersion>>,
