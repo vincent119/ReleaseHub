@@ -230,7 +230,7 @@ func marshalStringSlice(values []string) datatypes.JSON {
 const requestSummaryQuery = `
 SELECT request.id, request.organization_id, request.project_id, request.environment_id,
        request.classification, request.status, request.updated_at, version.version_number,
-       version.status AS version_status, version.title,
+       version.status AS version_status, version.title, version.scheduled_for,
        (SELECT COUNT(*) FROM deployment_request_applications application
         WHERE application.request_version_id = version.id) AS application_count
 FROM deployment_requests request
@@ -252,6 +252,7 @@ type requestSummaryModel struct {
 	VersionNumber    uint64
 	VersionStatus    string
 	Title            string
+	ScheduledFor     *time.Time
 	ApplicationCount int
 }
 
@@ -269,5 +270,6 @@ func requestSummary(value requestSummaryModel) deploydomain.DeploymentRequestSum
 	return deploydomain.DeploymentRequestSummary{ID: value.ID, OrganizationID: value.OrganizationID,
 		ProjectID: value.ProjectID, EnvironmentID: value.EnvironmentID, Classification: value.Classification,
 		Status: deploydomain.DeploymentRequestStatus(value.VersionStatus), Title: value.Title,
-		ActiveVersionNumber: value.VersionNumber, ApplicationCount: value.ApplicationCount, UpdatedAt: value.UpdatedAt}
+		ActiveVersionNumber: value.VersionNumber, ApplicationCount: value.ApplicationCount,
+		ScheduledFor: value.ScheduledFor, UpdatedAt: value.UpdatedAt}
 }

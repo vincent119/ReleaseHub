@@ -19,7 +19,7 @@ func TestDeploymentRequestProjectsCurrentCapabilities(t *testing.T) {
 	authorizer := &capabilityAuthorizer{allowed: map[authz.Permission]bool{
 		"deployment_request.view": true, "deployment_request.review": true,
 	}}
-	service, err := NewDeploymentRequestService(repository, authorizer, SystemWorkflowClock{})
+	service, err := NewDeploymentRequestService(repository, &requestScheduleReader{}, authorizer, SystemWorkflowClock{})
 	require.NoError(t, err)
 
 	result, err := service.Get(context.Background(), RequestPrincipal{UserID: uuid.New()}, detail.Summary.ID)
@@ -35,7 +35,7 @@ func TestDeploymentRequestProjectsEveryAllowedCapability(t *testing.T) {
 		allowed[authz.Permission(key)] = true
 	}
 	authorizer := &capabilityAuthorizer{allowed: allowed}
-	service, err := NewDeploymentRequestService(repository, authorizer, SystemWorkflowClock{})
+	service, err := NewDeploymentRequestService(repository, &requestScheduleReader{}, authorizer, SystemWorkflowClock{})
 	require.NoError(t, err)
 
 	result, err := service.Get(context.Background(), RequestPrincipal{UserID: uuid.New()}, detail.Summary.ID)
@@ -54,7 +54,7 @@ func TestDeploymentRequestCommandRechecksPermissionAfterCapabilityProjection(t *
 	authorizer := &capabilityAuthorizer{allowed: map[authz.Permission]bool{
 		"deployment_request.view": true, "deployment_request.update": true,
 	}}
-	service, err := NewDeploymentRequestService(repository, authorizer, SystemWorkflowClock{})
+	service, err := NewDeploymentRequestService(repository, &requestScheduleReader{}, authorizer, SystemWorkflowClock{})
 	require.NoError(t, err)
 	principal := RequestPrincipal{UserID: uuid.New()}
 
@@ -75,6 +75,15 @@ func TestDeploymentRequestCommandRechecksPermissionAfterCapabilityProjection(t *
 type capabilityRequestRepository struct {
 	detail         deploydomain.DeploymentRequestDetail
 	supersedeCalls int
+}
+
+type requestScheduleReader struct {
+	policy *deploydomain.DeploymentSchedulePolicy
+	err    error
+}
+
+func (s *requestScheduleReader) Get(context.Context, uuid.UUID) (*deploydomain.DeploymentSchedulePolicy, error) {
+	return s.policy, s.err
 }
 
 func (s *capabilityRequestRepository) List(context.Context, authz.Scope) ([]deploydomain.DeploymentRequestSummary, error) {

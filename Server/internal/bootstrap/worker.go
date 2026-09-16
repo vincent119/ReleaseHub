@@ -115,24 +115,41 @@ func newNotificationWorker(dependencies workerDependencies) (*deployapp.Notifica
 }
 
 func newDeploymentJobConsumer(dependencies workerDependencies) (*deployapp.DeploymentJobConsumer, error) {
-	locker, err := newImageLocker(dependencies.cfg)
+	executor, queue, err := newDeploymentConsumerExecution(dependencies)
 	if err != nil {
 		return nil, err
 	}
-	preflight, err := deployapp.NewPreflightService(dependencies.resources.argoClient, locker)
-	if err != nil {
-		return nil, err
-	}
-	executor, queue, err := newDeploymentExecutor(dependencies, preflight)
+	schedules, observer, err := newDeploymentScheduleWorker(dependencies)
 	if err != nil {
 		return nil, err
 	}
 	cfg := dependencies.cfg.Worker
 	return deployapp.NewDeploymentJobConsumer(deployapp.DeploymentJobConsumerOptions{
-		Queue: queue, Executor: executor, Owner: "worker-" + uuid.NewString(),
-		PollInterval: cfg.DeploymentPollInterval, LeaseTTL: cfg.JobLeaseDuration,
-		RetryDelay: cfg.JobRetryDelay,
+		Queue: queue, Executor: executor, Schedules: schedules, Observer: observer,
+		Owner: "worker-" + uuid.NewString(), PollInterval: cfg.DeploymentPollInterval,
+		LeaseTTL: cfg.JobLeaseDuration, RetryDelay: cfg.JobRetryDelay,
 	})
+}
+
+func newDeploymentConsumerExecution(dependencies workerDependencies) (*deployapp.DeploymentExecutor, *deployinfra.DeploymentJobQueue, error) {
+	locker, err := newImageLocker(dependencies.cfg)
+	if err != nil {
+		return nil, nil, err
+	}
+	preflight, err := deployapp.NewPreflightService(dependencies.resources.argoClient, locker)
+	if err != nil {
+		return nil, nil, err
+	}
+	return newDeploymentExecutor(dependencies, preflight)
+}
+
+func newDeploymentScheduleWorker(dependencies workerDependencies) (*deployinfra.DeploymentScheduleGate, *deployinfra.DeploymentScheduleObserver, error) {
+	schedules, err := deployinfra.NewDeploymentScheduleGate(dependencies.resources.db)
+	if err != nil {
+		return nil, nil, err
+	}
+	observer, err := deployinfra.NewDeploymentScheduleObserver(dependencies.registry, dependencies.resources.runtime.logger)
+	return schedules, observer, err
 }
 
 func newDeploymentExecutor(dependencies workerDependencies, preflight *deployapp.PreflightService) (*deployapp.DeploymentExecutor, *deployinfra.DeploymentJobQueue, error) {

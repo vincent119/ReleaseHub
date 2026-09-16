@@ -51,6 +51,47 @@ kubectl -n "$releasehub_namespace" logs deployment/releasehub-worker \
 
 The expected result is safe takeover followed by completion or an explicit `Blocked` or failed state. If progress does not resume, escalate the recorded identifiers and Worker logs to a platform administrator.
 
+## Scheduled Release or Maintenance Window Wait
+
+### Decision
+
+The Deployment Request list and detail page show the requested earliest time, the Server-computed next eligible time, and a reason as separate values:
+
+- `ScheduledTime`: the Request Version `scheduledFor` time has not arrived.
+- `MaintenanceWindow`: earliest-start has arrived, but the current time is outside a weekly maintenance window.
+- `Blackout`: the candidate time is inside a blackout.
+- `Ready`: earliest-start and policy allow the current time. Queue, lock, and preflight checks must still succeed before execution starts.
+
+These values are computed by Server. Browser time formatting does not mean that the browser determines eligibility. Weekly windows use the policy IANA time zone. Blackouts and next eligible times are absolute instants. On a DST transition day, use the displayed next eligible instant instead of manually applying a fixed UTC offset.
+
+### Preconditions
+
+- Reading the policy requires view access to the Environment. Updating it requires `deployment_schedule.manage`.
+- Record the Environment, current policy version, time zone, weekly windows, blackouts, Request ID and Version, requested earliest time, and next eligible time.
+- Confirm that the target Request has not created or started an Execution. A started Execution is not affected by later policy changes or by a closing window.
+
+### Procedure
+
+1. On Plans, select the same Organization, Project, and Environment, then open Deployment Schedule.
+2. Confirm that the time zone is a valid IANA name, weekly windows neither cross midnight nor overlap, and every blackout has an ordered start and end.
+3. If the policy matches the approved schedule, wait. Do not manually retry, create a replacement Request, edit queue rows, or trigger Argo CD Sync directly.
+4. If the business approves a policy change, an authorized operator saves it. The page submits the current version as an optimistic update. On `409 Conflict`, keep the unsent input, reload the latest policy, compare changes, and decide whether to resubmit. Do not overwrite another operator's update.
+5. Reload the Request after the update. A waiting job uses the latest policy on its next claim, so the next eligible time may move earlier or later. A started Execution is not interrupted.
+6. A Worker restart does not require a replacement job. Allow PostgreSQL `available_at`, leases, and fencing to continue the wait. If the restart occurs during a deployment, use normal Execution reconciliation instead of treating it as a schedule defer.
+
+### Validation and Stop Conditions
+
+A normal defer emits `Deployment job deferred by schedule` with `job_type`, low-cardinality `reason`, `wait`, `next_eligible_at`, and `policy_version`. Prometheus exposes:
+
+- `releasehub_deployment_schedule_deferred_total{reason=...}`
+- `releasehub_deployment_schedule_wait_seconds{reason=...}`
+
+At the next eligible time, the Request projection becomes `Ready` before the job can enter the Executor. Repeated `reason=Unavailable` means that no valid time exists within the bounded 366-day search. Stop attempts to loosen or resubmit the job and inspect weekly windows and long blackouts. If the policy appears correct but the next eligible instant does not match, record the UTC instant, IANA time zone, policy version, and DST boundary, then escalate to a platform administrator.
+
+### Recovery
+
+There is no in-place policy rollback command. To recover from an incorrect policy, use Plans with the latest version to explicitly write the previously approved content. This creates a new version, Audit record, and Outbox event. Do not directly update or delete `deployment_schedule_policies`, `deployment_schedule_commands`, or queue rows.
+
 ## Partial Failed
 
 ### Decision
@@ -132,4 +173,4 @@ kustomize build Deployments/kustomize/base \
   >/tmp/releasehub-kustomize.yaml
 ```
 
-Walk through each decision for queue incidents, `Partial Failed`, terminate, unlock, Argo CD outages, and Forward Rollback. A dry-run must not perform Sync, retry, terminate, unlock, Git write-back, or cluster apply. It only confirms that commands are readable and that each procedure names the required role and evidence. Without a test environment, leave failure injection and Argo CD or ECR end-to-end checks for integration validation; do not claim that a production drill was completed.
+Walk through each decision for queue waits, schedule waits, policy optimistic conflicts, Worker restarts, DST boundaries, `Partial Failed`, terminate, unlock, Argo CD outages, and Forward Rollback. A dry-run must not change a production policy, perform Sync, retry, terminate, unlock, Git write-back, or cluster apply. It only confirms that commands are readable and that each procedure names the required role and evidence. Without a test environment, leave failure injection and Argo CD or ECR end-to-end checks for integration validation; do not claim that a production drill was completed.

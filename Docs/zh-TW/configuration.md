@@ -77,18 +77,37 @@ Session、Queue、Audit 與 Outbox 目前保存於 PostgreSQL。設定 schema �
 
 ## Worker 與通知
 
-| YAML 欄位 | 預設值 | 用途 |
-| --- | --- | --- |
-| `worker.reconcile_interval` | `30s` | 重新讀取 Argo CD Application 並偵測 Candidate／設定漂移 |
-| `worker.deployment_poll_interval` | `1s` | 輪詢可 claim 的 Deployment Job |
-| `worker.job_lease_duration` | `30s` | Job lease 與 fencing 的有效期間 |
-| `worker.job_retry_delay` | `5s` | 基礎設施失敗後重新排隊前的等待時間 |
-| `worker.application_lock_duration` | `30s` | Application operation lock 的有效期間 |
-| `worker.max_parallel_deployments` | `10` | 單一 Worker 同時執行的 Application 上限；Plan 可設定更低上限 |
-| `notifications.retention` | `168h` | 站內通知保存期間；不影響 Audit |
-| `notifications.projection_interval` | `1s` | Outbox 投影及 SSE 可讀事件更新間隔 |
+| YAML 欄位                           | 預設值 | 用途                                                         |
+| ----------------------------------- | ------ | ------------------------------------------------------------ |
+| `worker.reconcile_interval`         | `30s`  | 重新讀取 Argo CD Application 並偵測 Candidate／設定漂移      |
+| `worker.deployment_poll_interval`   | `1s`   | 輪詢可 claim 的 Deployment Job                               |
+| `worker.job_lease_duration`         | `30s`  | Job lease 與 fencing 的有效期間                              |
+| `worker.job_retry_delay`            | `5s`   | 基礎設施失敗後重新排隊前的等待時間                           |
+| `worker.application_lock_duration`  | `30s`  | Application operation lock 的有效期間                        |
+| `worker.max_parallel_deployments`   | `10`   | 單一 Worker 同時執行的 Application 上限；Plan 可設定更低上限 |
+| `notifications.retention`           | `168h` | 站內通知保存期間；不影響 Audit                               |
+| `notifications.projection_interval` | `1s`   | Outbox 投影及 SSE 可讀事件更新間隔                           |
 
 第一階段必須維持單一 Worker replica。多個 Worker replica 會各自套用 `max_parallel_deployments`，無法保證全平台上限。SSE 由 Web Nginx 的精確路徑 `/api/v1/notifications/events` 代理，並關閉 buffering 與 cache；Client 斷線後以 `Last-Event-ID` 重播，再重新取得當下權限資料。
+
+## Environment Deployment Schedule
+
+Deployment Schedule 是保存於 PostgreSQL 的 Environment policy，不是 Server YAML 或 environment variable。選定 Organization、Project 與 Environment 後，在 Plans 頁面管理；未建立 policy 時，API 回傳 `enabled=false`、`timeZone=UTC`、`version=0` 的 unrestricted default。停用 policy 時仍保留文件內容，但只套用 Request Version 的 `scheduledFor` earliest-start。
+
+Policy 欄位與限制：
+
+| 欄位                       | 語意與限制                                                                                 |
+| -------------------------- | ------------------------------------------------------------------------------------------ |
+| `enabled`                  | 啟用 weekly window 與 blackout gate；啟用時至少需要一筆 weekly window                      |
+| `timeZone`                 | IANA timezone，例如 `Asia/Taipei`；weekly window 依此時區解讀                              |
+| `weeklyWindows`            | 最多 32 筆；`dayOfWeek` 為 `0` 至 `6`，分別代表星期日至星期六；同日不可重疊且不可跨日      |
+| `startMinute`／`endMinute` | 當地日內分鐘，範圍分別為 `0..1439` 與 `1..1440`；開始包含、結束不包含                      |
+| `blackouts`                | 最多 64 筆；開始與結束為 RFC 3339 absolute time，Server 正規化為 UTC；開始包含、結束不包含 |
+| `version`                  | Server 管理的 optimistic version；更新時以前一版作為 `expectedVersion`                     |
+
+讀取 policy 需要目標 scope 的 `deployment_request.view` 或 `deployment_schedule.manage`；修改需要 `deployment_schedule.manage`。PUT 另要求 Session、CSRF token、`Idempotency-Key` 與 `expectedVersion`。相同 actor 與相同 idempotency key 只有在 payload 相同時重播原結果；stale version 或 key/payload 衝突回傳 `409 Conflict`。未授權與不存在的 Environment 都以遮蔽式 `404 Not Found` 回應。
+
+每次成功修改會在同一個 database transaction 寫入 policy、Audit `deployment_schedule.updated` 與 Outbox event。Audit metadata 只保存 version、weekly window 數量與 blackout 數量，不保存完整 policy。
 
 ## 啟動前驗證
 
@@ -99,3 +118,4 @@ Session、Queue、Audit 與 Outbox 目前保存於 PostgreSQL。設定 schema �
 3. PostgreSQL 可連線且已依[資料庫初始化文件](database-initialization.md)完成 versioned migrations。
 4. 啟用 OIDC 時，其 redirect URL 與外部 ReleaseHub URL 一致。
 5. Argo CD 與 ECR 身分符合最小權限。
+6. Migration 已建立 `deployment_schedule_policies`、`deployment_schedule_commands` 與 `deployment_schedule.manage` permission；此功能不需要新增 Server runtime config。

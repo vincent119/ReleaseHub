@@ -1,0 +1,75 @@
+.card {
+  border-color: color-mix(in srgb, var(--rh-color-border) 78%, transparent);
+  background: color-mix(
+    in srgb,
+    var(--rh-color-surface) 94%,
+    var(--rh-color-surface-soft)
+  );
+}
+
+.notice {
+  margin-block-end: var(--rh-space-4);
+}
+
+.policyHeader {
+  padding: var(--rh-space-4);
+  border: 1px solid var(--rh-color-border);
+  border-radius: var(--rh-radius-lg);
+  background: var(--rh-color-surface-soft);
+}
+
+.timeZone {
+  flex: 1 1 18rem;
+  max-width: 30rem;
+}
+
+.list {
+  width: 100%;
+}
+
+.row {
+  padding: var(--rh-space-3);
+  border: 1px solid var(--rh-color-border);
+  border-radius: var(--rh-radius-md);
+  background: var(--rh-color-surface);
+}
+
+.row :global(.ant-form-item) {
+  flex: 1 1 10rem;
+  margin-block-end: 0;
+}
+
+.day {
+  min-width: 10rem;
+}
+
+.remove {
+  margin-block-start: 1.9rem;
+}
+
+.add {
+  align-self: flex-start;
+}
+
+.actions {
+  margin-block-start: var(--rh-space-5);
+  padding-block-start: var(--rh-space-4);
+  border-block-start: 1px solid var(--rh-color-border);
+}
+
+@media (max-width: 640px) {
+  .policyHeader,
+  .row {
+    flex-direction: column;
+  }
+
+  .timeZone,
+  .row :global(.ant-form-item) {
+    width: 100%;
+    max-width: none;
+  }
+
+  .remove {
+    margin-block-start: 0;
+  }
+}

@@ -61,6 +61,21 @@ type DeploymentRequestVersionSummary struct {
 	CreatedAt         time.Time
 }
 
+// DeploymentRequestScheduleState describes whether a request may start now.
+type DeploymentRequestScheduleState string
+
+const (
+	DeploymentRequestScheduleReady   DeploymentRequestScheduleState = "Ready"
+	DeploymentRequestScheduleWaiting DeploymentRequestScheduleState = "Waiting"
+)
+
+// DeploymentRequestScheduleProjection is the Server-owned current eligibility view.
+type DeploymentRequestScheduleProjection struct {
+	State          DeploymentRequestScheduleState
+	NextEligibleAt time.Time
+	Reason         DeploymentScheduleReason
+}
+
 // DeploymentRequestSummary identifies a request and the version currently visible to operators.
 type DeploymentRequestSummary struct {
 	ID                  uuid.UUID
@@ -72,6 +87,8 @@ type DeploymentRequestSummary struct {
 	Title               string
 	ActiveVersionNumber uint64
 	ApplicationCount    int
+	ScheduledFor        *time.Time
+	Schedule            DeploymentRequestScheduleProjection
 	UpdatedAt           time.Time
 }
 

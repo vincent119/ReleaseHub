@@ -13,7 +13,9 @@ func deploymentRequestSummaries(values []deploydomain.DeploymentRequestSummary) 
 		result = append(result, contract.DeploymentRequestSummary{Id: value.ID, OrganizationId: value.OrganizationID,
 			ProjectId: value.ProjectID, EnvironmentId: value.EnvironmentID, Classification: contract.DeploymentRequestSummaryClassification(value.Classification),
 			Status: contract.DeploymentRequestStatus(value.Status), Title: value.Title, ActiveVersionNumber: int64(value.ActiveVersionNumber),
-			ApplicationCount: value.ApplicationCount, UpdatedAt: value.UpdatedAt})
+			ApplicationCount: value.ApplicationCount, ScheduledFor: value.ScheduledFor,
+			ScheduleState: contract.DeploymentRequestScheduleState(value.Schedule.State), NextEligibleAt: value.Schedule.NextEligibleAt,
+			ScheduleReason: contract.DeploymentScheduleReason(value.Schedule.Reason), UpdatedAt: value.UpdatedAt})
 	}
 	return result
 }
@@ -26,7 +28,9 @@ func deploymentRequestDetail(value deploydomain.DeploymentRequestDetail) contrac
 		Classification: contract.DeploymentRequestVersionClassification(value.Summary.Classification), Fingerprint: version.Fingerprint,
 		WorkflowVersionId: version.WorkflowVersionID, PlanVersionId: version.PlanVersionID, Title: version.Title,
 		ChangeDescription: version.Metadata.ChangeDescription, IssueUrl: version.Metadata.IssueURL, ScheduledFor: version.Metadata.ScheduledFor,
-		LockVersion: int64(version.LockVersion), Applications: deploymentRequestApplications(value.Applications), Reviews: deploymentRequestReviews(value.Reviews),
+		ScheduleState: contract.DeploymentRequestScheduleState(value.Summary.Schedule.State), NextEligibleAt: value.Summary.Schedule.NextEligibleAt,
+		ScheduleReason: contract.DeploymentScheduleReason(value.Summary.Schedule.Reason),
+		LockVersion:    int64(version.LockVersion), Applications: deploymentRequestApplications(value.Applications), Reviews: deploymentRequestReviews(value.Reviews),
 		WorkflowStateKey: optionalText(value.WorkflowStateKey), ExecutionId: uuidPointer(value.ExecutionID),
 		ExecutionStatus: deploymentExecutionStatus(value.ExecutionStatus), Capabilities: value.Capabilities, CreatedAt: version.CreatedAt}
 }

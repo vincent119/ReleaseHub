@@ -83,7 +83,8 @@ func deploymentRequestDetailFromModel(model requestDetailModel, applications []d
 	summary := deploydomain.DeploymentRequestSummary{ID: model.ID, OrganizationID: model.OrganizationID,
 		ProjectID: model.ProjectID, EnvironmentID: model.EnvironmentID, Classification: model.Classification,
 		Status: deploydomain.DeploymentRequestStatus(model.VersionStatus), Title: model.Title,
-		ActiveVersionNumber: model.VersionNumber, ApplicationCount: len(applications), UpdatedAt: model.UpdatedAt}
+		ActiveVersionNumber: model.VersionNumber, ApplicationCount: len(applications),
+		ScheduledFor: model.ScheduledFor, UpdatedAt: model.UpdatedAt}
 	version := deploydomain.DeploymentRequestVersionSummary{ID: model.VersionID, RequestID: model.ID,
 		VersionNumber: model.VersionNumber, Status: deploydomain.DeploymentRequestStatus(model.VersionStatus),
 		Fingerprint: model.Fingerprint, WorkflowVersionID: model.WorkflowVersionID, PlanVersionID: model.PlanVersionID,

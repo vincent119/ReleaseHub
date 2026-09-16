@@ -53,6 +53,7 @@ type WorkflowHandlerOptions struct {
 type PlanHandlerOptions struct {
 	Definitions planDefinitionService
 	Bindings    deploymentBindingService
+	Schedules   deploymentScheduleService
 }
 
 // DeploymentHandlerOptions supplies Deployment Request application ports.
@@ -102,7 +103,7 @@ func NewAPIHandler(options APIOptions) contract.ServerInterface {
 		argoCDHandler:   &argoCDHandler{authn: authn, onboarding: options.ArgoCD.Onboarding, candidates: options.ArgoCD.Candidates},
 		accessHandler:   &accessHandler{authn: authn, service: options.Access.Service, localUsers: options.Access.LocalUsers},
 		workflowHandler: &workflowHandler{authn: authn, definitions: options.Workflow.Definitions},
-		planHandler:     &planHandler{authn: authn, definitions: options.Plan.Definitions, bindings: options.Plan.Bindings},
+		planHandler:     &planHandler{authn: authn, definitions: options.Plan.Definitions, bindings: options.Plan.Bindings, schedules: options.Plan.Schedules},
 		deploymentHandler: &deploymentHandler{authn: authn, requests: options.Deployment.Requests,
 			workflows: options.Deployment.Workflows, executions: options.Deployment.Executions,
 			history: options.Deployment.History, notifications: options.Deployment.Notifications},

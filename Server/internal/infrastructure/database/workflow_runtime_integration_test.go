@@ -65,6 +65,46 @@ func TestWorkflowRuntimePersistsReviewTransitionAndDeploymentIntent(t *testing.T
 	assertCountWhere(t, db, "deployment_jobs", "aggregate_id = ?", requestVersionID, 1)
 }
 
+func TestScheduledDeploymentJobUsesEarliestEligibleTime(t *testing.T) {
+	ctx := context.Background()
+	db := workflowTestDatabase(t, ctx)
+	ids := seedDeploymentSchemaScope(t, db)
+	reviewerID := uuid.New()
+	execDeploymentSQL(t, db, `INSERT INTO users (id, username) VALUES (?, 'schedule-reviewer')`, reviewerID)
+	workflowVersion := seedRuntimeWorkflow(t, ctx, db, reviewerID)
+	planVersionID := seedRuntimePlan(t, db, ids)
+	scheduledFor := runtimeIntegrationTime().Add(4 * time.Hour)
+	requestVersionID := seedRuntimeRequestAt(t, db, ids, workflowVersion.ID, planVersionID, &scheduledFor)
+
+	repository, _ := deployinfra.NewWorkflowRuntimeRepository(db)
+	service := runtimeService(t, repository)
+	started, err := service.Start(ctx, deployapp.WorkflowStartInput{
+		RequestVersionID: requestVersionID, IdempotencyKey: "schedule-runtime-start", RequestID: "schedule-runtime-test",
+	})
+	if err != nil || started.ReviewPolicy == nil {
+		t.Fatalf("start scheduled workflow: %#v %v", started, err)
+	}
+	snapshot, err := repository.Load(ctx, requestVersionID)
+	if err != nil || snapshot.CurrentReview == nil {
+		t.Fatalf("load scheduled workflow: %#v %v", snapshot, err)
+	}
+	approveRuntimeReview(t, ctx, service, snapshot, reviewerID)
+	snapshot, err = repository.Load(ctx, requestVersionID)
+	if err != nil {
+		t.Fatalf("reload scheduled workflow: %v", err)
+	}
+	transitionRuntimeToDeployment(t, ctx, service, snapshot, reviewerID)
+
+	var availableAt time.Time
+	if err := db.Table("deployment_jobs").Select("available_at").Where("aggregate_id = ?", requestVersionID).
+		Take(&availableAt).Error; err != nil {
+		t.Fatalf("load scheduled deployment Job: %v", err)
+	}
+	if !availableAt.Equal(scheduledFor) {
+		t.Fatalf("scheduled deployment Job available_at = %s, want %s", availableAt, scheduledFor)
+	}
+}
+
 func reassignRuntimeReview(t *testing.T, ctx context.Context, service *deployapp.WorkflowRuntimeService, snapshot deployapp.WorkflowRuntimeSnapshot, replacementID uuid.UUID) {
 	t.Helper()
 	task, err := service.ReassignReview(ctx, deployapp.WorkflowPrincipal{UserID: replacementID}, deployapp.WorkflowReviewReassignmentInput{
@@ -131,6 +171,10 @@ func seedRuntimePlan(t *testing.T, db *gorm.DB, ids deploymentSchemaIDs) uuid.UU
 }
 
 func seedRuntimeRequest(t *testing.T, db *gorm.DB, ids deploymentSchemaIDs, workflowVersionID, planVersionID uuid.UUID) uuid.UUID {
+	return seedRuntimeRequestAt(t, db, ids, workflowVersionID, planVersionID, nil)
+}
+
+func seedRuntimeRequestAt(t *testing.T, db *gorm.DB, ids deploymentSchemaIDs, workflowVersionID, planVersionID uuid.UUID, scheduledFor *time.Time) uuid.UUID {
 	t.Helper()
 	requestID, versionID := uuid.New(), uuid.New()
 	execDeploymentSQL(t, db, `
@@ -140,10 +184,10 @@ func seedRuntimeRequest(t *testing.T, db *gorm.DB, ids deploymentSchemaIDs, work
 	execDeploymentSQL(t, db, `
 		INSERT INTO deployment_request_versions (
 			id, request_id, version_number, status, fingerprint,
-			workflow_version_id, plan_version_id, title, source_snapshot, created_by
-		) VALUES (?, ?, 1, 'Candidate', ?, ?, ?, 'Runtime request', '{}', ?)
+			workflow_version_id, plan_version_id, title, scheduled_for, source_snapshot, created_by
+		) VALUES (?, ?, 1, 'Candidate', ?, ?, ?, 'Runtime request', ?, '{}', ?)
 	`, versionID, requestID, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-		workflowVersionID, planVersionID, ids.userID)
+		workflowVersionID, planVersionID, scheduledFor, ids.userID)
 	return versionID
 }
 

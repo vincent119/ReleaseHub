@@ -43,6 +43,11 @@ type DeploymentRequestRepository interface {
 	SupersedeMetadata(context.Context, RequestMutation, MetadataVersionChange) (deploydomain.DeploymentRequestDetail, error)
 }
 
+// DeploymentRequestScheduleReader loads the latest Environment policy used by request projections.
+type DeploymentRequestScheduleReader interface {
+	Get(context.Context, uuid.UUID) (*deploydomain.DeploymentSchedulePolicy, error)
+}
+
 // MetadataVersionChange creates a new version from immutable snapshots.
 type MetadataVersionChange struct {
 	RequestID       uuid.UUID
@@ -54,6 +59,7 @@ type MetadataVersionChange struct {
 // DeploymentRequestService exposes request viewing and immutable metadata versioning.
 type DeploymentRequestService struct {
 	repository DeploymentRequestRepository
+	schedules  DeploymentRequestScheduleReader
 	authorizer WorkflowAuthorizer
 	clock      WorkflowClock
 	view       authz.Permission
@@ -61,13 +67,13 @@ type DeploymentRequestService struct {
 }
 
 // NewDeploymentRequestService creates the request use case.
-func NewDeploymentRequestService(repository DeploymentRequestRepository, authorizer WorkflowAuthorizer, clock WorkflowClock) (*DeploymentRequestService, error) {
-	if repository == nil || authorizer == nil || clock == nil {
+func NewDeploymentRequestService(repository DeploymentRequestRepository, schedules DeploymentRequestScheduleReader, authorizer WorkflowAuthorizer, clock WorkflowClock) (*DeploymentRequestService, error) {
+	if repository == nil || schedules == nil || authorizer == nil || clock == nil {
 		return nil, errors.New("deployment request dependencies are required")
 	}
 	view, _ := authz.NewPermission("deployment_request.view")
 	update, _ := authz.NewPermission("deployment_request.update")
-	return &DeploymentRequestService{repository: repository, authorizer: authorizer, clock: clock, view: view, update: update}, nil
+	return &DeploymentRequestService{repository: repository, schedules: schedules, authorizer: authorizer, clock: clock, view: view, update: update}, nil
 }
 
 // List returns requests only after scope authorization.
@@ -75,7 +81,21 @@ func (s *DeploymentRequestService) List(ctx context.Context, principal RequestPr
 	if err := s.authorize(ctx, principal, s.view, scope); err != nil {
 		return nil, err
 	}
-	return s.repository.List(ctx, scope)
+	values, err := s.repository.List(ctx, scope)
+	if err != nil {
+		return nil, err
+	}
+	policy, err := s.schedules.Get(ctx, scope.EnvironmentID)
+	if err != nil {
+		return nil, fmt.Errorf("load deployment request schedule: %w", err)
+	}
+	now := s.clock.Now()
+	for index := range values {
+		if err := projectDeploymentRequestSchedule(&values[index], policy, now); err != nil {
+			return nil, err
+		}
+	}
+	return values, nil
 }
 
 // Get returns a single request after resolving its persisted scope.
@@ -85,6 +105,9 @@ func (s *DeploymentRequestService) Get(ctx context.Context, principal RequestPri
 		return deploydomain.DeploymentRequestDetail{}, err
 	}
 	if err := s.authorize(ctx, principal, s.view, requestScope(detail.Summary)); err != nil {
+		return deploydomain.DeploymentRequestDetail{}, err
+	}
+	if err := s.loadAndProjectSchedule(ctx, &detail.Summary); err != nil {
 		return deploydomain.DeploymentRequestDetail{}, err
 	}
 	return s.withCapabilities(ctx, principal, detail)
@@ -104,7 +127,33 @@ func (s *DeploymentRequestService) UpdateMetadata(ctx context.Context, principal
 	if err != nil {
 		return deploydomain.DeploymentRequestDetail{}, err
 	}
+	if err := s.loadAndProjectSchedule(ctx, &updated.Summary); err != nil {
+		return deploydomain.DeploymentRequestDetail{}, err
+	}
 	return s.withCapabilities(ctx, principal, updated)
+}
+
+func (s *DeploymentRequestService) loadAndProjectSchedule(ctx context.Context, summary *deploydomain.DeploymentRequestSummary) error {
+	policy, err := s.schedules.Get(ctx, summary.EnvironmentID)
+	if err != nil {
+		return fmt.Errorf("load deployment request schedule: %w", err)
+	}
+	return projectDeploymentRequestSchedule(summary, policy, s.clock.Now())
+}
+
+func projectDeploymentRequestSchedule(summary *deploydomain.DeploymentRequestSummary, policy *deploydomain.DeploymentSchedulePolicy, now time.Time) error {
+	eligibility, err := deploydomain.CalculateDeploymentEligibility(now, summary.ScheduledFor, policy)
+	if err != nil {
+		return fmt.Errorf("project deployment request schedule: %w", err)
+	}
+	state := deploydomain.DeploymentRequestScheduleWaiting
+	if eligibility.EligibleNow {
+		state = deploydomain.DeploymentRequestScheduleReady
+	}
+	summary.Schedule = deploydomain.DeploymentRequestScheduleProjection{
+		State: state, NextEligibleAt: eligibility.NextEligibleAt, Reason: eligibility.Reason,
+	}
+	return nil
 }
 
 func (s *DeploymentRequestService) prepareMetadataVersion(ctx context.Context, input MetadataVersionChange) (MetadataVersionChange, deploydomain.DeploymentRequestDetail, error) {

@@ -170,7 +170,11 @@ func newPlanHandlerOptions(db *gorm.DB, policy *authzinfra.PolicyEngine) (httpse
 		return httpserver.PlanHandlerOptions{}, err
 	}
 	bindings, err := newDeploymentBindingService(db, policy)
-	return httpserver.PlanHandlerOptions{Definitions: service, Bindings: bindings}, err
+	if err != nil {
+		return httpserver.PlanHandlerOptions{}, err
+	}
+	schedules, err := newDeploymentScheduleService(db, policy)
+	return httpserver.PlanHandlerOptions{Definitions: service, Bindings: bindings, Schedules: schedules}, err
 }
 
 func newDeploymentBindingService(db *gorm.DB, policy *authzinfra.PolicyEngine) (*deployapp.DeploymentBindingService, error) {
@@ -179,6 +183,14 @@ func newDeploymentBindingService(db *gorm.DB, policy *authzinfra.PolicyEngine) (
 		return nil, err
 	}
 	return deployapp.NewDeploymentBindingService(repository, policy, deployapp.SystemWorkflowClock{})
+}
+
+func newDeploymentScheduleService(db *gorm.DB, policy *authzinfra.PolicyEngine) (*deployapp.DeploymentScheduleService, error) {
+	repository, err := deployinfra.NewDeploymentScheduleRepository(db)
+	if err != nil {
+		return nil, err
+	}
+	return deployapp.NewDeploymentScheduleService(repository, policy, deployapp.SystemWorkflowClock{})
 }
 
 func newWorkflowHandlerOptions(db *gorm.DB, policy *authzinfra.PolicyEngine) (httpserver.WorkflowHandlerOptions, error) {

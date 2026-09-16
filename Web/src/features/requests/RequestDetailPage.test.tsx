@@ -56,6 +56,8 @@ describe('RequestDetailPage', () => {
     )
     expect(screen.queryByRole('button', { name: '核准申請' })).toBeNull()
     expect(screen.queryByRole('button', { name: '編輯選填資訊' })).toBeNull()
+    expect(screen.getByText('等待下一個維護時段')).toBeInTheDocument()
+    expect(screen.getByText('等待排程')).toBeInTheDocument()
   })
 
   it('renders request actions only when the backend grants capabilities', () => {
@@ -126,6 +128,9 @@ function requestFixture(): DeploymentRequestVersion {
     title: 'Deploy payment',
     changeDescription: '',
     issueUrl: '',
+    scheduleState: 'Waiting',
+    nextEligibleAt: '2026-09-17T01:00:00Z',
+    scheduleReason: 'MaintenanceWindow',
     lockVersion: 4,
     workflowStateKey: 'review',
     capabilities: [],

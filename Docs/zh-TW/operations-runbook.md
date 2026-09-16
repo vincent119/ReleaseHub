@@ -51,6 +51,47 @@ kubectl -n "$releasehub_namespace" logs deployment/releasehub-worker \
 
 預期結果為原 Job 被安全接手、完成或明確進入 `Blocked`／失敗狀態。若狀態沒有進展，將上述識別資訊與 Worker 日誌交給平台管理者處理。
 
+## 排程發布或維護時段等待
+
+### 判斷
+
+Deployment Request 清單與詳細頁會分開顯示 requested earliest time、Server 計算的 next eligible time 及原因：
+
+- `ScheduledTime`：尚未到 Request Version 的 `scheduledFor`。
+- `MaintenanceWindow`：已達 earliest-start，但目前不在 weekly maintenance window。
+- `Blackout`：候選時間落在 blackout。
+- `Ready`：目前時間符合 earliest-start 與 policy；實際開始仍需 Queue、lock 與 preflight 成功。
+
+以上值由 Server 計算，瀏覽器顯示時間不代表瀏覽器自行判定 eligibility。Weekly window 依 policy 的 IANA timezone 解讀；blackout 與 next eligible time 是 absolute instant。DST 轉換日必須以畫面顯示的 next eligible time 為準，不要用固定 UTC offset 人工換算。
+
+### 前置條件
+
+- 讀取 policy 需要目標 Environment 的檢視權限；修改需要 `deployment_schedule.manage`。
+- 先記錄 Environment、目前 policy version、時區、weekly windows、blackouts、Request ID／Version、requested earliest time 與 next eligible time。
+- 確認目標 Request 尚未建立或開始 Execution。已開始的 Execution 不受後續 policy 修改或 window 結束影響。
+
+### 處理
+
+1. 在 Plans 選取相同 Organization、Project 與 Environment，開啟 Deployment Schedule。
+2. 確認時區為有效 IANA 名稱，weekly window 未跨日或重疊，blackout 起訖順序正確。
+3. 若目前 policy 符合預期，保持等待；不要手動 retry、重新建立 Request、修改 Queue row 或直接觸發 Argo CD Sync。
+4. 若業務核准調整 policy，由具權限操作者保存變更。畫面使用目前 version 進行 optimistic update；若收到 `409 Conflict`，保留尚未送出的內容，重新整理最新 policy、比較差異後再決定是否重送，不可覆蓋他人更新。
+5. 更新後重新讀取 Request。等待中的 Job 會在下一次 claim 使用最新 policy，next eligible time 可能提前或延後；已開始 Execution 不會被中斷。
+6. Worker restart 時不需建立替代 Job。等待 PostgreSQL `available_at`、lease 與 fencing 接續；若 restart 發生於已開始部署，依既有 Execution reconciliation 判斷，不把它改判為 schedule defer。
+
+### 驗證與停止條件
+
+正常 defer 應出現日誌 `Deployment job deferred by schedule`，欄位包含 `job_type`、低基數 `reason`、`wait`、`next_eligible_at` 與 `policy_version`。Prometheus 指標為：
+
+- `releasehub_deployment_schedule_deferred_total{reason=...}`
+- `releasehub_deployment_schedule_wait_seconds{reason=...}`
+
+到達 next eligible time 後，Request projection 應變為 `Ready`，Job 才能進入 Executor。若 `reason=Unavailable` 持續出現，表示 366 天搜尋範圍內沒有合法時段；停止進一步放寬或重送，檢查 weekly windows 與長期 blackout。若 policy 看似正確但 next eligible time 不一致，記錄 UTC instant、IANA timezone、policy version 與 DST 邊界後升級給平台管理者。
+
+### 回復方式
+
+Policy 沒有就地 rollback 指令。若新 policy 不正確，透過 Plans 以最新 version 明確寫回前一份已核准內容，產生下一個 version、Audit 與 Outbox event。不得直接更新或刪除 `deployment_schedule_policies`、`deployment_schedule_commands` 或 Queue row。
+
 ## Partial Failed
 
 ### 判斷
@@ -132,4 +173,4 @@ kustomize build Deployments/kustomize/base \
   >/tmp/releasehub-kustomize.yaml
 ```
 
-接著逐段演練 Queue、`Partial Failed`、terminate、unlock、Argo CD 中斷及 Forward Rollback 的判斷點。Dry-run 不執行 Sync、retry、terminate、unlock、Git write-back 或叢集套用；只確認命令可讀、角色與必要證據完整。缺少測試環境時，將實際故障注入與 Argo CD／ECR E2E 保留給整合驗證，不得據此宣稱 production 演練完成。
+接著逐段演練 Queue、排程等待、policy optimistic conflict、Worker restart、DST 邊界、`Partial Failed`、terminate、unlock、Argo CD 中斷及 Forward Rollback 的判斷點。Dry-run 不修改 production policy，不執行 Sync、retry、terminate、unlock、Git write-back 或叢集套用；只確認命令可讀、角色與必要證據完整。缺少測試環境時，將實際故障注入與 Argo CD／ECR E2E 保留給整合驗證，不得據此宣稱 production 演練完成。

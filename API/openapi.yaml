@@ -1300,6 +1300,69 @@ paths:
           description: The Scope, Workflow, or Plan Version does not exist, or the caller lacks operation permission.
         "409":
           description: The expectedVersion is stale or the Version is not published.
+  /api/v1/deployment-schedules/{environmentId}:
+    get:
+      operationId: getDeploymentSchedule
+      summary: Get the effective deployment schedule for an Environment
+      tags:
+        - DeploymentPlans
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: environmentId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: The effective deployment schedule and current management capability.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeploymentScheduleResponse"
+        "401":
+          description: The user is unauthenticated or the session has expired.
+        "404":
+          description: The Environment does not exist or the caller lacks view permission.
+    put:
+      operationId: updateDeploymentSchedule
+      summary: Replace an Environment deployment schedule
+      tags:
+        - DeploymentPlans
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: environmentId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateDeploymentScheduleRequest"
+      responses:
+        "200":
+          description: The deployment schedule was replaced or replayed idempotently.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeploymentScheduleResponse"
+        "400":
+          description: The request body or schedule document is invalid.
+        "401":
+          description: The user is unauthenticated or the session has expired.
+        "404":
+          description: The Environment does not exist or the caller lacks management permission.
+        "409":
+          description: The expectedVersion is stale or the Idempotency-Key conflicts.
   /api/v1/deployment-executions/{executionId}:
     get:
       operationId: getDeploymentExecution
@@ -3204,6 +3267,112 @@ components:
           nullable: true
         meta:
           $ref: "#/components/schemas/ResponseMeta"
+    DeploymentScheduleWeeklyWindow:
+      type: object
+      required:
+        - dayOfWeek
+        - startMinute
+        - endMinute
+      properties:
+        dayOfWeek:
+          type: integer
+          minimum: 0
+          maximum: 6
+        startMinute:
+          type: integer
+          minimum: 0
+          maximum: 1439
+        endMinute:
+          type: integer
+          minimum: 1
+          maximum: 1440
+    DeploymentScheduleBlackout:
+      type: object
+      required:
+        - startsAt
+        - endsAt
+      properties:
+        startsAt:
+          type: string
+          format: date-time
+        endsAt:
+          type: string
+          format: date-time
+    DeploymentSchedule:
+      type: object
+      required:
+        - environmentId
+        - enabled
+        - timeZone
+        - weeklyWindows
+        - blackouts
+        - version
+        - canManage
+      properties:
+        environmentId:
+          type: string
+          format: uuid
+        enabled:
+          type: boolean
+        timeZone:
+          type: string
+          minLength: 1
+          maxLength: 255
+        weeklyWindows:
+          type: array
+          maxItems: 32
+          items:
+            $ref: "#/components/schemas/DeploymentScheduleWeeklyWindow"
+        blackouts:
+          type: array
+          maxItems: 64
+          items:
+            $ref: "#/components/schemas/DeploymentScheduleBlackout"
+        version:
+          type: integer
+          format: int64
+          minimum: 0
+        canManage:
+          type: boolean
+    UpdateDeploymentScheduleRequest:
+      type: object
+      required:
+        - enabled
+        - timeZone
+        - weeklyWindows
+        - blackouts
+        - expectedVersion
+      properties:
+        enabled:
+          type: boolean
+        timeZone:
+          type: string
+          minLength: 1
+          maxLength: 255
+        weeklyWindows:
+          type: array
+          maxItems: 32
+          items:
+            $ref: "#/components/schemas/DeploymentScheduleWeeklyWindow"
+        blackouts:
+          type: array
+          maxItems: 64
+          items:
+            $ref: "#/components/schemas/DeploymentScheduleBlackout"
+        expectedVersion:
+          type: integer
+          format: int64
+          minimum: 0
+    DeploymentScheduleResponse:
+      type: object
+      required:
+        - data
+        - meta
+      properties:
+        data:
+          $ref: "#/components/schemas/DeploymentSchedule"
+        meta:
+          $ref: "#/components/schemas/ResponseMeta"
     DeploymentRequestStatus:
       type: string
       enum:
@@ -3217,6 +3386,18 @@ components:
         - Blocked
         - Superseded
         - Terminated
+    DeploymentRequestScheduleState:
+      type: string
+      enum:
+        - Ready
+        - Waiting
+    DeploymentScheduleReason:
+      type: string
+      enum:
+        - Ready
+        - ScheduledTime
+        - MaintenanceWindow
+        - Blackout
     DeploymentImageSnapshot:
       type: object
       required:
@@ -3343,6 +3524,9 @@ components:
         - applications
         - reviews
         - capabilities
+        - scheduleState
+        - nextEligibleAt
+        - scheduleReason
         - createdAt
       properties:
         id:
@@ -3388,6 +3572,13 @@ components:
         scheduledFor:
           type: string
           format: date-time
+        scheduleState:
+          $ref: "#/components/schemas/DeploymentRequestScheduleState"
+        nextEligibleAt:
+          type: string
+          format: date-time
+        scheduleReason:
+          $ref: "#/components/schemas/DeploymentScheduleReason"
         lockVersion:
           type: integer
           format: int64
@@ -3436,6 +3627,9 @@ components:
         - activeVersionNumber
         - title
         - applicationCount
+        - scheduleState
+        - nextEligibleAt
+        - scheduleReason
         - updatedAt
       properties:
         id:
@@ -3466,6 +3660,16 @@ components:
         applicationCount:
           type: integer
           minimum: 1
+        scheduledFor:
+          type: string
+          format: date-time
+        scheduleState:
+          $ref: "#/components/schemas/DeploymentRequestScheduleState"
+        nextEligibleAt:
+          type: string
+          format: date-time
+        scheduleReason:
+          $ref: "#/components/schemas/DeploymentScheduleReason"
         updatedAt:
           type: string
           format: date-time

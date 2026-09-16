@@ -25,10 +25,16 @@ type deploymentBindingService interface {
 	Bind(context.Context, deployapp.PlanPrincipal, deployapp.BindDefinitionsInput) (deploydomain.DeploymentBinding, error)
 }
 
+type deploymentScheduleService interface {
+	Get(context.Context, deployapp.PlanPrincipal, uuid.UUID) (deployapp.DeploymentScheduleView, error)
+	Put(context.Context, deployapp.PlanPrincipal, deployapp.UpdateDeploymentScheduleInput) (deployapp.DeploymentScheduleView, error)
+}
+
 type planHandler struct {
 	authn       *authHandler
 	definitions planDefinitionService
 	bindings    deploymentBindingService
+	schedules   deploymentScheduleService
 }
 
 // GetDeploymentBinding returns the current Environment binding or an explicit null.

@@ -8,13 +8,30 @@ test.beforeEach(async ({ page }) => {
   )
 })
 
-test('未登入使用者只會看到登入提示', async ({ page }) => {
+test('未登入使用者會看到本機登入表單', async ({ page }) => {
   await page.route('**/api/v1/auth/session', (route) =>
     route.fulfill({ status: 401, contentType: 'application/json', body: '{}' }),
   )
+  await page.route('**/api/v1/system/status', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        data: {
+          name: 'ReleaseHub',
+          version: 'test',
+          tenancyMode: 'single',
+          oidcEnabled: false,
+        },
+        meta: meta(),
+      }),
+    }),
+  )
   await page.goto('/access')
-  await expect(page.getByText('需要登入')).toBeVisible()
-  await expect(page.locator('a[href="/api/v1/auth/login"]')).toBeVisible()
+  await expect(page.getByRole('heading', { name: '歡迎回來' })).toBeVisible()
+  await expect(page.getByLabel('使用者名稱')).toHaveValue('')
+  await expect(page.getByLabel('密碼')).toBeEditable()
+  await expect(page.locator('a[href="/api/v1/auth/login"]')).toHaveCount(0)
 })
 
 test('授權使用者可檢視 onboarding 與設定漂移並送出驗證', async ({

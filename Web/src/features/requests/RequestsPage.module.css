@@ -15,3 +15,14 @@
   color: var(--ant-color-text-secondary);
   font-size: 0.75rem;
 }
+
+.scheduleCell {
+  display: grid;
+  min-width: 12rem;
+  gap: var(--rh-space-1);
+  align-items: start;
+}
+
+.scheduleCell :global(.ant-tag) {
+  width: fit-content;
+}
