@@ -101,7 +101,7 @@ func TestWorkflowDefinitionRepositoryRestrictsDeletionToUnusedDrafts(t *testing.
 
 	stale := workflowAggregateNamed(t, ids.userID, now, "stale draft")
 	createWorkflowForDeletion(t, repository, stale, ids.userID, now)
-	assertWorkflowDeleteConflict(t, repository, stale.ID, 2, ids.userID, "delete-stale")
+	assertWorkflowDeleteConflict(t, db, repository, stale.ID, 2, ids.userID, "delete-stale")
 
 	publishedWorkflow := workflowAggregateNamed(t, ids.userID, now, "published workflow")
 	createWorkflowForDeletion(t, repository, publishedWorkflow, ids.userID, now)
@@ -109,7 +109,7 @@ func TestWorkflowDefinitionRepositoryRestrictsDeletionToUnusedDrafts(t *testing.
 	if err := repository.UpdateLifecycle(ctx, deployapp.WorkflowMutation{ActorID: ids.userID, RequestID: "publish-delete-test", OccurredAt: now}, 1, published); err != nil {
 		t.Fatalf("publish deletion test workflow: %v", err)
 	}
-	assertWorkflowDeleteConflict(t, repository, publishedWorkflow.ID, 1, ids.userID, "delete-published")
+	assertWorkflowDeleteConflict(t, db, repository, publishedWorkflow.ID, 1, ids.userID, "delete-published")
 
 	referenced := workflowAggregateNamed(t, ids.userID, now, "bound draft")
 	createWorkflowForDeletion(t, repository, referenced, ids.userID, now)
@@ -118,7 +118,7 @@ func TestWorkflowDefinitionRepositoryRestrictsDeletionToUnusedDrafts(t *testing.
 		Update("workflow_version_id", referenced.Versions[0].ID).Error; err != nil {
 		t.Fatalf("reference draft workflow: %v", err)
 	}
-	assertWorkflowDeleteConflict(t, repository, referenced.ID, 1, ids.userID, "delete-referenced")
+	assertWorkflowDeleteConflict(t, db, repository, referenced.ID, 1, ids.userID, "delete-referenced")
 	if err := db.Model(&deploymentBindingReference{}).
 		Where("environment_id = ?", ids.environmentID).
 		Update("workflow_version_id", ids.workflowVersionID).Error; err != nil {
@@ -127,9 +127,10 @@ func TestWorkflowDefinitionRepositoryRestrictsDeletionToUnusedDrafts(t *testing.
 
 	requestReferenced := workflowAggregateNamed(t, ids.userID, now, "request referenced draft")
 	createWorkflowForDeletion(t, repository, requestReferenced, ids.userID, now)
-	requestVersionID, _ := seedDeploymentRequest(t, db, ids)
-	execDeploymentSQL(t, db, `UPDATE deployment_request_versions SET workflow_version_id = ? WHERE id = ?`, requestReferenced.Versions[0].ID, requestVersionID)
-	assertWorkflowDeleteConflict(t, repository, requestReferenced.ID, 1, ids.userID, "delete-request-referenced")
+	requestIDs := ids
+	requestIDs.workflowVersionID = requestReferenced.Versions[0].ID
+	seedDeploymentRequest(t, db, requestIDs)
+	assertWorkflowDeleteConflict(t, db, repository, requestReferenced.ID, 1, ids.userID, "delete-request-referenced")
 
 	instanceReferenced := workflowAggregateNamed(t, ids.userID, now, "instance referenced draft")
 	createWorkflowForDeletion(t, repository, instanceReferenced, ids.userID, now)
@@ -139,7 +140,7 @@ func TestWorkflowDefinitionRepositoryRestrictsDeletionToUnusedDrafts(t *testing.
 			request_version_id, workflow_version_id, current_state_key, status
 		) VALUES (?, ?, 'start', 'Running')
 	`, instanceRequestVersionID, instanceReferenced.Versions[0].ID)
-	assertWorkflowDeleteConflict(t, repository, instanceReferenced.ID, 1, ids.userID, "delete-instance-referenced")
+	assertWorkflowDeleteConflict(t, db, repository, instanceReferenced.ID, 1, ids.userID, "delete-instance-referenced")
 
 	observationReferenced := workflowAggregateNamed(t, ids.userID, now, "observation referenced draft")
 	createWorkflowForDeletion(t, repository, observationReferenced, ids.userID, now)
@@ -152,7 +153,19 @@ func TestWorkflowDefinitionRepositoryRestrictsDeletionToUnusedDrafts(t *testing.
 		) VALUES (?, ?, ?, ?, 'revision-b', '["revision-b"]', ?, ?, '[]', '[]', '[]', ?, ?)
 	`, ids.applicationID, observationRequestVersionID, observationReferenced.Versions[0].ID,
 		ids.planVersionID, strings.Repeat("a", 64), strings.Repeat("b", 64), strings.Repeat("c", 64), now)
-	assertWorkflowDeleteConflict(t, repository, observationReferenced.ID, 1, ids.userID, "delete-observation-referenced")
+	assertWorkflowDeleteConflict(t, db, repository, observationReferenced.ID, 1, ids.userID, "delete-observation-referenced")
+
+	constraintReferenced := workflowAggregateNamed(t, ids.userID, now, "constraint referenced draft")
+	createWorkflowForDeletion(t, repository, constraintReferenced, ids.userID, now)
+	execDeploymentSQL(t, db, `
+		CREATE TABLE workflow_delete_integration_guard (
+			workflow_version_id UUID PRIMARY KEY REFERENCES release_workflow_versions(id)
+		)
+	`)
+	execDeploymentSQL(t, db, `
+		INSERT INTO workflow_delete_integration_guard (workflow_version_id) VALUES (?)
+	`, constraintReferenced.Versions[0].ID)
+	assertWorkflowDeleteConflict(t, db, repository, constraintReferenced.ID, 1, ids.userID, "delete-constraint-referenced")
 }
 
 type deploymentBindingReference struct{}
@@ -178,11 +191,19 @@ func createWorkflowForDeletion(t *testing.T, repository *deployinfra.WorkflowDef
 	}
 }
 
-func assertWorkflowDeleteConflict(t *testing.T, repository *deployinfra.WorkflowDefinitionRepository, workflowID uuid.UUID, expected uint64, actorID uuid.UUID, requestID string) {
+func assertWorkflowDeleteConflict(t *testing.T, db *gorm.DB, repository *deployinfra.WorkflowDefinitionRepository, workflowID uuid.UUID, expected uint64, actorID uuid.UUID, requestID string) {
 	t.Helper()
+	auditBefore := tableCount(t, db, "audit_logs")
+	outboxBefore := tableCount(t, db, "outbox_events")
 	mutation := deployapp.WorkflowMutation{ActorID: actorID, RequestID: requestID, OccurredAt: time.Now().UTC()}
 	if err := repository.DeleteUnusedDraft(context.Background(), mutation, workflowID, expected); !errors.Is(err, deployapp.ErrWorkflowConflict) {
 		t.Fatalf("delete workflow conflict error = %v", err)
+	}
+	if _, err := repository.Load(context.Background(), workflowID); err != nil {
+		t.Fatalf("load workflow after rejected deletion: %v", err)
+	}
+	if tableCount(t, db, "audit_logs") != auditBefore || tableCount(t, db, "outbox_events") != outboxBefore {
+		t.Fatal("rejected workflow deletion must roll back audit and outbox records")
 	}
 }
 
