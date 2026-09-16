@@ -21,6 +21,7 @@ import {
   useListArgoCDCandidates,
 } from '@/generated/api'
 import type { ArgoCDCandidate } from '@/generated/model'
+import { parseAPIErrorResponse } from '@/shared/api/apiError'
 import { useFeedback } from '@/shared/feedback/useFeedback'
 
 interface AssignmentFields {
@@ -82,8 +83,9 @@ export function CandidatesPage() {
         { headers: { 'X-CSRF-Token': csrfToken } },
       )
       if (response.status !== 201) {
+        const error = parseAPIErrorResponse(response)
         feedback.error(
-          response.status === 409
+          error.category === 'conflict'
             ? t('candidates.assignment.conflict')
             : t('candidates.assignment.error'),
         )

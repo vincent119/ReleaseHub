@@ -278,10 +278,6 @@ func (h *authHandler) authenticateAllowPasswordChange(c *gin.Context) (identity.
 func responseMeta(c *gin.Context) contract.ResponseMeta {
 	return contract.ResponseMeta{RequestId: c.GetHeader(requestIDHeader), Timestamp: time.Now().UTC()}
 }
-func respondError(c *gin.Context, status int, code, message string) {
-	c.JSON(status, contract.ErrorResponse{Code: code, Message: message, RequestId: c.GetHeader(requestIDHeader)})
-}
-
 func respondRequestCanceled(c *gin.Context) {
 	c.Status(statusClientClosedRequest)
 }

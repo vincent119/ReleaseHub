@@ -5,14 +5,30 @@
  * Shared HTTP API contract for the ReleaseHub frontend and backend.
  * OpenAPI spec version: 1.0.0
  */
+import type { ErrorResponseCategory } from './errorResponseCategory';
 import type { ErrorResponseDetails } from './errorResponseDetails';
 
 export interface ErrorResponse {
-  /** @minLength 1 */
+  /**
+     * Stable machine-readable error code. Clients must not branch on message.
+     * @minLength 1
+     * @pattern ^[A-Z][A-Z0-9_]*$
+     */
   code: string;
-  /** @minLength 1 */
+  /** Stable error class used for unknown-code fallback behavior. */
+  category: ErrorResponseCategory;
+  /**
+     * Safe human-readable summary. It does not contain the internal cause.
+     * @minLength 1
+     */
   message: string;
-  /** @minLength 1 */
+  /**
+     * Correlation identifier matching the X-Request-ID response header.
+     * @minLength 1
+     */
   requestId: string;
+  /** Whether the operation can be attempted again after the transient condition clears. Clients must not automatically retry non-idempotent mutations. */
+  retryable: boolean;
+  /** Optional structured public details. Internal causes and sensitive data are forbidden. */
   details?: ErrorResponseDetails;
 }

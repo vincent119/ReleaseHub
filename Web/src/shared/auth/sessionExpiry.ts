@@ -7,24 +7,15 @@ import {
 import { useEffect } from 'react'
 
 import { getGetAuthSessionQueryKey } from '@/generated/api'
+import { parseAPIErrorResponse } from '@/shared/api/apiError'
 
 const sessionErrorCodes = new Set(['SESSION_REQUIRED', 'SESSION_INVALID'])
 const maximumTimerDelay = 2_147_483_647
 const deadlineTolerance = 250
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null
-}
-
 export function isSessionExpiryResponse(value: unknown): boolean {
-  if (!isRecord(value) || value.status !== 401 || !isRecord(value.data)) {
-    return false
-  }
-
-  return (
-    typeof value.data.code === 'string' &&
-    sessionErrorCodes.has(value.data.code)
-  )
+  const error = parseAPIErrorResponse(value)
+  return error.status === 401 && sessionErrorCodes.has(error.code)
 }
 
 function isAuthSessionQuery(queryKey: readonly unknown[]): boolean {

@@ -6,4 +6,7 @@
  * OpenAPI spec version: 1.0.0
  */
 
+/**
+ * Optional structured public details. Internal causes and sensitive data are forbidden.
+ */
 export type ErrorResponseDetails = { [key: string]: unknown };

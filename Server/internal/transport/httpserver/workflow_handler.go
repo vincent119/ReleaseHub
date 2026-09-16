@@ -135,7 +135,7 @@ func (h *workflowHandler) authenticate(c *gin.Context) (deployapp.WorkflowPrinci
 		return deployapp.WorkflowPrincipal{}, false
 	}
 	if h.definitions == nil {
-		respondError(c, http.StatusServiceUnavailable, "WORKFLOW_UNAVAILABLE", "Release workflow is unavailable")
+		respondDefinedError(c, workflowUnavailableError)
 		return deployapp.WorkflowPrincipal{}, false
 	}
 	return deployapp.WorkflowPrincipal{UserID: user.ID, Disabled: user.Disabled}, true
@@ -147,7 +147,7 @@ func (h *workflowHandler) authenticateMutation(c *gin.Context, csrf string) (dep
 		return deployapp.WorkflowPrincipal{}, false
 	}
 	if h.definitions == nil {
-		respondError(c, http.StatusServiceUnavailable, "WORKFLOW_UNAVAILABLE", "Release workflow is unavailable")
+		respondDefinedError(c, workflowUnavailableError)
 		return deployapp.WorkflowPrincipal{}, false
 	}
 	return deployapp.WorkflowPrincipal{UserID: user.ID, Disabled: user.Disabled}, true
@@ -155,11 +155,11 @@ func (h *workflowHandler) authenticateMutation(c *gin.Context, csrf string) (dep
 
 func respondWorkflowReadError(c *gin.Context, operation string, err error) {
 	if errors.Is(err, deployapp.ErrWorkflowForbidden) || errors.Is(err, deployapp.ErrWorkflowNotFound) {
-		respondError(c, http.StatusNotFound, "WORKFLOW_NOT_FOUND", "Release workflow was not found")
+		respondDefinedError(c, workflowNotFoundError)
 		return
 	}
 	recordRequestError(c, operation, err)
-	respondError(c, http.StatusInternalServerError, "WORKFLOW_READ_FAILED", "Unable to read release workflows")
+	respondDefinedError(c, workflowReadFailedError)
 }
 
 func respondWorkflowMutationError(c *gin.Context, err error, invalidStatus int) bool {
@@ -167,7 +167,7 @@ func respondWorkflowMutationError(c *gin.Context, err error, invalidStatus int) 
 		return true
 	}
 	if errors.Is(err, deployapp.ErrWorkflowForbidden) || errors.Is(err, deployapp.ErrWorkflowNotFound) {
-		respondError(c, http.StatusNotFound, "WORKFLOW_NOT_FOUND", "Release workflow was not found")
+		respondDefinedError(c, workflowNotFoundError)
 		return false
 	}
 	if errors.Is(err, deployapp.ErrWorkflowInvalid) {
@@ -177,25 +177,25 @@ func respondWorkflowMutationError(c *gin.Context, err error, invalidStatus int) 
 	if respondWorkflowConflict(c, err) {
 		return false
 	}
-	respondError(c, http.StatusInternalServerError, "WORKFLOW_MUTATION_FAILED", "Unable to change release workflow")
+	respondDefinedError(c, workflowMutationFailedError)
 	return false
 }
 
 func respondWorkflowConflict(c *gin.Context, err error) bool {
 	if errors.Is(err, deployapp.ErrWorkflowNameConflict) {
-		respondError(c, http.StatusConflict, "WORKFLOW_NAME_CONFLICT", "Release workflow name already exists")
+		respondDefinedError(c, workflowNameConflictError)
 		return true
 	}
 	if errors.Is(err, deployapp.ErrWorkflowVersionConflict) {
-		respondError(c, http.StatusConflict, "WORKFLOW_VERSION_CONFLICT", "Release workflow version changed")
+		respondDefinedError(c, workflowVersionConflictError)
 		return true
 	}
 	if errors.Is(err, deployapp.ErrWorkflowDraftExists) {
-		respondError(c, http.StatusConflict, "WORKFLOW_DRAFT_EXISTS", "Release workflow already has a draft")
+		respondDefinedError(c, workflowDraftExistsError)
 		return true
 	}
 	if errors.Is(err, deployapp.ErrWorkflowConflict) {
-		respondError(c, http.StatusConflict, "WORKFLOW_CONFLICT", "Release workflow change was rejected")
+		respondDefinedError(c, workflowConflictError)
 		return true
 	}
 	return false

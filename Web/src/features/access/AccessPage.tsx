@@ -51,8 +51,10 @@ import type {
   AccessUser,
   CatalogOrganizationNode,
 } from '@/generated/model'
+import { parseAPIErrorResponse } from '@/shared/api/apiError'
 import { useFeedback } from '@/shared/feedback/useFeedback'
 import { GroupMembersModal } from './GroupMembersModal'
+import { accessMutationErrorKey } from './mutationError'
 import {
   scopePayload,
   scopeResourceOptions,
@@ -226,7 +228,7 @@ export function AccessPage() {
     setAction(next)
   }
   const mutate = async (
-    work: (options: RequestInit) => Promise<{ status: number }>,
+    work: (options: RequestInit) => Promise<{ status: number; data?: unknown }>,
     closeModal = true,
   ): Promise<boolean> => {
     const csrf = browserCookie('releasehub_csrf')
@@ -238,21 +240,8 @@ export function AccessPage() {
     try {
       const response = await work({ headers: { 'X-CSRF-Token': csrf } })
       if (response.status !== 201 && response.status !== 204) {
-        const code = mutationErrorCode(response)
-        let errorKey = 'access.mutation.error'
-        if (response.status === 401)
-          errorKey = 'access.mutation.unauthenticated'
-        else if (response.status === 400) errorKey = 'access.mutation.invalid'
-        else if (response.status === 404)
-          errorKey = 'access.mutation.notAuthorized'
-        else if (code === 'ACCESS_SELF_DISABLE_FORBIDDEN')
-          errorKey = 'access.mutation.selfDisable'
-        else if (code === 'ACCESS_LAST_PLATFORM_MANAGER')
-          errorKey = 'access.mutation.lastManager'
-        else if (code === 'ACCESS_RESOURCE_PROTECTED')
-          errorKey = 'access.mutation.protected'
-        else if (response.status === 409) errorKey = 'access.mutation.conflict'
-        feedback.error(t(errorKey))
+        const error = parseAPIErrorResponse(response)
+        feedback.error(t(accessMutationErrorKey(error)))
         return false
       }
       if (closeModal) {
@@ -1037,9 +1026,4 @@ function browserCookie(name: string): string | undefined {
     .split('; ')
     .find((value) => value.startsWith(`${name}=`))
     ?.slice(name.length + 1)
-}
-
-function mutationErrorCode(response: { status: number }) {
-  const value = response as { data?: { error?: { code?: string } } }
-  return value.data?.error?.code
 }

@@ -3881,18 +3881,40 @@ components:
       type: object
       required:
         - code
+        - category
         - message
         - requestId
+        - retryable
       properties:
         code:
           type: string
           minLength: 1
+          pattern: "^[A-Z][A-Z0-9_]*$"
+          description: Stable machine-readable error code. Clients must not branch on message.
+        category:
+          type: string
+          description: Stable error class used for unknown-code fallback behavior.
+          enum:
+            - authentication
+            - authorization
+            - validation
+            - not_found
+            - conflict
+            - rate_limit
+            - dependency
+            - internal
         message:
           type: string
           minLength: 1
+          description: Safe human-readable summary. It does not contain the internal cause.
         requestId:
           type: string
           minLength: 1
+          description: Correlation identifier matching the X-Request-ID response header.
+        retryable:
+          type: boolean
+          description: Whether the operation can be attempted again after the transient condition clears. Clients must not automatically retry non-idempotent mutations.
         details:
           type: object
+          description: Optional structured public details. Internal causes and sensitive data are forbidden.
           additionalProperties: true
