@@ -1,6 +1,7 @@
 package httpserver
 
 import (
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -15,6 +16,7 @@ import (
 	"go.uber.org/zap/zaptest/observer"
 
 	"github.com/vincent119/ReleaseHub/Server/internal/observability"
+	contract "github.com/vincent119/ReleaseHub/Server/internal/transport/openapi"
 )
 
 func TestRequestObserverClassifiesHTTPOutcomeLogLevels(t *testing.T) {
@@ -75,6 +77,40 @@ func TestRequestObserverClassifiesHTTPOutcomeLogLevels(t *testing.T) {
 				t.Fatalf("metric status = %d, want %d", got, test.status)
 			}
 		})
+	}
+}
+
+func TestAPIErrorCorrelatesResponseHeaderBodyAndLog(t *testing.T) {
+	core, recorded := observer.New(zap.DebugLevel)
+	registry := prometheus.NewRegistry()
+	metrics, err := observability.NewHTTPMetrics(registry)
+	if err != nil {
+		t.Fatalf("create HTTP metrics: %v", err)
+	}
+	router := gin.New()
+	router.Use(requestObserver(RouterOptions{
+		Logger: zap.New(core), HTTPMetrics: metrics,
+		TracerProvider: trace.NewNoopTracerProvider(), MetricsPath: "/metrics",
+	}))
+	router.GET("/error", func(c *gin.Context) {
+		respondError(c, http.StatusConflict, "TEST_CONFLICT", "Safe conflict")
+	})
+
+	request := httptest.NewRequest(http.MethodGet, "/error", nil)
+	request.Header.Set(requestIDHeader, "request-correlation-1")
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+
+	var body contract.ErrorResponse
+	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if got := response.Header().Get(requestIDHeader); got != body.RequestId || got != "request-correlation-1" {
+		t.Fatalf("request IDs header=%q body=%q", got, body.RequestId)
+	}
+	entries := recorded.All()
+	if len(entries) != 1 || entries[0].ContextMap()["request_id"] != body.RequestId {
+		t.Fatalf("request log = %#v", entries)
 	}
 }
 

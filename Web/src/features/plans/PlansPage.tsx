@@ -14,8 +14,9 @@ import {
   useListReleaseWorkflows,
 } from '@/generated/api'
 import type { DeploymentPlan, DeploymentPlanVersion } from '@/generated/model'
-import { useFeedback } from '@/shared/feedback/useFeedback'
+import { parseAPIErrorResponse, type APIErrorView } from '@/shared/api/apiError'
 import definitionStyles from '@/shared/definition/DefinitionWorkspace.module.css'
+import { useFeedback } from '@/shared/feedback/useFeedback'
 
 import { DeploymentBindingPanel } from './components/DeploymentBindingPanel'
 import { PlanDetail } from './components/PlanDetail'
@@ -73,7 +74,9 @@ export function PlansPage() {
   }, [planListStatus, queryClient])
   const mutate = async (
     mutationOperation: PlanMutationOperation,
-    operation: (options: RequestInit) => Promise<{ status: number }>,
+    operation: (
+      options: RequestInit,
+    ) => Promise<{ status: number; data?: unknown }>,
   ) => {
     const csrf = browserCookie('releasehub_csrf')
     if (!csrf) return void feedback.error(t('plans.mutation.error'))
@@ -81,13 +84,14 @@ export function PlansPage() {
     try {
       const response = await operation({ headers: { 'X-CSRF-Token': csrf } })
       if (response.status < 200 || response.status >= 300) {
-        if (response.status === 401)
+        const error = parseAPIErrorResponse(response)
+        if (error.status === 401)
           await queryClient.invalidateQueries({
             queryKey: getGetAuthSessionQueryKey(),
             exact: true,
           })
         return void feedback.error(
-          t(planMutationErrorKey(mutationOperation, response.status)),
+          t(planMutationErrorKey(mutationOperation, error)),
         )
       }
       setEditor(undefined)
@@ -286,15 +290,15 @@ function browserCookie(name: string): string | undefined {
 
 function planMutationErrorKey(
   operation: PlanMutationOperation,
-  status: number,
+  error: APIErrorView,
 ) {
-  if (status === 401) return 'plans.mutation.unauthenticated'
-  if (status === 404) return 'plans.mutation.notFound'
-  if (status === 409)
+  if (error.status === 401) return 'plans.mutation.unauthenticated'
+  if (error.status === 404) return 'plans.mutation.notFound'
+  if (error.category === 'conflict')
     return operation === 'create'
       ? 'plans.mutation.nameConflict'
       : 'plans.mutation.versionConflict'
-  if (status === 422 && operation === 'lifecycle')
+  if (error.status === 422 && operation === 'lifecycle')
     return 'plans.mutation.invalidLifecycle'
   return 'plans.mutation.error'
 }

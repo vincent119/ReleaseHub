@@ -268,18 +268,17 @@ func (h *accessHandler) RevokeAccessDeny(c *gin.Context, denyID uuid.UUID, param
 }
 
 type accessErrorMapping struct {
-	target        error
-	status        int
-	code, message string
+	target     error
+	definition apiErrorDefinition
 }
 
 var accessMutationErrors = []accessErrorMapping{
-	{authzapp.ErrAccessManagementNotFound, http.StatusNotFound, "ACCESS_MANAGEMENT_NOT_FOUND", "Access management resource was not found"},
-	{authzapp.ErrInvalidAccessRequest, http.StatusBadRequest, "INVALID_REQUEST", "Access management request is invalid"},
-	{authzapp.ErrSelfDisable, http.StatusConflict, "ACCESS_SELF_DISABLE_FORBIDDEN", "Administrators cannot disable their own account"},
-	{authzapp.ErrLastPlatformManager, http.StatusConflict, "ACCESS_LAST_PLATFORM_MANAGER", "The last platform-management path cannot be removed"},
-	{authzapp.ErrProtectedAccessResource, http.StatusConflict, "ACCESS_RESOURCE_PROTECTED", "The access-management resource is system managed"},
-	{authzapp.ErrAccessManagementConflict, http.StatusConflict, "ACCESS_MANAGEMENT_CONFLICT", "The access-management resource is no longer active"},
+	{authzapp.ErrAccessManagementNotFound, accessManagementNotFoundError},
+	{authzapp.ErrInvalidAccessRequest, apiErrorDefinition{Code: "INVALID_REQUEST", Category: apiErrorValidation, Status: http.StatusBadRequest, Message: "Access management request is invalid"}},
+	{authzapp.ErrSelfDisable, accessSelfDisableError},
+	{authzapp.ErrLastPlatformManager, accessLastManagerError},
+	{authzapp.ErrProtectedAccessResource, accessResourceProtectedError},
+	{authzapp.ErrAccessManagementConflict, accessManagementConflictError},
 }
 
 func (h *accessHandler) respondAccessMutationError(c *gin.Context, err error) bool {
@@ -288,7 +287,7 @@ func (h *accessHandler) respondAccessMutationError(c *gin.Context, err error) bo
 	}
 	for _, mapping := range accessMutationErrors {
 		if errors.Is(err, mapping.target) {
-			respondError(c, mapping.status, mapping.code, mapping.message)
+			respondDefinedError(c, mapping.definition)
 			return false
 		}
 	}

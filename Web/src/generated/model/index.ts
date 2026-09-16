@@ -148,6 +148,7 @@ export * from './deploymentTransitionRequest';
 export * from './deploymentUnlockRequest';
 export * from './environmentIdParameter';
 export * from './errorResponse';
+export * from './errorResponseCategory';
 export * from './errorResponseDetails';
 export * from './expectedWorkflowVersionParameter';
 export * from './getDeploymentBindingParams';

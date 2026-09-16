@@ -32,6 +32,7 @@ import type {
   CatalogOrganizationNode,
   CatalogProjectNode,
 } from '@/generated/model'
+import { parseAPIErrorResponse, type APIErrorView } from '@/shared/api/apiError'
 import { useFeedback } from '@/shared/feedback/useFeedback'
 import { SemanticList, SemanticListItemContent } from '@/shared/list'
 
@@ -112,62 +113,51 @@ export function ResourcesPage() {
     }
     setSubmitting(true)
     try {
-      let status: number
+      let response: { status: number; data?: unknown }
       const options = { headers: { 'X-CSRF-Token': csrfToken } }
       if (action.kind === 'organization') {
-        status = (
-          await createCatalogOrganization({ name: fields.name ?? '' }, options)
-        ).status
+        response = await createCatalogOrganization(
+          { name: fields.name ?? '' },
+          options,
+        )
       } else if (action.kind === 'rename') {
-        status = (
-          await updateCatalogOrganization(
-            action.organization.id,
-            {
-              name: fields.name?.trim() ?? '',
-              version: action.organization.version,
-            },
-            options,
-          )
-        ).status
+        response = await updateCatalogOrganization(
+          action.organization.id,
+          {
+            name: fields.name?.trim() ?? '',
+            version: action.organization.version,
+          },
+          options,
+        )
       } else if (action.kind === 'project') {
-        status = (
-          await createCatalogProject(
-            action.organization.id,
-            { name: fields.name ?? '' },
-            options,
-          )
-        ).status
+        response = await createCatalogProject(
+          action.organization.id,
+          { name: fields.name ?? '' },
+          options,
+        )
       } else if (action.kind === 'environment') {
-        status = (
-          await createCatalogEnvironment(
-            action.organization.id,
-            action.project.id,
-            { name: fields.name ?? '', type: fields.type ?? 'Development' },
-            options,
-          )
-        ).status
+        response = await createCatalogEnvironment(
+          action.organization.id,
+          action.project.id,
+          { name: fields.name ?? '', type: fields.type ?? 'Development' },
+          options,
+        )
       } else {
-        status = (
-          await createCatalogEnvironmentLabelMapping(
-            action.organization.id,
-            action.project.id,
-            {
-              environmentId: fields.environmentId ?? '',
-              labelKey: fields.labelKey ?? '',
-              labelValue: fields.labelValue ?? '',
-            },
-            options,
-          )
-        ).status
+        response = await createCatalogEnvironmentLabelMapping(
+          action.organization.id,
+          action.project.id,
+          {
+            environmentId: fields.environmentId ?? '',
+            labelKey: fields.labelKey ?? '',
+            labelValue: fields.labelValue ?? '',
+          },
+          options,
+        )
       }
       const expectedStatus = action.kind === 'rename' ? 200 : 201
-      if (status !== expectedStatus) {
+      if (response.status !== expectedStatus) {
         feedback.error(
-          status === 400
-            ? t('resources.mutation.invalid')
-            : status === 404
-              ? t('resources.mutation.notAuthorized')
-              : t('resources.mutation.conflict'),
+          resourceMutationError(parseAPIErrorResponse(response), t),
         )
         return
       }
@@ -202,11 +192,7 @@ export function ResourcesPage() {
       )
       if (response.status !== 204) {
         feedback.error(
-          response.status === 400
-            ? t('resources.mutation.invalid')
-            : response.status === 404
-              ? t('resources.mutation.notAuthorized')
-              : t('resources.mutation.conflict'),
+          resourceMutationError(parseAPIErrorResponse(response), t),
         )
         return
       }
@@ -528,6 +514,17 @@ function ResourceModal({
       </Form>
     </Modal>
   )
+}
+
+function resourceMutationError(
+  error: APIErrorView,
+  t: (key: string) => string,
+) {
+  if (error.category === 'validation') return t('resources.mutation.invalid')
+  if (error.category === 'not_found')
+    return t('resources.mutation.notAuthorized')
+  if (error.category === 'conflict') return t('resources.mutation.conflict')
+  return t('resources.mutation.error')
 }
 
 function browserCookie(name: string): string | undefined {

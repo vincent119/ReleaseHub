@@ -34,6 +34,7 @@ import type {
   ReleaseWorkflowVersion,
 } from '@/generated/model'
 import definitionStyles from '@/shared/definition/DefinitionWorkspace.module.css'
+import { parseAPIError, resolveAPIErrorFeedback } from '@/shared/api/apiError'
 import { useFeedback } from '@/shared/feedback/useFeedback'
 import { SemanticList, SemanticListItemContent } from '@/shared/list'
 
@@ -83,19 +84,32 @@ export function WorkflowsPage() {
     setSubmitting(true)
     try {
       const response = await operation({ headers: { 'X-CSRF-Token': csrf } })
-      if (
-        response.status === 409 &&
-        conflictContext === 'create' &&
-        responseErrorCode(response.data) === 'WORKFLOW_NAME_CONFLICT'
-      )
-        return void feedback.error(t('workflows.mutation.nameConflict'))
+      if (response.status === 409 && conflictContext === 'create') {
+        const error = parseAPIError(response.data, response.status)
+        if (error.code === 'WORKFLOW_NAME_CONFLICT')
+          return void feedback.error(
+            resolveAPIErrorFeedback(error, {
+              byCode: {
+                WORKFLOW_NAME_CONFLICT: t('workflows.mutation.nameConflict'),
+              },
+              fallback: t('workflows.mutation.rejected'),
+            }),
+          )
+      }
       if (response.status === 409 && conflictContext === 'version') {
-        const code = responseErrorCode(response.data)
-        if (code === 'WORKFLOW_VERSION_CONFLICT')
-          return void feedback.error(t('workflows.mutation.versionConflict'))
-        if (code === 'WORKFLOW_DRAFT_EXISTS')
-          return void feedback.error(t('workflows.mutation.draftExists'))
-        return void feedback.error(t('workflows.mutation.conflict'))
+        const error = parseAPIError(response.data, response.status)
+        return void feedback.error(
+          resolveAPIErrorFeedback(error, {
+            byCode: {
+              WORKFLOW_VERSION_CONFLICT: t(
+                'workflows.mutation.versionConflict',
+              ),
+              WORKFLOW_DRAFT_EXISTS: t('workflows.mutation.draftExists'),
+            },
+            byCategory: { conflict: t('workflows.mutation.conflict') },
+            fallback: t('workflows.mutation.rejected'),
+          }),
+        )
       }
       if (response.status < 200 || response.status >= 300)
         return void feedback.error(t('workflows.mutation.rejected'))
@@ -440,12 +454,6 @@ function selectedVersion(workflow?: ReleaseWorkflow, versionID?: string) {
 
 function latestVersionNumber(workflow: ReleaseWorkflow) {
   return workflow.versions.at(-1)?.versionNumber ?? 1
-}
-
-function responseErrorCode(data: unknown) {
-  if (typeof data !== 'object' || data === null || !('code' in data))
-    return undefined
-  return typeof data.code === 'string' ? data.code : undefined
 }
 
 function isDraftOnly(workflow: ReleaseWorkflow) {
