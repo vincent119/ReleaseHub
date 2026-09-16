@@ -91,6 +91,51 @@ test('Forward Rollback 仍顯示正常審核，Superseded 版本不可操作', a
   await expect(page.getByRole('button', { name: 'deploy' })).toHaveCount(0)
 })
 
+test('scope-limited 與 explicit-denied actor 的 UI 與直接 API 拒絕一致', async ({
+  page,
+}) => {
+  const scopeLimited = requestFixture()
+  const state = { request: scopeLimited, retryBody: undefined as unknown }
+  await mockApplication(page, state)
+
+  await page.goto(`/requests/${ids.request}`)
+  await expect(page.getByRole('button', { name: '核准申請' })).toBeVisible()
+  await expect(page.getByRole('button', { name: '編輯選填資訊' })).toHaveCount(
+    0,
+  )
+  await expect(
+    page.getByRole('button', { name: '重試選取的失敗項目' }),
+  ).toHaveCount(0)
+
+  state.request = { ...state.request, capabilities: [] }
+  await page.reload()
+  await expect(page.getByRole('button', { name: '核准申請' })).toHaveCount(0)
+
+  const status = await page.evaluate(
+    async ({ requestID, versionID }) => {
+      const response = await fetch(
+        `/api/v1/deployment-requests/${requestID}/versions/${versionID}/retry`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-Token': 'csrf-token',
+            'Idempotency-Key': 'matrix-explicit-deny',
+          },
+          body: JSON.stringify({
+            applicationIds: ['019c1230-0000-7000-8000-000000000212'],
+            expectedVersion: 1,
+          }),
+        },
+      )
+      return response.status
+    },
+    { requestID: ids.request, versionID: ids.version },
+  )
+  expect(status).toBe(404)
+  expect(state.retryBody).toBeUndefined()
+})
+
 async function mockApplication(
   page: Page,
   state: { request: DeploymentRequestVersion; retryBody: unknown },
@@ -132,10 +177,14 @@ async function mockApplication(
     if (request.method() === 'GET')
       return route.fulfill(json({ data: state.request, meta: meta() }))
     if (url.pathname.endsWith('/decisions')) {
+      if (!state.request.capabilities.includes('deployment_request.review'))
+        return route.fulfill({ status: 404, ...json({}) })
       state.request = approvedRequest(state.request)
       return route.fulfill(json({ data: state.request, meta: meta() }))
     }
     if (url.pathname.endsWith('/transitions')) {
+      if (!state.request.capabilities.includes('deployment_request.deploy'))
+        return route.fulfill({ status: 404, ...json({}) })
       state.request = deployedRequest(state.request)
       return route.fulfill({
         status: 202,
@@ -143,6 +192,8 @@ async function mockApplication(
       })
     }
     if (url.pathname.endsWith('/retry')) {
+      if (!state.request.capabilities.includes('deployment_request.retry'))
+        return route.fulfill({ status: 404, ...json({}) })
       state.retryBody = request.postDataJSON()
       return route.fulfill({
         status: 202,

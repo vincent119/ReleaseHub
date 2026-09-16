@@ -67,6 +67,60 @@ func TestTerminateExecutionRequiresCurrentPermission(t *testing.T) {
 	}
 }
 
+func TestExecutionControlCapabilityMatrixDeniesCommandsWithoutCurrentPermission(t *testing.T) {
+	tests := []struct {
+		name string
+		run  func(*executionControlRepositoryStub, *ExecutionControlService, RequestPrincipal) error
+	}{
+		{
+			name: "AUTHZ-REQUEST-RETRY-PERMISSION-DENY",
+			run: func(repository *executionControlRepositoryStub, service *ExecutionControlService, principal RequestPrincipal) error {
+				_, err := service.Retry(context.Background(), principal, RetryExecutionInput{
+					RequestID: repository.snapshot.RequestID, RequestVersionID: repository.snapshot.Execution.RequestVersionID,
+					ApplicationIDs:  []uuid.UUID{repository.snapshot.Execution.Nodes[1].ApplicationID},
+					ExpectedVersion: 2, IdempotencyKey: "matrix-retry-deny",
+				})
+				return err
+			},
+		},
+		{
+			name: "AUTHZ-REQUEST-TERMINATE-PERMISSION-DENY",
+			run: func(repository *executionControlRepositoryStub, service *ExecutionControlService, principal RequestPrincipal) error {
+				_, err := service.Terminate(context.Background(), principal, TerminateExecutionInput{
+					RequestID: repository.snapshot.RequestID, RequestVersionID: repository.snapshot.Execution.RequestVersionID,
+					Reason: "permission revoked", ExpectedVersion: 2, IdempotencyKey: "matrix-terminate-deny",
+				})
+				return err
+			},
+		},
+		{
+			name: "AUTHZ-REQUEST-UNLOCK-PERMISSION-DENY",
+			run: func(repository *executionControlRepositoryStub, service *ExecutionControlService, principal RequestPrincipal) error {
+				repository.snapshot.Execution.Status = "Terminated"
+				_, err := service.Unlock(context.Background(), principal, UnlockExecutionInput{
+					RequestID: repository.snapshot.RequestID, RequestVersionID: repository.snapshot.Execution.RequestVersionID,
+					Reason: "permission revoked", ExpectedVersion: 2,
+					ActualStates:   service.actualStates.(*actualStateReaderStub).states,
+					IdempotencyKey: "matrix-unlock-deny",
+				})
+				return err
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			repository, service, principal := executionControlFixture(t, false)
+			err := test.run(repository, service, principal)
+			if err != ErrExecutionForbidden {
+				t.Fatalf("command error = %v", err)
+			}
+			if repository.retry.ExecutionID != uuid.Nil || repository.terminate.ExecutionID != uuid.Nil || repository.unlock.ExecutionID != uuid.Nil {
+				t.Fatalf("denied command reached repository: retry=%#v terminate=%#v unlock=%#v", repository.retry, repository.terminate, repository.unlock)
+			}
+		})
+	}
+}
+
 func TestTerminateExecutionStopsOnlyActiveArgoOperations(t *testing.T) {
 	repository, service, principal := executionControlFixture(t, true)
 	repository.snapshot.Execution.Status = "Running"

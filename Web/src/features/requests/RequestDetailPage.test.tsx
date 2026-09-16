@@ -58,6 +58,26 @@ describe('RequestDetailPage', () => {
     expect(screen.queryByRole('button', { name: '編輯選填資訊' })).toBeNull()
   })
 
+  it('renders request actions only when the backend grants capabilities', () => {
+    const request = requestFixture()
+    request.capabilities = [
+      'deployment_request.update',
+      'deployment_request.review',
+      'deployment_request.reassign',
+    ]
+    api.request.mockReturnValue(
+      queryResult({ status: 200, data: { data: request } }),
+    )
+
+    renderPage()
+
+    expect(
+      screen.getByRole('button', { name: '編輯選填資訊' }),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '核准申請' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '重新指派' })).toBeInTheDocument()
+  })
+
   it('defers rendering cumulative diff until the Application is expanded', () => {
     renderPage()
     expect(screen.queryByText(/apps\/Deployment/)).toBeNull()
