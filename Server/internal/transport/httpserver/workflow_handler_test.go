@@ -96,6 +96,33 @@ func TestCreateReleaseWorkflowReturnsNamedConflict(t *testing.T) {
 	}
 }
 
+func TestCreateReleaseWorkflowVersionReturnsSpecificConflicts(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		code string
+	}{
+		{name: "stale version", err: deployapp.ErrWorkflowVersionConflict, code: "WORKFLOW_VERSION_CONFLICT"},
+		{name: "existing draft", err: deployapp.ErrWorkflowDraftExists, code: "WORKFLOW_DRAFT_EXISTS"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			service := &fakeWorkflowDefinitionService{versionError: test.err}
+			router := newTestRouterWithWorkflow(t, &fakeAuthFlow{}, service)
+			path := "/api/v1/release-workflows/" + uuid.NewString() + "/versions"
+			request := workflowMutationRequest(http.MethodPost, path, `{"expectedVersion":1,"document":{"initialState":"start","states":[{"key":"start","name":"Start","type":"Start"},{"key":"done","name":"Done","type":"Terminal"}],"transitions":[{"key":"finish","from":"start","to":"done","trigger":"Manual","permission":"deployment_request.update","conditions":[]}]}}`)
+			response := httptest.NewRecorder()
+
+			router.ServeHTTP(response, request)
+
+			if response.Code != http.StatusConflict || !strings.Contains(response.Body.String(), `"code":"`+test.code+`"`) {
+				t.Fatalf("workflow version conflict = %d %s", response.Code, response.Body.String())
+			}
+		})
+	}
+}
+
 func TestReleaseWorkflowReadFailureKeepsResponseGenericAndLogsCause(t *testing.T) {
 	service := &fakeWorkflowDefinitionService{listError: errors.New("database unavailable")}
 	options := testAPIOptions(&fakeAuthFlow{})
@@ -271,6 +298,7 @@ type fakeWorkflowDefinitionService struct {
 	deleted       deployapp.DeleteWorkflowInput
 	listError     error
 	createError   error
+	versionError  error
 	changeError   error
 	deleteError   error
 	reviewOptions deployapp.WorkflowReviewOptions
@@ -295,7 +323,10 @@ func (s *fakeWorkflowDefinitionService) Create(_ context.Context, principal depl
 	}, input.Document)
 }
 
-func (*fakeWorkflowDefinitionService) CreateVersion(_ context.Context, _ deployapp.WorkflowPrincipal, input deployapp.CreateWorkflowVersionInput) (deploydomain.ReleaseWorkflowVersion, error) {
+func (s *fakeWorkflowDefinitionService) CreateVersion(_ context.Context, _ deployapp.WorkflowPrincipal, input deployapp.CreateWorkflowVersionInput) (deploydomain.ReleaseWorkflowVersion, error) {
+	if s.versionError != nil {
+		return deploydomain.ReleaseWorkflowVersion{}, s.versionError
+	}
 	return deploydomain.NewReleaseWorkflowVersion(deploydomain.WorkflowVersionDraft{
 		WorkflowID: input.WorkflowID, VersionNumber: input.ExpectedVersion + 1,
 		ActorID: uuid.New(), Document: input.Document, CreatedAt: workflowHandlerTestTime(),

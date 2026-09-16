@@ -45,6 +45,30 @@ func TestWorkflowDefinitionLifecycle(t *testing.T) {
 	}
 }
 
+func TestCreateWorkflowVersionDistinguishesStaleVersionAndExistingDraft(t *testing.T) {
+	repository := &workflowDefinitionRepositoryStub{}
+	service := mustWorkflowDefinitionService(t, repository, true)
+	principal := WorkflowPrincipal{UserID: uuid.New()}
+	created, err := service.Create(context.Background(), principal, CreateWorkflowInput{
+		Name: "Production approval", Document: definitionTestDocument(),
+	})
+	if err != nil {
+		t.Fatalf("create workflow: %v", err)
+	}
+
+	input := CreateWorkflowVersionInput{
+		WorkflowID: created.ID, ExpectedVersion: 1, Document: definitionTestDocument(),
+	}
+	if _, err := service.CreateVersion(context.Background(), principal, input); !errors.Is(err, ErrWorkflowDraftExists) {
+		t.Fatalf("existing draft error = %v", err)
+	}
+
+	input.ExpectedVersion = 2
+	if _, err := service.CreateVersion(context.Background(), principal, input); !errors.Is(err, ErrWorkflowVersionConflict) {
+		t.Fatalf("stale workflow version error = %v", err)
+	}
+}
+
 func TestWorkflowManagementRequiresPlatformPermission(t *testing.T) {
 	service := mustWorkflowDefinitionService(t, &workflowDefinitionRepositoryStub{}, false)
 	_, err := service.Create(context.Background(), WorkflowPrincipal{UserID: uuid.New()}, CreateWorkflowInput{

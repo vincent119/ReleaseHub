@@ -1100,6 +1100,10 @@ paths:
           description: The Workflow does not exist or the caller lacks operation permission.
         "409":
           description: The expectedVersion is stale or a conflicting Draft already exists.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /api/v1/release-workflows/{workflowId}/versions/{workflowVersionId}/lifecycle:
     post:
       operationId: changeReleaseWorkflowVersionLifecycle

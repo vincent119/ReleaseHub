@@ -247,6 +247,59 @@ for (const theme of ['light', 'dark'] as const) {
   })
 }
 
+for (const conflict of [
+  {
+    code: 'WORKFLOW_VERSION_CONFLICT',
+    message: 'Workflow 版本已變動，請重新整理後再試。',
+  },
+  {
+    code: 'WORKFLOW_DRAFT_EXISTS',
+    message: 'Workflow 已有 Draft，請先發布目前 Draft 後再建立新版本。',
+  },
+] as const) {
+  test(`建立 Workflow 新版本顯示 ${conflict.code} 對應訊息並保留編輯器`, async ({
+    page,
+  }) => {
+    await page.context().addCookies([
+      {
+        name: 'releasehub_csrf',
+        value: 'csrf-token',
+        domain: '127.0.0.1',
+        path: '/',
+      },
+    ])
+    await page.addInitScript(() => {
+      localStorage.setItem('releasehub.language', 'zh-TW')
+    })
+    await mockSession(page)
+    await page.route('**/api/v1/release-workflows', (route) =>
+      route.fulfill(json({ data: [savedWorkflowResponse()], meta: meta() })),
+    )
+    await page.route(
+      '**/api/v1/release-workflows/saved-workflow/versions',
+      (route) =>
+        route.fulfill({
+          status: 409,
+          ...json({
+            code: conflict.code,
+            message: 'Workflow version conflict',
+            requestId: 'e2e',
+          }),
+        }),
+    )
+    await mockReviewOptions(page)
+
+    await page.goto('/workflows')
+    await page.getByRole('button', { name: '建立新版本' }).click()
+    await page.getByRole('button', { name: '儲存 Workflow' }).click()
+
+    await expect(page.getByText(conflict.message)).toBeVisible()
+    await expect(
+      page.getByRole('heading', { name: '建立 Workflow Version' }),
+    ).toBeVisible()
+  })
+}
+
 for (const width of [720, 320]) {
   test(`${width}px Workflow 編輯器將設定面板置於畫布下方且無水平溢出`, async ({
     page,
@@ -301,7 +354,21 @@ async function mockSession(page: Page) {
 
 async function mockReviewOptions(page: Page) {
   await page.route('**/api/v1/release-workflows/review-options', (route) =>
-    route.fulfill(json({ data: { users: [], roles: [] }, meta: meta() })),
+    route.fulfill(
+      json({
+        data: {
+          users: [
+            {
+              id: '019c1230-0000-7000-8000-000000000001',
+              username: 'vincent',
+              assignable: true,
+            },
+          ],
+          roles: [],
+        },
+        meta: meta(),
+      }),
+    ),
   )
 }
 
@@ -322,7 +389,18 @@ function savedWorkflowResponse() {
         document: {
           initialState: 'pending_review',
           states: [
-            { key: 'pending_review', name: 'Pending Review', type: 'Review' },
+            {
+              key: 'pending_review',
+              name: 'Pending Review',
+              type: 'Review',
+              reviewPolicy: {
+                type: 'AnyApprover',
+                requiredApprovals: 1,
+                allowSelfReview: false,
+                userIds: ['019c1230-0000-7000-8000-000000000001'],
+                roleIds: [],
+              },
+            },
             { key: 'approved', name: 'Approved', type: 'ManualAction' },
             { key: 'deploying', name: 'Deploying', type: 'Deployment' },
             { key: 'succeeded', name: 'Succeeded', type: 'Terminal' },

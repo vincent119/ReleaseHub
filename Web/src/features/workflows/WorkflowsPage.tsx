@@ -89,8 +89,14 @@ export function WorkflowsPage() {
         responseErrorCode(response.data) === 'WORKFLOW_NAME_CONFLICT'
       )
         return void feedback.error(t('workflows.mutation.nameConflict'))
-      if (response.status === 409 && conflictContext === 'version')
-        return void feedback.error(t('workflows.mutation.versionConflict'))
+      if (response.status === 409 && conflictContext === 'version') {
+        const code = responseErrorCode(response.data)
+        if (code === 'WORKFLOW_VERSION_CONFLICT')
+          return void feedback.error(t('workflows.mutation.versionConflict'))
+        if (code === 'WORKFLOW_DRAFT_EXISTS')
+          return void feedback.error(t('workflows.mutation.draftExists'))
+        return void feedback.error(t('workflows.mutation.conflict'))
+      }
       if (response.status < 200 || response.status >= 300)
         return void feedback.error(t('workflows.mutation.rejected'))
       setEditor(undefined)

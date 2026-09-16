@@ -43,6 +43,9 @@ func TestWorkflowDefinitionRepositoryPreservesVersionLifecycle(t *testing.T) {
 		t.Fatalf("publish workflow version: %v", err)
 	}
 	second := workflowVersion(t, workflow.ID, 2, actorID, now.Add(time.Minute))
+	if err := repository.AppendVersion(ctx, mutation, 2, second); !errors.Is(err, deployapp.ErrWorkflowVersionConflict) {
+		t.Fatalf("append workflow with stale version error = %v", err)
+	}
 	if err := repository.AppendVersion(ctx, mutation, 1, second); err != nil {
 		t.Fatalf("append workflow version: %v", err)
 	}
@@ -256,7 +259,7 @@ func publishWorkflowVersion(t *testing.T, version deploydomain.ReleaseWorkflowVe
 func assertDraftAppendConflict(t *testing.T, repository *deployinfra.WorkflowDefinitionRepository, mutation deployapp.WorkflowMutation, workflow deploydomain.ReleaseWorkflow, actorID uuid.UUID, now time.Time) {
 	t.Helper()
 	second := workflowVersion(t, workflow.ID, 2, actorID, now.Add(time.Minute))
-	if err := repository.AppendVersion(context.Background(), mutation, 1, second); !errors.Is(err, deployapp.ErrWorkflowConflict) {
+	if err := repository.AppendVersion(context.Background(), mutation, 1, second); !errors.Is(err, deployapp.ErrWorkflowDraftExists) {
 		t.Fatalf("append with active draft error = %v", err)
 	}
 }

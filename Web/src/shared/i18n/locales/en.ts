@@ -479,8 +479,10 @@ export const en = {
     mutation: {
       saved: 'Workflow saved.',
       nameConflict: 'The Workflow name already exists. Use another name.',
-      versionConflict:
-        'The Workflow version changed or already has a Draft. Refresh and try again.',
+      versionConflict: 'The Workflow version changed. Refresh and try again.',
+      draftExists:
+        'The Workflow already has a Draft. Publish it before creating another version.',
+      conflict: 'The Workflow operation conflicted. Refresh and try again.',
       rejected:
         'The operation was rejected. Refresh and verify access and version.',
       error: 'The Workflow could not be saved.',

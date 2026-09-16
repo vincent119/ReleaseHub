@@ -186,6 +186,14 @@ func respondWorkflowConflict(c *gin.Context, err error) bool {
 		respondError(c, http.StatusConflict, "WORKFLOW_NAME_CONFLICT", "Release workflow name already exists")
 		return true
 	}
+	if errors.Is(err, deployapp.ErrWorkflowVersionConflict) {
+		respondError(c, http.StatusConflict, "WORKFLOW_VERSION_CONFLICT", "Release workflow version changed")
+		return true
+	}
+	if errors.Is(err, deployapp.ErrWorkflowDraftExists) {
+		respondError(c, http.StatusConflict, "WORKFLOW_DRAFT_EXISTS", "Release workflow already has a draft")
+		return true
+	}
 	if errors.Is(err, deployapp.ErrWorkflowConflict) {
 		respondError(c, http.StatusConflict, "WORKFLOW_CONFLICT", "Release workflow change was rejected")
 		return true

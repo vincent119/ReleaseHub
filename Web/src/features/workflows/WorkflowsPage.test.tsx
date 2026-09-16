@@ -153,8 +153,30 @@ describe('WorkflowsPage', () => {
     expect(api.refetch).not.toHaveBeenCalled()
   })
 
-  it('keeps the editor open when new-version creation conflicts', async () => {
-    api.createVersion.mockResolvedValue({ status: 409, data: undefined })
+  it('keeps the editor open when the Workflow version changed', async () => {
+    api.createVersion.mockResolvedValue({
+      status: 409,
+      data: { code: 'WORKFLOW_VERSION_CONFLICT' },
+    })
+    renderPage()
+
+    fireEvent.click(screen.getByRole('button', { name: '建立新版本' }))
+    fireEvent.click(screen.getByRole('button', { name: '儲存 Workflow' }))
+
+    expect(
+      await screen.findByText('Workflow 版本已變動，請重新整理後再試。'),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('heading', { name: '建立 Workflow Version' }),
+    ).toBeInTheDocument()
+    expect(api.refetch).not.toHaveBeenCalled()
+  })
+
+  it('explains that an existing Draft blocks a new Workflow version', async () => {
+    api.createVersion.mockResolvedValue({
+      status: 409,
+      data: { code: 'WORKFLOW_DRAFT_EXISTS' },
+    })
     renderPage()
 
     fireEvent.click(screen.getByRole('button', { name: '建立新版本' }))
@@ -162,8 +184,27 @@ describe('WorkflowsPage', () => {
 
     expect(
       await screen.findByText(
-        'Workflow 版本已變更或已有 Draft，請重新整理後再試。',
+        'Workflow 已有 Draft，請先發布目前 Draft 後再建立新版本。',
       ),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('heading', { name: '建立 Workflow Version' }),
+    ).toBeInTheDocument()
+    expect(api.refetch).not.toHaveBeenCalled()
+  })
+
+  it('uses generic feedback for an unknown Workflow version conflict', async () => {
+    api.createVersion.mockResolvedValue({
+      status: 409,
+      data: { code: 'WORKFLOW_CONFLICT' },
+    })
+    renderPage()
+
+    fireEvent.click(screen.getByRole('button', { name: '建立新版本' }))
+    fireEvent.click(screen.getByRole('button', { name: '儲存 Workflow' }))
+
+    expect(
+      await screen.findByText('Workflow 操作發生衝突，請重新整理後再試。'),
     ).toBeInTheDocument()
     expect(
       screen.getByRole('heading', { name: '建立 Workflow Version' }),
