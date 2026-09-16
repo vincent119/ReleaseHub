@@ -26,7 +26,7 @@ func TestDeploymentJobQueueConcurrentClaimAndDuplicateProducer(t *testing.T) {
 		t.Fatalf("create deployment job queue: %v", err)
 	}
 	job := deploymentJobFixture(t, "queue-concurrent", 3)
-	assertConcurrentDuplicateEnqueue(t, ctx, db, queue, job)
+	assertConcurrentDuplicateEnqueue(t, ctx, db, queue, job, false)
 	conflict := job
 	conflict.ID, conflict.Payload = uuid.New(), json.RawMessage(`{"changed":true}`)
 	if _, _, err := queue.Enqueue(ctx, conflict); !errors.Is(err, deploydomain.ErrJobConflict) {
@@ -35,13 +35,29 @@ func TestDeploymentJobQueueConcurrentClaimAndDuplicateProducer(t *testing.T) {
 	assertSingleConcurrentClaim(t, ctx, queue)
 }
 
+func TestDeploymentJobQueueConcurrentSameIDReplay(t *testing.T) {
+	ctx := context.Background()
+	db := workflowTestDatabase(t, ctx)
+	queue, err := deployinfra.NewDeploymentJobQueue(db)
+	if err != nil {
+		t.Fatalf("create same-ID deployment job queue: %v", err)
+	}
+	job := deploymentJobFixture(t, "queue-concurrent-same-id", 3)
+	assertConcurrentDuplicateEnqueue(t, ctx, db, queue, job, true)
+	conflict := job
+	conflict.Payload = json.RawMessage(`{"changed":true}`)
+	if _, _, err := queue.Enqueue(ctx, conflict); !errors.Is(err, deploydomain.ErrJobConflict) {
+		t.Fatalf("same-ID conflicting duplicate error = %v", err)
+	}
+}
+
 type enqueueResult struct {
 	job     deploydomain.DeploymentJob
 	created bool
 	err     error
 }
 
-func assertConcurrentDuplicateEnqueue(t *testing.T, ctx context.Context, db *gorm.DB, queue *deployinfra.DeploymentJobQueue, job deploydomain.DeploymentJob) {
+func assertConcurrentDuplicateEnqueue(t *testing.T, ctx context.Context, db *gorm.DB, queue *deployinfra.DeploymentJobQueue, job deploydomain.DeploymentJob, reuseID bool) {
 	t.Helper()
 	blocker := db.Begin()
 	if blocker.Error != nil {
@@ -59,7 +75,9 @@ func assertConcurrentDuplicateEnqueue(t *testing.T, ctx context.Context, db *gor
 			ready <- struct{}{}
 			<-start
 			candidate := job
-			candidate.ID = uuid.New()
+			if !reuseID {
+				candidate.ID = uuid.New()
+			}
 			value, created, err := queue.Enqueue(ctx, candidate)
 			results <- enqueueResult{job: value, created: created, err: err}
 		}()
