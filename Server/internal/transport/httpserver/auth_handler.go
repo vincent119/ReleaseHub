@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"net/http"
-	"net/url"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -56,35 +55,38 @@ func (h *authHandler) authenticateMutationForPasswordChange(c *gin.Context, csrf
 	if !h.mutationOriginAllowed(c) {
 		return identity.Session{}, identity.User{}, false
 	}
-	if h.flow == nil {
-		respondError(c, http.StatusUnauthorized, "SESSION_REQUIRED", "Authentication is required")
-		return identity.Session{}, identity.User{}, false
-	}
-	token, ok := sessionToken(c)
+	token, ok := h.requiredSessionToken(c)
 	if !ok {
-		respondError(c, http.StatusUnauthorized, "SESSION_REQUIRED", "Authentication is required")
 		return identity.Session{}, identity.User{}, false
 	}
 	session, user, err := h.flow.ValidateMutation(c.Request.Context(), token, csrfToken)
 	if err != nil {
-		if errors.Is(err, context.Canceled) {
-			respondRequestCanceled(c)
-			return identity.Session{}, identity.User{}, false
-		}
-		if errors.Is(err, identityapp.ErrSessionInvalid) {
-			h.clearSessionCookies(c)
-			respondError(c, http.StatusUnauthorized, "SESSION_INVALID", "Authentication session is invalid")
-			return identity.Session{}, identity.User{}, false
-		}
-		if !errors.Is(err, identityapp.ErrCSRFInvalid) {
-			recordRequestError(c, "validate authenticated mutation", err)
-			respondError(c, http.StatusServiceUnavailable, "SESSION_STATE_UNAVAILABLE", "Authentication state is unavailable")
-			return identity.Session{}, identity.User{}, false
-		}
-		respondError(c, http.StatusForbidden, "MUTATION_REJECTED", "State-changing request was rejected")
+		h.respondMutationAuthenticationError(c, err)
 		return identity.Session{}, identity.User{}, false
 	}
 	return session, user, true
+}
+
+func (h *authHandler) requiredSessionToken(c *gin.Context) (string, bool) {
+	if h.flow != nil {
+		if token, ok := sessionToken(c); ok {
+			return token, true
+		}
+	}
+	respondError(c, http.StatusUnauthorized, "SESSION_REQUIRED", "Authentication is required")
+	return "", false
+}
+
+func (h *authHandler) respondMutationAuthenticationError(c *gin.Context, err error) {
+	if h.respondCommonAuthenticationError(c, err) {
+		return
+	}
+	if errors.Is(err, identityapp.ErrCSRFInvalid) {
+		respondError(c, http.StatusForbidden, "MUTATION_REJECTED", "State-changing request was rejected")
+		return
+	}
+	recordRequestError(c, "validate authenticated mutation", err)
+	respondError(c, http.StatusServiceUnavailable, "SESSION_STATE_UNAVAILABLE", "Authentication state is unavailable")
 }
 
 func (h *authHandler) mutationOriginAllowed(c *gin.Context) bool {
@@ -148,44 +150,41 @@ func (h *authHandler) CompleteAuthCallback(c *gin.Context, params contract.Compl
 	c.Redirect(http.StatusFound, h.webRedirectURL)
 }
 
-func loginStateCookie(c *gin.Context) (string, bool) {
-	value, err := c.Cookie(loginCookieName)
-	return value, err == nil
-}
-
-func (h *authHandler) setSessionCookies(c *gin.Context, sessionToken, csrfToken string) {
-	writeCookie(c, h.sessionCookie(sessionCookieName, sessionToken, true))
-	writeCookie(c, h.sessionCookie(csrfCookieName, csrfToken, false))
-}
-
 func (h *authHandler) GetAuthSession(c *gin.Context) {
 	c.Header("Cache-Control", "no-store")
 	session, user, ok := h.authenticateAllowPasswordChange(c)
 	if !ok {
 		return
 	}
-	mustChange := false
-	passwordChangeAvailable := h.local != nil && session.AuthenticationMethod == "local"
-	if passwordChangeAvailable {
-		var err error
-		mustChange, err = h.local.MustChangePassword(c.Request.Context(), user.ID)
-		if err != nil {
-			if errors.Is(err, context.Canceled) {
-				respondRequestCanceled(c)
-				return
-			}
-			respondError(c, http.StatusInternalServerError, "SESSION_STATE_UNAVAILABLE", "Authentication state is unavailable")
-			return
-		}
+	state, ok := h.passwordChangeState(c, session, user)
+	if !ok {
+		return
 	}
-	c.JSON(http.StatusOK, contract.AuthSessionResponse{Data: contract.AuthSession{
-		UserId:                  user.ID,
-		Username:                user.Username,
-		MustChangePassword:      mustChange,
-		PasswordChangeAvailable: passwordChangeAvailable,
-		IdleExpiresAt:           session.IdleExpiresAt.UTC(),
-		AbsoluteExpiresAt:       session.AbsoluteExpiresAt.UTC(),
-	}, Meta: responseMeta(c)})
+	c.JSON(http.StatusOK, authSessionResponse(c, session, user, state))
+}
+
+type passwordChangeState struct{ mustChange, available bool }
+
+func (h *authHandler) passwordChangeState(c *gin.Context, session identity.Session, user identity.User) (passwordChangeState, bool) {
+	state := passwordChangeState{available: h.local != nil && session.AuthenticationMethod == "local"}
+	if !state.available {
+		return state, true
+	}
+	mustChange, err := h.local.MustChangePassword(c.Request.Context(), user.ID)
+	if err != nil {
+		respondPasswordStateError(c, err)
+		return passwordChangeState{}, false
+	}
+	state.mustChange = mustChange
+	return state, true
+}
+
+func authSessionResponse(c *gin.Context, session identity.Session, user identity.User, state passwordChangeState) contract.AuthSessionResponse {
+	return contract.AuthSessionResponse{Data: contract.AuthSession{
+		UserId: user.ID, Username: user.Username, MustChangePassword: state.mustChange,
+		PasswordChangeAvailable: state.available, IdleExpiresAt: session.IdleExpiresAt.UTC(),
+		AbsoluteExpiresAt: session.AbsoluteExpiresAt.UTC(),
+	}, Meta: responseMeta(c)}
 }
 
 func (h *authHandler) LogoutAuthSession(c *gin.Context, params contract.LogoutAuthSessionParams) {
@@ -206,16 +205,6 @@ func (h *authHandler) LogoutAuthSession(c *gin.Context, params contract.LogoutAu
 	}
 	h.clearSessionCookies(c)
 	c.JSON(http.StatusOK, contract.LogoutResponse{Data: logoutResult(redirectURL), Meta: responseMeta(c)})
-}
-
-func sessionToken(c *gin.Context) (string, bool) {
-	value, err := c.Cookie(sessionCookieName)
-	return value, err == nil
-}
-
-func (h *authHandler) clearSessionCookies(c *gin.Context) {
-	writeCookie(c, h.expiredCookie(sessionCookieName, "/", true))
-	writeCookie(c, h.expiredCookie(csrfCookieName, "/", false))
 }
 
 func logoutResult(redirectURL string) contract.LogoutResult {
@@ -248,31 +237,40 @@ func (h *authHandler) authenticate(c *gin.Context) (identity.Session, identity.U
 }
 
 func (h *authHandler) authenticateAllowPasswordChange(c *gin.Context) (identity.Session, identity.User, bool) {
-	if h.flow == nil {
-		respondError(c, http.StatusUnauthorized, "SESSION_REQUIRED", "Authentication is required")
-		return identity.Session{}, identity.User{}, false
-	}
-	token, ok := sessionToken(c)
+	token, ok := h.requiredSessionToken(c)
 	if !ok {
-		respondError(c, http.StatusUnauthorized, "SESSION_REQUIRED", "Authentication is required")
 		return identity.Session{}, identity.User{}, false
 	}
 	session, user, err := h.flow.Authenticate(c.Request.Context(), token)
 	if err != nil {
-		if errors.Is(err, context.Canceled) {
-			respondRequestCanceled(c)
-			return identity.Session{}, identity.User{}, false
+		if !h.respondCommonAuthenticationError(c, err) {
+			recordRequestError(c, "authenticate session", err)
+			respondError(c, http.StatusServiceUnavailable, "SESSION_STATE_UNAVAILABLE", "Authentication state is unavailable")
 		}
-		if errors.Is(err, identityapp.ErrSessionInvalid) {
-			h.clearSessionCookies(c)
-			respondError(c, http.StatusUnauthorized, "SESSION_INVALID", "Authentication session is invalid")
-			return identity.Session{}, identity.User{}, false
-		}
-		recordRequestError(c, "authenticate session", err)
-		respondError(c, http.StatusServiceUnavailable, "SESSION_STATE_UNAVAILABLE", "Authentication state is unavailable")
 		return identity.Session{}, identity.User{}, false
 	}
 	return session, user, true
+}
+
+func (h *authHandler) respondCommonAuthenticationError(c *gin.Context, err error) bool {
+	if errors.Is(err, context.Canceled) {
+		respondRequestCanceled(c)
+		return true
+	}
+	if !errors.Is(err, identityapp.ErrSessionInvalid) {
+		return false
+	}
+	h.clearSessionCookies(c)
+	respondError(c, http.StatusUnauthorized, "SESSION_INVALID", "Authentication session is invalid")
+	return true
+}
+
+func respondPasswordStateError(c *gin.Context, err error) {
+	if errors.Is(err, context.Canceled) {
+		respondRequestCanceled(c)
+		return
+	}
+	respondError(c, http.StatusInternalServerError, "SESSION_STATE_UNAVAILABLE", "Authentication state is unavailable")
 }
 
 func responseMeta(c *gin.Context) contract.ResponseMeta {
@@ -280,43 +278,6 @@ func responseMeta(c *gin.Context) contract.ResponseMeta {
 }
 func respondRequestCanceled(c *gin.Context) {
 	c.Status(statusClientClosedRequest)
-}
-
-func (h *authHandler) loginCookie(value string) http.Cookie {
-	return http.Cookie{
-		Name: loginCookieName, Value: value, Path: "/api/v1/auth/callback",
-		MaxAge: int(h.loginStateTTL.Seconds()), HttpOnly: true, Secure: h.cookieSecure,
-	}
-}
-
-func (h *authHandler) sessionCookie(name, value string, httpOnly bool) http.Cookie {
-	return http.Cookie{
-		Name: name, Value: value, Path: "/", MaxAge: int(h.sessionTTL.Seconds()),
-		HttpOnly: httpOnly, Secure: h.cookieSecure,
-	}
-}
-
-func (h *authHandler) expiredCookie(name, path string, httpOnly bool) http.Cookie {
-	return http.Cookie{
-		Name: name, Path: path, MaxAge: -1, HttpOnly: httpOnly, Secure: h.cookieSecure,
-	}
-}
-
-func writeCookie(c *gin.Context, cookie http.Cookie) {
-	cookie.SameSite = http.SameSiteLaxMode
-	http.SetCookie(c.Writer, &cookie)
-}
-func sameOrigin(request *http.Request, target string) bool {
-	targetURL, err := url.Parse(target)
-	if err != nil || targetURL.Scheme == "" || targetURL.Host == "" {
-		return false
-	}
-	source := request.Header.Get("Origin")
-	if source == "" {
-		source = request.Referer()
-	}
-	sourceURL, err := url.Parse(source)
-	return err == nil && sourceURL.Scheme == targetURL.Scheme && sourceURL.Host == targetURL.Host
 }
 
 var _ authFlow = (*identityapp.AuthFlow)(nil)

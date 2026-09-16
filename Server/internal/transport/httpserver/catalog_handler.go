@@ -37,47 +37,6 @@ type catalogHandler struct {
 	statusReader applicationStatusReader
 }
 
-// CreateCatalogOrganization creates a tenant boundary after CSRF and platform authorization checks.
-func (h *catalogHandler) CreateCatalogOrganization(c *gin.Context, params contract.CreateCatalogOrganizationParams) {
-	_, user, ok := h.authn.authenticateMutation(c, string(params.XCSRFToken))
-	if !ok {
-		return
-	}
-	var body contract.CreateNamedResourceRequest
-	if err := c.ShouldBindJSON(&body); err != nil {
-		respondError(c, http.StatusBadRequest, "INVALID_REQUEST", "Organization request is invalid")
-		return
-	}
-	value, err := h.service.CreateOrganization(c.Request.Context(), catalogapp.Principal{UserID: user.ID, Disabled: user.Disabled}, catalogapp.Mutation{RequestID: c.GetHeader(requestIDHeader)}, body.Name)
-	if !h.respondCatalogMutationError(c, err) {
-		return
-	}
-	c.JSON(http.StatusCreated, contract.CatalogOrganizationResponse{Data: contract.CatalogOrganizationResource{Id: value.ID, Name: value.Name, Active: value.Active, Version: int64(value.Version)}, Meta: responseMeta(c)})
-}
-
-// DeleteCatalogOrganization deactivates an empty non-default tenant boundary.
-func (h *catalogHandler) DeleteCatalogOrganization(c *gin.Context, organizationID uuid.UUID, params contract.DeleteCatalogOrganizationParams) {
-	_, user, ok := h.authn.authenticateMutation(c, string(params.XCSRFToken))
-	if !ok {
-		return
-	}
-	if params.ExpectedVersion < 1 {
-		respondError(c, http.StatusBadRequest, "INVALID_REQUEST", "Organization deletion request is invalid")
-		return
-	}
-	err := h.service.DeleteOrganization(
-		c.Request.Context(),
-		catalogapp.Principal{UserID: user.ID, Disabled: user.Disabled},
-		catalogapp.Mutation{RequestID: c.GetHeader(requestIDHeader)},
-		organizationID,
-		uint64(params.ExpectedVersion),
-	)
-	if !h.respondCatalogMutationError(c, err) {
-		return
-	}
-	c.Status(http.StatusNoContent)
-}
-
 // CreateCatalogProject creates a Project under an existing Organization.
 func (h *catalogHandler) CreateCatalogProject(c *gin.Context, organizationID uuid.UUID, params contract.CreateCatalogProjectParams) {
 	_, user, ok := h.authn.authenticateMutation(c, string(params.XCSRFToken))

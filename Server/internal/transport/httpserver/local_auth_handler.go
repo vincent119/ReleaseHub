@@ -33,6 +33,10 @@ func (h *authHandler) LoginLocal(c *gin.Context) {
 		return
 	}
 	h.setSessionCookies(c, sessionToken, csrfToken)
+	respondLocalLogin(c, user, mustChange, session)
+}
+
+func respondLocalLogin(c *gin.Context, user identity.User, mustChange bool, session identity.Session) {
 	c.JSON(http.StatusOK, contract.AuthSessionResponse{Data: contract.AuthSession{
 		UserId:                  user.ID,
 		Username:                user.Username,
