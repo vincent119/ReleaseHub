@@ -135,6 +135,38 @@ func TestAccessCapabilitiesDoNotCrossDelegatedPermissionBoundaries(t *testing.T)
 	}
 }
 
+func TestAccessCommandRechecksPermissionAfterCapabilityProjection(t *testing.T) {
+	projectID := uuid.New()
+	repository := &accessRepositoryStub{
+		scopes: []ProjectScope{{OrganizationID: uuid.New(), ProjectID: projectID}},
+		snapshot: AccessSnapshot{Groups: []AccessGroup{
+			{ID: uuid.New(), OwnerKind: "project", OwnerID: &projectID, Name: "operators"},
+		}},
+	}
+	authorizer := &accessAuthorizerStub{allowedProjectID: projectID}
+	service, err := NewAccessManagementService(repository, authorizer)
+	if err != nil {
+		t.Fatalf("create access management service: %v", err)
+	}
+	principal := AccessPrincipal{UserID: uuid.New()}
+
+	capabilities, err := service.Capabilities(context.Background(), principal)
+	if err != nil || !collectionCanCreate(capabilities, "groups") {
+		t.Fatalf("initial Group capability = %#v, %v", capabilities.Collections, err)
+	}
+
+	authorizer.denyGroupManage = true
+	_, err = service.CreateGroup(context.Background(), principal, AccessMutation{}, CreateGroupInput{
+		OwnerKind: "project", OwnerID: &projectID, Name: "release-operators",
+	})
+	if !errors.Is(err, ErrAccessManagementNotFound) {
+		t.Fatalf("stale Group capability command error = %v", err)
+	}
+	if repository.createGroupCalls != 0 {
+		t.Fatalf("repository create Group calls = %d", repository.createGroupCalls)
+	}
+}
+
 func TestAccessUserPaginationUsesStableRowCursor(t *testing.T) {
 	first, second, third := uuid.New(), uuid.New(), uuid.New()
 	repository := &accessRepositoryStub{snapshot: AccessSnapshot{Users: []AccessUser{
@@ -238,6 +270,7 @@ func stringPointer(value string) *string { return &value }
 type accessRepositoryStub struct {
 	scopes           []ProjectScope
 	snapshot         AccessSnapshot
+	createGroupCalls int
 	disableUserCalls int
 	candidateQuery   string
 	candidateLimit   int
@@ -273,6 +306,7 @@ func (s *accessRepositoryStub) LoadAccessSnapshot(context.Context) (AccessSnapsh
 }
 
 func (s *accessRepositoryStub) CreateGroup(context.Context, AccessMutation, CreateGroupInput) (AccessGroup, error) {
+	s.createGroupCalls++
 	return AccessGroup{}, nil
 }
 
