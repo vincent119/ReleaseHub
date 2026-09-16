@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"reflect"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
@@ -28,6 +29,9 @@ func (queue *DeploymentJobQueue) Enqueue(ctx context.Context, job deploydomain.D
 	model := deploymentJobToModel(job)
 	result := queue.db.WithContext(ctx).Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "idempotency_key"}}, DoNothing: true}).Create(&model)
 	if result.Error != nil {
+		if isDeploymentJobUniqueConflict(result.Error) {
+			return queue.loadDuplicate(ctx, job)
+		}
 		return deploydomain.DeploymentJob{}, false, fmt.Errorf("enqueue deployment job: %w", result.Error)
 	}
 	if result.RowsAffected == 1 {
@@ -39,6 +43,9 @@ func (queue *DeploymentJobQueue) Enqueue(ctx context.Context, job deploydomain.D
 func (queue *DeploymentJobQueue) loadDuplicate(ctx context.Context, job deploydomain.DeploymentJob) (deploydomain.DeploymentJob, bool, error) {
 	var model deploymentJobModel
 	err := queue.db.WithContext(ctx).Where("idempotency_key = ?", job.IdempotencyKey).Take(&model).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return deploydomain.DeploymentJob{}, false, deploydomain.ErrJobConflict
+	}
 	if err != nil {
 		return deploydomain.DeploymentJob{}, false, fmt.Errorf("load duplicate deployment job: %w", err)
 	}
@@ -46,6 +53,11 @@ func (queue *DeploymentJobQueue) loadDuplicate(ctx context.Context, job deploydo
 		return deploydomain.DeploymentJob{}, false, deploydomain.ErrJobConflict
 	}
 	return deploymentJobFromModel(model), false, nil
+}
+
+func isDeploymentJobUniqueConflict(err error) bool {
+	var postgresError *pgconn.PgError
+	return errors.As(err, &postgresError) && postgresError.Code == "23505"
 }
 
 func sameDeploymentJob(model deploymentJobModel, job deploydomain.DeploymentJob) bool {
