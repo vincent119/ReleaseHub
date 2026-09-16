@@ -26,20 +26,56 @@ func TestDeploymentJobQueueConcurrentClaimAndDuplicateProducer(t *testing.T) {
 		t.Fatalf("create deployment job queue: %v", err)
 	}
 	job := deploymentJobFixture(t, "queue-concurrent", 3)
-	persisted, created, err := queue.Enqueue(ctx, job)
-	if err != nil || !created {
-		t.Fatalf("enqueue deployment job: %#v %t %v", persisted, created, err)
-	}
-	duplicate, created, err := queue.Enqueue(ctx, job)
-	if err != nil || created || duplicate.ID != persisted.ID {
-		t.Fatalf("deduplicate deployment job: %#v %t %v", duplicate, created, err)
-	}
+	assertConcurrentDuplicateEnqueue(t, ctx, db, queue, job)
 	conflict := job
 	conflict.ID, conflict.Payload = uuid.New(), json.RawMessage(`{"changed":true}`)
 	if _, _, err := queue.Enqueue(ctx, conflict); !errors.Is(err, deploydomain.ErrJobConflict) {
 		t.Fatalf("conflicting duplicate error = %v", err)
 	}
 	assertSingleConcurrentClaim(t, ctx, queue)
+}
+
+type enqueueResult struct {
+	job     deploydomain.DeploymentJob
+	created bool
+	err     error
+}
+
+func assertConcurrentDuplicateEnqueue(t *testing.T, ctx context.Context, db *gorm.DB, queue *deployinfra.DeploymentJobQueue, job deploydomain.DeploymentJob) {
+	t.Helper()
+	blocker := db.Begin()
+	if blocker.Error != nil {
+		t.Fatalf("begin deployment job blocker: %v", blocker.Error)
+	}
+	if err := blocker.Exec("LOCK TABLE deployment_jobs IN ACCESS EXCLUSIVE MODE").Error; err != nil {
+		t.Fatalf("hold deployment job table lock: %v", err)
+	}
+	t.Cleanup(func() { _ = blocker.Rollback().Error })
+	start := make(chan struct{})
+	ready := make(chan struct{}, 2)
+	results := make(chan enqueueResult, 2)
+	for range 2 {
+		go func() {
+			ready <- struct{}{}
+			<-start
+			candidate := job
+			candidate.ID = uuid.New()
+			value, created, err := queue.Enqueue(ctx, candidate)
+			results <- enqueueResult{job: value, created: created, err: err}
+		}()
+	}
+	<-ready
+	<-ready
+	close(start)
+	waitForBlockedQueries(t, db, "deployment_jobs", 2)
+	commitBlocker(t, blocker)
+	first, second := <-results, <-results
+	if first.err != nil || second.err != nil {
+		t.Fatalf("concurrent enqueue errors = %v, %v", first.err, second.err)
+	}
+	if first.created == second.created || first.job.ID != second.job.ID {
+		t.Fatalf("concurrent enqueue results = %#v, %#v", first, second)
+	}
 }
 
 func TestDeploymentJobQueueLeaseRecoveryAndFencing(t *testing.T) {

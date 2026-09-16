@@ -5,7 +5,10 @@ package database_test
 import (
 	"context"
 	"errors"
+	"fmt"
+	"os"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -421,6 +424,9 @@ func tableCount(t *testing.T, db *gorm.DB, table string) int64 {
 
 func startPostgreSQL(t *testing.T, ctx context.Context) config.DatabaseConfig {
 	t.Helper()
+	if port := os.Getenv("RELEASEHUB_TEST_POSTGRES_PORT"); port != "" {
+		return startExternalPostgreSQL(t, port)
+	}
 	container, err := testcontainers.Run(ctx, "postgres:16-alpine",
 		testcontainers.WithEnv(map[string]string{
 			"POSTGRES_USER":     "releasehub",
@@ -452,6 +458,52 @@ func startPostgreSQL(t *testing.T, ctx context.Context) config.DatabaseConfig {
 	return config.DatabaseConfig{
 		Server: host, Port: portNumber, User: "releasehub", Password: "releasehub-test-password",
 		Database: "releasehub", SSLMode: "disable", Timezone: "UTC",
+	}
+}
+
+func startExternalPostgreSQL(t *testing.T, portValue string) config.DatabaseConfig {
+	t.Helper()
+	port, err := strconv.Atoi(portValue)
+	if err != nil {
+		t.Fatalf("parse external PostgreSQL port: %v", err)
+	}
+	user := os.Getenv("RELEASEHUB_TEST_POSTGRES_USER")
+	if user == "" {
+		t.Fatal("RELEASEHUB_TEST_POSTGRES_USER is required with RELEASEHUB_TEST_POSTGRES_PORT")
+	}
+	base := config.DatabaseConfig{
+		Server: "127.0.0.1", Port: port, User: user,
+		Database: "postgres", SSLMode: "disable", Timezone: "UTC",
+	}
+	name := "releasehub_test_" + strings.ReplaceAll(uuid.NewString(), "-", "")
+	admin := openExternalPostgreSQLAdmin(t, base)
+	if err := admin.Exec(fmt.Sprintf(`CREATE DATABASE %q`, name)).Error; err != nil {
+		t.Fatalf("create isolated PostgreSQL database: %v", err)
+	}
+	if err := database.Close(admin); err != nil {
+		t.Fatalf("close PostgreSQL administration connection: %v", err)
+	}
+	adminConfig := base
+	t.Cleanup(func() { dropExternalPostgreSQLDatabase(t, adminConfig, name) })
+	base.Database = name
+	return base
+}
+
+func openExternalPostgreSQLAdmin(t *testing.T, cfg config.DatabaseConfig) *gorm.DB {
+	t.Helper()
+	db, err := database.Open(cfg, config.PoolConfig{MaxOpenConnections: 2, MaxIdleConnections: 1})
+	if err != nil {
+		t.Fatalf("open external PostgreSQL administration connection: %v", err)
+	}
+	return db
+}
+
+func dropExternalPostgreSQLDatabase(t *testing.T, cfg config.DatabaseConfig, name string) {
+	t.Helper()
+	admin := openExternalPostgreSQLAdmin(t, cfg)
+	defer func() { _ = database.Close(admin) }()
+	if err := admin.Exec(fmt.Sprintf(`DROP DATABASE %q WITH (FORCE)`, name)).Error; err != nil {
+		t.Errorf("drop isolated PostgreSQL database: %v", err)
 	}
 }
 
