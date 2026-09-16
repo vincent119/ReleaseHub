@@ -77,18 +77,37 @@ Sessions, the queue, Audit, and Outbox records are currently stored in PostgreSQ
 
 ## Worker and Notifications
 
-| YAML field | Default | Purpose |
-| --- | --- | --- |
-| `worker.reconcile_interval` | `30s` | Reload Argo CD Applications and detect candidates or configuration drift |
-| `worker.deployment_poll_interval` | `1s` | Poll for claimable deployment jobs |
-| `worker.job_lease_duration` | `30s` | Lifetime of job leases and fencing ownership |
-| `worker.job_retry_delay` | `5s` | Delay before an infrastructure failure is requeued |
-| `worker.application_lock_duration` | `30s` | Lifetime of Application operation locks |
-| `worker.max_parallel_deployments` | `10` | Maximum Applications executed by one Worker; a Plan may set a lower limit |
-| `notifications.retention` | `168h` | Retention for in-app notifications; Audit is unaffected |
-| `notifications.projection_interval` | `1s` | Interval for Outbox projection and availability of SSE events |
+| YAML field                          | Default | Purpose                                                                   |
+| ----------------------------------- | ------- | ------------------------------------------------------------------------- |
+| `worker.reconcile_interval`         | `30s`   | Reload Argo CD Applications and detect candidates or configuration drift  |
+| `worker.deployment_poll_interval`   | `1s`    | Poll for claimable deployment jobs                                        |
+| `worker.job_lease_duration`         | `30s`   | Lifetime of job leases and fencing ownership                              |
+| `worker.job_retry_delay`            | `5s`    | Delay before an infrastructure failure is requeued                        |
+| `worker.application_lock_duration`  | `30s`   | Lifetime of Application operation locks                                   |
+| `worker.max_parallel_deployments`   | `10`    | Maximum Applications executed by one Worker; a Plan may set a lower limit |
+| `notifications.retention`           | `168h`  | Retention for in-app notifications; Audit is unaffected                   |
+| `notifications.projection_interval` | `1s`    | Interval for Outbox projection and availability of SSE events             |
 
 Phase one must run exactly one Worker replica. Multiple Worker replicas would each apply `max_parallel_deployments`, so the platform-wide limit could not be guaranteed. Web Nginx proxies the exact SSE path `/api/v1/notifications/events` with buffering and caching disabled. After reconnecting with `Last-Event-ID`, the client fetches data again under the user's current permissions.
+
+## Environment Deployment Schedule
+
+A Deployment Schedule is an Environment policy stored in PostgreSQL. It is not a Server YAML field or environment variable. Select an Organization, Project, and Environment, then manage the policy on the Plans page. When no policy exists, the API returns an unrestricted default with `enabled=false`, `timeZone=UTC`, and `version=0`. Disabling a policy keeps its document but applies only the Request Version `scheduledFor` earliest-start constraint.
+
+Policy fields and limits:
+
+| Field                      | Meaning and limits                                                                                                                        |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `enabled`                  | Enables the weekly-window and blackout gate. An enabled policy requires at least one weekly window.                                       |
+| `timeZone`                 | An IANA time zone such as `Asia/Taipei`. Weekly windows use this local time zone.                                                         |
+| `weeklyWindows`            | At most 32 entries. `dayOfWeek` is `0` through `6` for Sunday through Saturday. Windows on the same day cannot overlap or cross midnight. |
+| `startMinute`／`endMinute` | Local minute of day. The ranges are `0..1439` and `1..1440`. Starts are inclusive and ends are exclusive.                                 |
+| `blackouts`                | At most 64 entries. Start and end are RFC 3339 absolute times normalized to UTC by Server. Starts are inclusive and ends are exclusive.   |
+| `version`                  | Server-managed optimistic version. An update sends the prior version as `expectedVersion`.                                                |
+
+Reading a policy requires `deployment_request.view` or `deployment_schedule.manage` on the target scope. Updating it requires `deployment_schedule.manage`. PUT also requires a Session, CSRF token, `Idempotency-Key`, and `expectedVersion`. The same actor and idempotency key replay the original result only when the payload matches. A stale version or a key/payload conflict returns `409 Conflict`. A missing Environment and an unauthorized Environment both return a masked `404 Not Found`.
+
+Every successful update writes the policy, Audit action `deployment_schedule.updated`, and an Outbox event in one database transaction. Audit metadata contains only the version and weekly-window and blackout counts, not the complete policy.
 
 ## Startup Validation
 
@@ -99,3 +118,4 @@ The Server fails before creating a runtime when the database, Redis address, ses
 3. PostgreSQL is reachable and versioned migrations have completed according to [Database Initialization](database-initialization.md).
 4. When OIDC is enabled, its redirect URL matches the externally reachable ReleaseHub URL.
 5. Argo CD and ECR identities follow least privilege.
+6. Migrations created `deployment_schedule_policies`, `deployment_schedule_commands`, and the `deployment_schedule.manage` permission. This feature adds no Server runtime configuration field.

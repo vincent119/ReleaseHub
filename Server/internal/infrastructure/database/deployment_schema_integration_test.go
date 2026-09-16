@@ -126,6 +126,10 @@ func seedDeploymentDefinitions(t *testing.T, db *gorm.DB, ids deploymentSchemaID
 }
 
 func seedDeploymentRequest(t *testing.T, db *gorm.DB, ids deploymentSchemaIDs) (uuid.UUID, uuid.UUID) {
+	return seedDeploymentRequestAt(t, db, ids, nil)
+}
+
+func seedDeploymentRequestAt(t *testing.T, db *gorm.DB, ids deploymentSchemaIDs, scheduledFor *time.Time) (uuid.UUID, uuid.UUID) {
 	t.Helper()
 	requestID := uuid.New()
 	requestVersionID := uuid.New()
@@ -137,9 +141,9 @@ func seedDeploymentRequest(t *testing.T, db *gorm.DB, ids deploymentSchemaIDs) (
 	execDeploymentSQL(t, db, `
 		INSERT INTO deployment_request_versions (
 			id, request_id, version_number, status, fingerprint,
-			workflow_version_id, plan_version_id, title, source_snapshot, created_by
-		) VALUES (?, ?, 1, 'Candidate', ?, ?, ?, 'Deploy API', '{}', ?)
-	`, requestVersionID, requestID, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", ids.workflowVersionID, ids.planVersionID, ids.userID)
+			workflow_version_id, plan_version_id, title, scheduled_for, source_snapshot, created_by
+		) VALUES (?, ?, 1, 'Candidate', ?, ?, ?, 'Deploy API', ?, '{}', ?)
+	`, requestVersionID, requestID, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", ids.workflowVersionID, ids.planVersionID, scheduledFor, ids.userID)
 	execDeploymentSQL(t, db, `
 		INSERT INTO deployment_request_applications (
 			id, request_version_id, application_id, application_key,
@@ -226,8 +230,8 @@ func verifyDeploymentPermissions(t *testing.T, db *gorm.DB) {
 	if err := db.Table("authorization_permissions").Where("key LIKE ? OR key IN ?", "deployment_%", []string{"workflow.manage", "notification.view", "notification.mark_read"}).Count(&count).Error; err != nil {
 		t.Fatalf("count deployment permissions: %v", err)
 	}
-	if count != 13 {
-		t.Fatalf("deployment permission count mismatch, got %d want 13", count)
+	if count != 14 {
+		t.Fatalf("deployment permission count mismatch, got %d want 14", count)
 	}
 }
 

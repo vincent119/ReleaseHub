@@ -85,6 +85,7 @@ import type {
   DeploymentRetryRequest,
   DeploymentReviewDecisionRequest,
   DeploymentReviewReassignmentRequest,
+  DeploymentScheduleResponse,
   DeploymentTerminateRequest,
   DeploymentTransitionRequest,
   DeploymentUnlockRequest,
@@ -113,7 +114,8 @@ import type {
   ReleaseWorkflowVersionResponse,
   SystemStatusResponse,
   UpdateCatalogOrganizationRequest,
-  UpdateDeploymentRequestVersionRequest
+  UpdateDeploymentRequestVersionRequest,
+  UpdateDeploymentScheduleRequest
 } from './model';
 
 export type HTTPStatusCode1xx = 100 | 101 | 102 | 103;
@@ -7367,6 +7369,260 @@ export const useBindDeploymentDefinitions = <TError = void,
         TContext
       > => {
       return useMutation(getBindDeploymentDefinitionsMutationOptions(options), queryClient);
+    }
+
+export type getDeploymentScheduleResponse200 = {
+  data: DeploymentScheduleResponse
+  status: 200
+}
+
+export type getDeploymentScheduleResponse401 = {
+  data: void
+  status: 401
+}
+
+export type getDeploymentScheduleResponse404 = {
+  data: void
+  status: 404
+}
+
+export type getDeploymentScheduleResponseSuccess = (getDeploymentScheduleResponse200) & {
+  headers: Headers;
+};
+export type getDeploymentScheduleResponseError = (getDeploymentScheduleResponse401 | getDeploymentScheduleResponse404) & {
+  headers: Headers;
+};
+
+export type getDeploymentScheduleResponse = (getDeploymentScheduleResponseSuccess | getDeploymentScheduleResponseError)
+
+export const getGetDeploymentScheduleUrl = (environmentId: string,) => {
+
+
+
+
+  return `/api/v1/deployment-schedules/${environmentId}`
+}
+
+/**
+ * @summary Get the effective deployment schedule for an Environment
+ */
+export const getDeploymentSchedule = async (environmentId: string, options?: RequestInit): Promise<getDeploymentScheduleResponse> => {
+
+  const res = await fetch(getGetDeploymentScheduleUrl(environmentId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getDeploymentScheduleResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as getDeploymentScheduleResponse
+}
+
+
+
+
+
+export const getGetDeploymentScheduleQueryKey = (environmentId: string,) => {
+    return [
+    `/api/v1/deployment-schedules/${environmentId}`
+    ] as const;
+    }
+
+
+export const getGetDeploymentScheduleQueryOptions = <TData = Awaited<ReturnType<typeof getDeploymentSchedule>>, TError = void>(environmentId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getDeploymentSchedule>>, TError, TData>>, fetch?: RequestInit}
+) => {
+
+const {query: queryOptions, fetch: fetchOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetDeploymentScheduleQueryKey(environmentId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getDeploymentSchedule>>> = ({ signal }) => getDeploymentSchedule(environmentId, { signal, ...fetchOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: environmentId !== null && environmentId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getDeploymentSchedule>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetDeploymentScheduleQueryResult = NonNullable<Awaited<ReturnType<typeof getDeploymentSchedule>>>
+export type GetDeploymentScheduleQueryError = void
+
+
+export function useGetDeploymentSchedule<TData = Awaited<ReturnType<typeof getDeploymentSchedule>>, TError = void>(
+ environmentId: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getDeploymentSchedule>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getDeploymentSchedule>>,
+          TError,
+          Awaited<ReturnType<typeof getDeploymentSchedule>>
+        > , 'initialData'
+      >, fetch?: RequestInit}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetDeploymentSchedule<TData = Awaited<ReturnType<typeof getDeploymentSchedule>>, TError = void>(
+ environmentId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getDeploymentSchedule>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getDeploymentSchedule>>,
+          TError,
+          Awaited<ReturnType<typeof getDeploymentSchedule>>
+        > , 'initialData'
+      >, fetch?: RequestInit}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetDeploymentSchedule<TData = Awaited<ReturnType<typeof getDeploymentSchedule>>, TError = void>(
+ environmentId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getDeploymentSchedule>>, TError, TData>>, fetch?: RequestInit}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Get the effective deployment schedule for an Environment
+ */
+
+export function useGetDeploymentSchedule<TData = Awaited<ReturnType<typeof getDeploymentSchedule>>, TError = void>(
+ environmentId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getDeploymentSchedule>>, TError, TData>>, fetch?: RequestInit}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetDeploymentScheduleQueryOptions(environmentId,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export type updateDeploymentScheduleResponse200 = {
+  data: DeploymentScheduleResponse
+  status: 200
+}
+
+export type updateDeploymentScheduleResponse400 = {
+  data: void
+  status: 400
+}
+
+export type updateDeploymentScheduleResponse401 = {
+  data: void
+  status: 401
+}
+
+export type updateDeploymentScheduleResponse404 = {
+  data: void
+  status: 404
+}
+
+export type updateDeploymentScheduleResponse409 = {
+  data: void
+  status: 409
+}
+
+export type updateDeploymentScheduleResponseSuccess = (updateDeploymentScheduleResponse200) & {
+  headers: Headers;
+};
+export type updateDeploymentScheduleResponseError = (updateDeploymentScheduleResponse400 | updateDeploymentScheduleResponse401 | updateDeploymentScheduleResponse404 | updateDeploymentScheduleResponse409) & {
+  headers: Headers;
+};
+
+export type updateDeploymentScheduleResponse = (updateDeploymentScheduleResponseSuccess | updateDeploymentScheduleResponseError)
+
+export const getUpdateDeploymentScheduleUrl = (environmentId: string,) => {
+
+
+
+
+  return `/api/v1/deployment-schedules/${environmentId}`
+}
+
+/**
+ * @summary Replace an Environment deployment schedule
+ */
+export const updateDeploymentSchedule = async (environmentId: string,
+    updateDeploymentScheduleRequest: UpdateDeploymentScheduleRequest, options?: RequestInit): Promise<updateDeploymentScheduleResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+const res = await fetch(getUpdateDeploymentScheduleUrl(environmentId),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(updateDeploymentScheduleRequest)
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: updateDeploymentScheduleResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as updateDeploymentScheduleResponse
+}
+
+
+
+
+
+export const getUpdateDeploymentScheduleMutationKey = () => ['updateDeploymentSchedule'] as const;
+
+export const getUpdateDeploymentScheduleMutationOptions = <TError = void,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateDeploymentSchedule>>, TError,UpdateDeploymentScheduleMutationVariables, TContext>, fetch?: RequestInit}
+): UseMutationOptions<Awaited<ReturnType<typeof updateDeploymentSchedule>>, TError,UpdateDeploymentScheduleMutationVariables, TContext> => {
+
+const mutationKey = getUpdateDeploymentScheduleMutationKey();
+const {mutation: mutationOptions, fetch: fetchOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, fetch: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateDeploymentSchedule>>, UpdateDeploymentScheduleMutationVariables> = (props) => {
+          const {environmentId,data} = props ?? {};
+
+          return  updateDeploymentSchedule(environmentId,data,fetchOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateDeploymentScheduleMutationResult = NonNullable<Awaited<ReturnType<typeof updateDeploymentSchedule>>>
+    export type UpdateDeploymentScheduleMutationBody = UpdateDeploymentScheduleRequest
+    export type UpdateDeploymentScheduleMutationError = void
+    export type UpdateDeploymentScheduleMutationVariables = {environmentId: string;data: UpdateDeploymentScheduleRequest}
+
+    /**
+ * @summary Replace an Environment deployment schedule
+ */
+export const useUpdateDeploymentSchedule = <TError = void,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateDeploymentSchedule>>, TError,UpdateDeploymentScheduleMutationVariables, TContext>, fetch?: RequestInit}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof updateDeploymentSchedule>>,
+        TError,
+        UpdateDeploymentScheduleMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUpdateDeploymentScheduleMutationOptions(options), queryClient);
     }
 
 export type getDeploymentExecutionResponse200 = {

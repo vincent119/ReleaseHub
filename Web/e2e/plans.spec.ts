@@ -10,6 +10,86 @@ const ids = {
   workflowVersion: '019c1230-0000-7000-8000-000000000107',
 }
 
+test('在 Environment scope 管理發布排程且保留 Server version', async ({
+  context,
+  page,
+}) => {
+  await context.addCookies([
+    {
+      name: 'releasehub_csrf',
+      value: 'csrf-token',
+      domain: '127.0.0.1',
+      path: '/',
+    },
+  ])
+  await page.addInitScript(() => {
+    localStorage.setItem('releasehub.language', 'zh-TW')
+    localStorage.setItem('releasehub.theme', 'dark')
+  })
+  await mockSession(page)
+  await mockResources(page)
+  await mockWorkflows(page)
+  await page.route('**/api/v1/deployment-plans**', (route) =>
+    route.fulfill(json({ data: [], meta: meta() })),
+  )
+  await page.route('**/api/v1/deployment-bindings**', (route) =>
+    route.fulfill(json({ data: null, meta: meta() })),
+  )
+  let updateBody = null as Record<string, unknown> | null
+  await page.route('**/api/v1/deployment-schedules/*', async (route) => {
+    if (route.request().method() === 'PUT') {
+      updateBody = route.request().postDataJSON()
+      return route.fulfill(
+        json({
+          data: {
+            environmentId: ids.environment,
+            ...updateBody,
+            version: 1,
+            canManage: true,
+          },
+          meta: meta(),
+        }),
+      )
+    }
+    return route.fulfill(
+      json({
+        data: {
+          environmentId: ids.environment,
+          enabled: false,
+          timeZone: 'UTC',
+          weeklyWindows: [],
+          blackouts: [],
+          version: 0,
+          canManage: true,
+        },
+        meta: meta(),
+      }),
+    )
+  })
+
+  await page.goto('/plans')
+  await page.getByLabel('選擇 Project').click()
+  await page.getByText('Organization A / Project A').click()
+  await page.getByLabel('選擇 Environment').click()
+  await page.getByText('production', { exact: true }).click()
+
+  await expect(
+    page.getByText('發布排程與維護時段', { exact: true }),
+  ).toBeVisible()
+  await page.getByLabel('IANA 時區').fill('Asia/Taipei')
+  await page.getByRole('button', { name: '儲存排程政策' }).click()
+
+  await expect
+    .poll(() => updateBody)
+    .toEqual({
+      enabled: false,
+      timeZone: 'Asia/Taipei',
+      weeklyWindows: [],
+      blackouts: [],
+      expectedVersion: 0,
+    })
+})
+
 test('建立 A/C 到 B 的 Plan 並綁定已發布版本', async ({ context, page }) => {
   await context.addCookies([
     {
@@ -171,7 +251,9 @@ for (const theme of ['light', 'dark'] as const) {
 
     const canvas = page.getByLabel('Deployment Plan 圖形編輯區')
     const editor = canvas.locator('..')
-    const toolbar = editor.locator('.ant-flex').first()
+    const toolbar = page.getByRole('toolbar', {
+      name: 'Deployment Plan 結構工具列',
+    })
     const inspector = editor.locator('aside')
     const nodes = canvas.locator('.react-flow__node-default')
     const expected = planPalette[theme]

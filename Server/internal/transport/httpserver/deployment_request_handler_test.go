@@ -27,14 +27,14 @@ func TestDeploymentRequestRoutesUseInjectedService(t *testing.T) {
 	request.AddCookie(&http.Cookie{Name: "releasehub_session", Value: "session-token"})
 	response := httptest.NewRecorder()
 	router.ServeHTTP(response, request)
-	if response.Code != http.StatusOK || service.listCalls != 1 || !strings.Contains(response.Body.String(), `"title":"Release API"`) {
+	if response.Code != http.StatusOK || service.listCalls != 1 || !strings.Contains(response.Body.String(), `"scheduleState":"Ready"`) {
 		t.Fatalf("list requests = %d %s", response.Code, response.Body.String())
 	}
 	detailRequest := httptest.NewRequest(http.MethodGet, "/api/v1/deployment-requests/"+value.ID.String(), nil)
 	detailRequest.AddCookie(&http.Cookie{Name: "releasehub_session", Value: "session-token"})
 	detailResponse := httptest.NewRecorder()
 	router.ServeHTTP(detailResponse, detailRequest)
-	if detailResponse.Code != http.StatusOK || !strings.Contains(detailResponse.Body.String(), `"capabilities":["deployment_request.review"]`) {
+	if detailResponse.Code != http.StatusOK || !strings.Contains(detailResponse.Body.String(), `"capabilities":["deployment_request.review"]`) || !strings.Contains(detailResponse.Body.String(), `"scheduleReason":"Ready"`) {
 		t.Fatalf("request presentation = %d %s", detailResponse.Code, detailResponse.Body.String())
 	}
 
@@ -76,14 +76,15 @@ func deploymentRequestDetailFixture() deploydomain.DeploymentRequestDetail {
 	return deploydomain.DeploymentRequestDetail{Summary: deploydomain.DeploymentRequestSummary{
 		ID: requestID, OrganizationID: uuid.New(), ProjectID: uuid.New(), EnvironmentID: uuid.New(),
 		Classification: "Standard", Status: deploydomain.DeploymentRequestCandidate, Title: "Release API", ActiveVersionNumber: 1, ApplicationCount: 1, UpdatedAt: now,
+		Schedule: deploydomain.DeploymentRequestScheduleProjection{State: deploydomain.DeploymentRequestScheduleReady, NextEligibleAt: now, Reason: deploydomain.DeploymentScheduleReady},
 	}, Version: deploydomain.DeploymentRequestVersionSummary{
 		ID: versionID, RequestID: requestID, VersionNumber: 1, Status: deploydomain.DeploymentRequestCandidate,
 		Fingerprint: strings.Repeat("a", 64), WorkflowVersionID: uuid.New(), PlanVersionID: uuid.New(), Title: "Release API", LockVersion: 1, CreatedAt: now,
 	}, WorkflowStateKey: "review", ExecutionID: uuid.New(), ExecutionStatus: deploydomain.ExecutionStatus("Running"),
 		Capabilities: []string{"deployment_request.review"}, Reviews: []deploydomain.DeploymentRequestReviewSnapshot{{
-		ID: uuid.New(), StateKey: "review", StageNumber: 1, PolicyType: deploydomain.ReviewPolicyAny,
-		RequiredApprovals: 1, Status: deploydomain.ReviewTaskPending,
-	}}}
+			ID: uuid.New(), StateKey: "review", StageNumber: 1, PolicyType: deploydomain.ReviewPolicyAny,
+			RequiredApprovals: 1, Status: deploydomain.ReviewTaskPending,
+		}}}
 }
 
 var _ httpserver.DeploymentHandlerOptions

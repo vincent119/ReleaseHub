@@ -11,7 +11,9 @@ import (
 // DeploymentJobConsumer polls only deployment execution jobs.
 type DeploymentJobConsumer struct {
 	queue        DeploymentJobQueue
-	executor     *DeploymentExecutor
+	executor     DeploymentJobExecutor
+	schedules    DeploymentScheduleEvaluator
+	observer     DeploymentScheduleObserver
 	owner        string
 	pollInterval time.Duration
 	leaseTTL     time.Duration
@@ -22,21 +24,31 @@ type DeploymentJobConsumer struct {
 // DeploymentJobConsumerOptions contains typed runtime settings.
 type DeploymentJobConsumerOptions struct {
 	Queue        DeploymentJobQueue
-	Executor     *DeploymentExecutor
+	Executor     DeploymentJobExecutor
+	Schedules    DeploymentScheduleEvaluator
+	Observer     DeploymentScheduleObserver
 	Owner        string
 	PollInterval time.Duration
 	LeaseTTL     time.Duration
 	RetryDelay   time.Duration
 }
 
+type scheduleDefer struct {
+	now           time.Time
+	availableAt   time.Time
+	reason        string
+	policyVersion uint64
+}
+
 // NewDeploymentJobConsumer validates worker queue dependencies.
 func NewDeploymentJobConsumer(options DeploymentJobConsumerOptions) (*DeploymentJobConsumer, error) {
-	if options.Queue == nil || options.Executor == nil || options.Owner == "" ||
+	if options.Queue == nil || options.Executor == nil || options.Schedules == nil || options.Observer == nil || options.Owner == "" ||
 		options.PollInterval <= 0 || options.LeaseTTL <= 0 || options.RetryDelay <= 0 {
 		return nil, errors.New("invalid deployment job consumer dependencies")
 	}
 	return &DeploymentJobConsumer{
 		queue: options.Queue, executor: options.Executor, owner: options.Owner,
+		schedules: options.Schedules, observer: options.Observer,
 		pollInterval: options.PollInterval, leaseTTL: options.LeaseTTL,
 		retryDelay: options.RetryDelay, now: time.Now,
 	}, nil
@@ -61,10 +73,15 @@ func (c *DeploymentJobConsumer) Run(ctx context.Context) error {
 // ProcessOnce claims and resolves one infrastructure attempt.
 func (c *DeploymentJobConsumer) ProcessOnce(ctx context.Context) error {
 	now := c.now().UTC()
-	lease, err := c.queue.Claim(ctx, JobClaimRequest{
-		Owner: c.owner, Type: deploydomain.JobExecuteDeployment, Now: now, LeaseDuration: c.leaseTTL,
-	})
+	lease, err := c.claim(ctx, now)
 	if err != nil {
+		return err
+	}
+	deferred, err := c.deferForSchedule(ctx, lease, now)
+	if err != nil && !deferred {
+		return c.retry(ctx, lease, err)
+	}
+	if err != nil || deferred {
 		return err
 	}
 	lease, executionErr := c.executeWithHeartbeat(ctx, lease)
@@ -72,6 +89,42 @@ func (c *DeploymentJobConsumer) ProcessOnce(ctx context.Context) error {
 		return c.retry(ctx, lease, executionErr)
 	}
 	return c.queue.Succeed(ctx, lease, c.now().UTC())
+}
+
+func (c *DeploymentJobConsumer) claim(ctx context.Context, now time.Time) (deploydomain.JobLease, error) {
+	return c.queue.Claim(ctx, JobClaimRequest{
+		Owner: c.owner, Type: deploydomain.JobExecuteDeployment, Now: now, LeaseDuration: c.leaseTTL,
+	})
+}
+
+func (c *DeploymentJobConsumer) deferForSchedule(ctx context.Context, lease deploydomain.JobLease, now time.Time) (bool, error) {
+	eligibility, err := c.schedules.Evaluate(ctx, lease.Job, now)
+	if errors.Is(err, deploydomain.ErrDeploymentScheduleUnavailable) {
+		return true, c.deferJob(ctx, lease, scheduleDefer{
+			now: now, availableAt: now.Add(c.retryDelay), reason: "Unavailable",
+		})
+	}
+	if err != nil {
+		return false, err
+	}
+	if eligibility.EligibleNow {
+		return false, nil
+	}
+	return true, c.deferJob(ctx, lease, scheduleDefer{
+		now: now, availableAt: eligibility.NextEligibleAt,
+		reason: string(eligibility.Reason), policyVersion: eligibility.PolicyVersion,
+	})
+}
+
+func (c *DeploymentJobConsumer) deferJob(ctx context.Context, lease deploydomain.JobLease, value scheduleDefer) error {
+	if err := c.queue.Defer(ctx, JobDeferRequest{Lease: lease, Now: value.now, AvailableAt: value.availableAt}); err != nil {
+		return err
+	}
+	c.observer.ObserveDeploymentScheduleDefer(DeploymentScheduleDeferObservation{
+		JobType: lease.Job.Type, Reason: value.reason, Wait: value.availableAt.Sub(value.now),
+		NextEligibleAt: value.availableAt, PolicyVersion: value.policyVersion,
+	})
+	return nil
 }
 
 func (c *DeploymentJobConsumer) executeWithHeartbeat(ctx context.Context, lease deploydomain.JobLease) (deploydomain.JobLease, error) {

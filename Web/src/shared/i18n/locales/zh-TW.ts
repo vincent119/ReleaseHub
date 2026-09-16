@@ -578,6 +578,60 @@ export const zhTW = {
       unbound: '這個 Environment 尚未綁定流程。',
       version: '目前 Binding version：{{version}}',
     },
+    schedule: {
+      title: '發布排程與維護時段',
+      description:
+        '設定這個 Environment 可開始部署的每週時段與禁止時段。實際可部署時間由 Server 統一計算。',
+      unavailable: '無法讀取發布排程，或你沒有目前 Environment 的查看權限。',
+      readOnly: '你可以查看目前政策，但沒有修改這個 Environment 排程的權限。',
+      version: '版本 {{version}}',
+      status: { enabled: '限制已啟用', disabled: '不限維護時段' },
+      fields: {
+        enabled: '啟用維護時段限制',
+        timeZone: 'IANA 時區',
+        day: '星期',
+        startTime: '開始時間',
+        endTime: '結束時間',
+        startsAt: '禁止開始時間',
+        endsAt: '禁止結束時間',
+      },
+      weekly: {
+        title: '每週允許時段',
+        description: '時間以所選 IANA 時區解讀；跨日區間請拆成兩筆。',
+        days: {
+          0: '星期日',
+          1: '星期一',
+          2: '星期二',
+          3: '星期三',
+          4: '星期四',
+          5: '星期五',
+          6: '星期六',
+        },
+      },
+      blackouts: {
+        title: '一次性禁止時段',
+        description: '禁止時段優先於每週允許時段，送出時會轉換為 UTC。',
+      },
+      actions: {
+        addWindow: '新增允許時段',
+        removeWindow: '移除允許時段',
+        addBlackout: '新增禁止時段',
+        removeBlackout: '移除禁止時段',
+        save: '儲存排程政策',
+      },
+      validation: {
+        timeZone: '請輸入 IANA 時區，例如 Asia/Taipei。',
+        window: '啟用限制時至少需要一筆每週允許時段。',
+        timeRange: '結束時間必須晚於開始時間。',
+      },
+      mutation: {
+        saved: '發布排程政策已更新。',
+        conflict:
+          '排程政策已被其他人更新；目前輸入內容已保留，請核對後再送出。',
+        invalid: '排程政策格式無效，請檢查時區與所有時段。',
+        error: '無法更新發布排程政策。',
+      },
+    },
   },
   requests: {
     title: 'Deployment Requests',
@@ -595,8 +649,10 @@ export const zhTW = {
       classification: '分類',
       version: '版本',
       applications: 'Applications',
+      schedule: '可部署時間',
       updatedAt: '更新時間',
     },
+    schedule: { requested: '指定最早時間', next: '下一個可部署時間' },
   },
   requestDetail: {
     unavailable: 'Deployment Request 不存在，或你沒有查看權限。',
@@ -607,6 +663,8 @@ export const zhTW = {
       version: 'Request Version',
       workflowState: 'Workflow 狀態',
       scheduledFor: '預計發佈時間',
+      scheduleState: '排程狀態',
+      nextEligibleAt: '下一個可部署時間',
       issue: 'Issue／變更單',
       changeDescription: '變更說明',
       liveRevision: '目前 revision',
@@ -615,6 +673,15 @@ export const zhTW = {
       diffHash: 'Diff hash',
     },
     values: { pending: '等待 Workflow 啟動', notSet: '未設定' },
+    schedule: {
+      states: { Ready: '目前可部署', Waiting: '等待排程' },
+      reasons: {
+        Ready: '已符合所有排程條件',
+        ScheduledTime: '尚未到指定的最早發布時間',
+        MaintenanceWindow: '等待下一個維護時段',
+        Blackout: '目前位於禁止時段',
+      },
+    },
     actions: {
       editMetadata: '編輯選填資訊',
       retryFailed: '重試選取的失敗項目',

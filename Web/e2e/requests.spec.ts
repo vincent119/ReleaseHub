@@ -220,6 +220,9 @@ function requestFixture(): DeploymentRequestVersion {
     title: 'Automatic payment deployment',
     changeDescription: '',
     issueUrl: '',
+    scheduleState: 'Waiting',
+    nextEligibleAt: '2026-09-07T01:00:00Z',
+    scheduleReason: 'MaintenanceWindow',
     lockVersion: 1,
     workflowStateKey: 'review',
     capabilities: ['deployment_request.review'],
@@ -415,6 +418,10 @@ function requestSummary(request: DeploymentRequestVersion) {
     activeVersionNumber: request.versionNumber,
     title: request.title,
     applicationCount: request.applications.length,
+    scheduledFor: request.scheduledFor,
+    scheduleState: request.scheduleState,
+    nextEligibleAt: request.nextEligibleAt,
+    scheduleReason: request.scheduleReason,
     updatedAt: request.createdAt,
   }
 }

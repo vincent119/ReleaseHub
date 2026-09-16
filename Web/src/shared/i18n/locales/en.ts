@@ -612,6 +612,64 @@ export const en = {
       unbound: 'This Environment is not bound yet.',
       version: 'Current Binding version: {{version}}',
     },
+    schedule: {
+      title: 'Deployment schedule and maintenance windows',
+      description:
+        'Define when deployments may start in this Environment. The Server remains the authority for the actual eligible time.',
+      unavailable:
+        'The deployment schedule is unavailable or outside your current Environment scope.',
+      readOnly:
+        'You can view this policy but cannot change the Environment schedule.',
+      version: 'Version {{version}}',
+      status: { enabled: 'Restrictions enabled', disabled: 'Unrestricted' },
+      fields: {
+        enabled: 'Enforce maintenance windows',
+        timeZone: 'IANA time zone',
+        day: 'Day',
+        startTime: 'Start time',
+        endTime: 'End time',
+        startsAt: 'Blackout starts',
+        endsAt: 'Blackout ends',
+      },
+      weekly: {
+        title: 'Weekly allowed windows',
+        description:
+          'Times use the selected IANA time zone. Split an overnight range into two entries.',
+        days: {
+          0: 'Sunday',
+          1: 'Monday',
+          2: 'Tuesday',
+          3: 'Wednesday',
+          4: 'Thursday',
+          5: 'Friday',
+          6: 'Saturday',
+        },
+      },
+      blackouts: {
+        title: 'One-time blackouts',
+        description:
+          'Blackouts override weekly windows and are converted to UTC when saved.',
+      },
+      actions: {
+        addWindow: 'Add allowed window',
+        removeWindow: 'Remove allowed window',
+        addBlackout: 'Add blackout',
+        removeBlackout: 'Remove blackout',
+        save: 'Save schedule policy',
+      },
+      validation: {
+        timeZone: 'Enter an IANA time zone such as Asia/Taipei.',
+        window: 'An enabled policy requires at least one weekly window.',
+        timeRange: 'The end time must be later than the start time.',
+      },
+      mutation: {
+        saved: 'Deployment schedule policy updated.',
+        conflict:
+          'Another user updated the policy. Your input is preserved for review before retrying.',
+        invalid: 'Review the time zone and every schedule interval.',
+        error: 'The deployment schedule policy could not be updated.',
+      },
+    },
   },
   requests: {
     title: 'Deployment Requests',
@@ -631,8 +689,10 @@ export const en = {
       classification: 'Classification',
       version: 'Version',
       applications: 'Applications',
+      schedule: 'Next eligible time',
       updatedAt: 'Updated',
     },
+    schedule: { requested: 'Requested earliest', next: 'Next eligible' },
   },
   requestDetail: {
     unavailable:
@@ -644,6 +704,8 @@ export const en = {
       version: 'Request Version',
       workflowState: 'Workflow state',
       scheduledFor: 'Planned deployment time',
+      scheduleState: 'Schedule state',
+      nextEligibleAt: 'Next eligible time',
       issue: 'Issue or change ticket',
       changeDescription: 'Change description',
       liveRevision: 'Current revision',
@@ -652,6 +714,15 @@ export const en = {
       diffHash: 'Diff hash',
     },
     values: { pending: 'Waiting for Workflow start', notSet: 'Not set' },
+    schedule: {
+      states: { Ready: 'Ready now', Waiting: 'Waiting' },
+      reasons: {
+        Ready: 'All schedule constraints are satisfied',
+        ScheduledTime: 'Waiting for the requested earliest start',
+        MaintenanceWindow: 'Waiting for the next maintenance window',
+        Blackout: 'The current time is inside a blackout',
+      },
+    },
     actions: {
       editMetadata: 'Edit optional details',
       retryFailed: 'Retry selected failures',

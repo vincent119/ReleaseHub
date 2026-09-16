@@ -218,6 +218,13 @@ func verifyAccessAndLocalAuthenticationMigrationRollback(t *testing.T, cfg confi
 	}
 	t.Cleanup(func() { _, _ = migrator.Close() })
 	if err := migrator.Steps(-1); err != nil {
+		t.Fatalf("roll back deployment schedule migration: %v", err)
+	}
+	var scheduleRemoved bool
+	if err := db.Raw(`SELECT to_regclass('public.deployment_schedule_policies') IS NULL`).Scan(&scheduleRemoved).Error; err != nil || !scheduleRemoved {
+		t.Fatalf("deployment schedule migration was not removed: removed=%t error=%v", scheduleRemoved, err)
+	}
+	if err := migrator.Steps(-1); err != nil {
 		t.Fatalf("roll back access lifecycle migration: %v", err)
 	}
 	var systemKeyColumns int64
@@ -231,8 +238,8 @@ func verifyAccessAndLocalAuthenticationMigrationRollback(t *testing.T, cfg confi
 	if err := db.Raw(`SELECT to_regclass('public.local_credentials') IS NULL`).Scan(&removed).Error; err != nil || !removed {
 		t.Fatalf("local credential table was not removed: removed=%t error=%v", removed, err)
 	}
-	if err := migrator.Steps(2); err != nil {
-		t.Fatalf("reapply local and access lifecycle migrations: %v", err)
+	if err := migrator.Steps(3); err != nil {
+		t.Fatalf("reapply local, access lifecycle, and deployment schedule migrations: %v", err)
 	}
 	var restored bool
 	if err := db.Raw(`SELECT to_regclass('public.local_credentials') IS NOT NULL`).Scan(&restored).Error; err != nil || !restored {

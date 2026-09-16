@@ -88,7 +88,11 @@ func newDeploymentRequestService(db *gorm.DB, policy *authzinfra.PolicyEngine) (
 	if err != nil {
 		return nil, err
 	}
-	return deployapp.NewDeploymentRequestService(repository, policy, deployapp.SystemWorkflowClock{})
+	schedules, err := deployinfra.NewDeploymentScheduleRepository(db)
+	if err != nil {
+		return nil, err
+	}
+	return deployapp.NewDeploymentRequestService(repository, schedules, policy, deployapp.SystemWorkflowClock{})
 }
 
 func newAPIWorkflowRuntimeService(db *gorm.DB, policy *authzinfra.PolicyEngine) (*deployapp.WorkflowRuntimeService, error) {

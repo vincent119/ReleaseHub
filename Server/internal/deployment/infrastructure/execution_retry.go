@@ -128,6 +128,14 @@ func uuidSet(values []uuid.UUID) map[uuid.UUID]struct{} {
 
 func persistRetryEffects(value retryPersistence) error {
 	now := value.change.Mutation.OccurredAt.UTC()
+	eligibility, err := calculateDeploymentScheduleEligibility(value.ctx, value.tx, value.retry.RequestVersionID, now)
+	if err != nil {
+		return fmt.Errorf("calculate retry deployment schedule: %w", err)
+	}
+	return persistScheduledRetryEffects(value, now, eligibility.NextEligibleAt)
+}
+
+func persistScheduledRetryEffects(value retryPersistence, now, availableAt time.Time) error {
 	if err := persistRetryWorkflow(value); err != nil {
 		return err
 	}
@@ -141,7 +149,7 @@ func persistRetryEffects(value retryPersistence) error {
 	if err := handoffRetryLocks(value, now); err != nil {
 		return err
 	}
-	if err := insertRetryJob(value.ctx, value.tx, value.retry, value.change); err != nil {
+	if err := insertRetryJob(value, availableAt); err != nil {
 		return err
 	}
 	return appendRetryEvidence(value)
@@ -176,16 +184,16 @@ func markRetryRequestDeploying(ctx context.Context, tx *gorm.DB, versionID uuid.
 	return nil
 }
 
-func insertRetryJob(ctx context.Context, tx *gorm.DB, retry deploymentExecutionModel, change deployapp.ExecutionRetryChange) error {
-	payload, _ := json.Marshal(map[string]any{"requestVersionId": retry.RequestVersionID, "attempt": retry.Attempt})
+func insertRetryJob(value retryPersistence, availableAt time.Time) error {
+	payload, _ := json.Marshal(map[string]any{"requestVersionId": value.retry.RequestVersionID, "attempt": value.retry.Attempt})
 	model := deploymentJobModel{
 		ID: uuid.New(), JobType: "ExecuteDeployment", AggregateType: "deployment_execution",
-		AggregateID: retry.ID, Payload: payload, Status: "Pending",
-		IdempotencyKey: "business-retry:" + retry.RequestVersionID.String() + ":" + change.Mutation.IdempotencyKey,
-		AvailableAt:    change.Mutation.OccurredAt, MaxAttempts: 10,
-		CreatedAt: change.Mutation.OccurredAt, UpdatedAt: change.Mutation.OccurredAt,
+		AggregateID: value.retry.ID, Payload: payload, Status: "Pending",
+		IdempotencyKey: "business-retry:" + value.retry.RequestVersionID.String() + ":" + value.change.Mutation.IdempotencyKey,
+		AvailableAt:    availableAt, MaxAttempts: 10,
+		CreatedAt: value.change.Mutation.OccurredAt, UpdatedAt: value.change.Mutation.OccurredAt,
 	}
-	return tx.WithContext(ctx).Create(&model).Error
+	return value.tx.WithContext(value.ctx).Create(&model).Error
 }
 
 func appendRetryEvidence(value retryPersistence) error {

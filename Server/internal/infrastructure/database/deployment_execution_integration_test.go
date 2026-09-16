@@ -59,13 +59,50 @@ func TestRetryHandoffsLocksAndForceUnlockPreservesAudit(t *testing.T) {
 	terminateAndUnlockExecution(t, ctx, db, repository, retry, applications)
 }
 
+func TestRetryDeploymentWaitsForNextEligibleWindow(t *testing.T) {
+	scheduledFor := time.Now().UTC().Add(2 * time.Hour).Truncate(time.Microsecond)
+	ctx, db, repository, execution, applications := partialExecutionFixtureAt(t, &scheduledFor)
+	if _, err := repository.Complete(ctx, execution.ID, time.Now().UTC()); err != nil {
+		t.Fatalf("complete partial execution: %v", err)
+	}
+	var lockVersion uint64
+	if err := db.Table("deployment_executions").Select("lock_version").Where("id = ?", execution.ID).
+		Scan(&lockVersion).Error; err != nil {
+		t.Fatalf("load partial execution version: %v", err)
+	}
+	actorID := deploymentActor(t, db)
+	workflowResult := executionWorkflowAction(t, db, execution.RequestVersionID, executionWorkflowActionInput{
+		permission: "deployment_request.retry", status: "PartialFailed", actorID: actorID,
+	})
+	retry, err := repository.Retry(ctx, deployapp.ExecutionRetryChange{
+		Mutation: deploymentMutation("retry-scheduled", actorID), WorkflowResult: workflowResult,
+		RequestID: uuid.New(), RequestVersionID: execution.RequestVersionID, ExecutionID: execution.ID,
+		ExpectedVersion: lockVersion, ApplicationIDs: []uuid.UUID{applications[1]},
+	})
+	if err != nil {
+		t.Fatalf("create scheduled retry: %v", err)
+	}
+	var availableAt time.Time
+	if err := db.Table("deployment_jobs").Select("available_at").Where("aggregate_id = ?", retry.ID).
+		Take(&availableAt).Error; err != nil {
+		t.Fatalf("load scheduled retry Job: %v", err)
+	}
+	if !availableAt.Equal(scheduledFor) {
+		t.Fatalf("scheduled retry available_at = %s, want %s", availableAt, scheduledFor)
+	}
+}
+
 func partialExecutionFixture(t *testing.T) (context.Context, *gorm.DB, *deployinfra.ExecutionRepository, deployapp.ExecutionSnapshot, []uuid.UUID) {
+	return partialExecutionFixtureAt(t, nil)
+}
+
+func partialExecutionFixtureAt(t *testing.T, scheduledFor *time.Time) (context.Context, *gorm.DB, *deployinfra.ExecutionRepository, deployapp.ExecutionSnapshot, []uuid.UUID) {
 	t.Helper()
 	ctx := context.Background()
 	db := workflowTestDatabase(t, ctx)
 	ids := seedDeploymentDefinitions(t, db, seedDeploymentSchemaScope(t, db))
 	ids = seedExecutionResultWorkflow(t, db, ids)
-	versionID, _ := seedDeploymentRequest(t, db, ids)
+	versionID, _ := seedDeploymentRequestAt(t, db, ids, scheduledFor)
 	seedExecutionWorkflowInstance(t, db, ids, versionID)
 	workerID := seedExecutionApplication(t, db, ids, versionID)
 	repository, _ := deployinfra.NewExecutionRepository(db)

@@ -87,6 +87,15 @@ export function RequestOverview({ request, onUpdated }: Props) {
             ? new Date(request.scheduledFor).toLocaleString()
             : t('requestDetail.values.notSet')}
         </Descriptions.Item>
+        <Descriptions.Item label={t('requestDetail.fields.scheduleState')}>
+          <Tag color={request.scheduleState === 'Ready' ? 'green' : 'gold'}>
+            {t(`requestDetail.schedule.states.${request.scheduleState}`)}
+          </Tag>
+          {t(`requestDetail.schedule.reasons.${request.scheduleReason}`)}
+        </Descriptions.Item>
+        <Descriptions.Item label={t('requestDetail.fields.nextEligibleAt')}>
+          {new Date(request.nextEligibleAt).toLocaleString()}
+        </Descriptions.Item>
         <Descriptions.Item label={t('requestDetail.fields.issue')}>
           {request.issueUrl ? (
             <a href={request.issueUrl} target="_blank" rel="noreferrer">
@@ -98,7 +107,7 @@ export function RequestOverview({ request, onUpdated }: Props) {
         </Descriptions.Item>
         <Descriptions.Item
           label={t('requestDetail.fields.changeDescription')}
-          span={3}
+          span="filled"
         >
           {request.changeDescription || t('requestDetail.values.notSet')}
         </Descriptions.Item>

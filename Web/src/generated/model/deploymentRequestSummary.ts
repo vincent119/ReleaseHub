@@ -5,8 +5,10 @@
  * Shared HTTP API contract for the ReleaseHub frontend and backend.
  * OpenAPI spec version: 1.0.0
  */
+import type { DeploymentRequestScheduleState } from './deploymentRequestScheduleState';
 import type { DeploymentRequestStatus } from './deploymentRequestStatus';
 import type { DeploymentRequestSummaryClassification } from './deploymentRequestSummaryClassification';
+import type { DeploymentScheduleReason } from './deploymentScheduleReason';
 
 export interface DeploymentRequestSummary {
   id: string;
@@ -20,5 +22,9 @@ export interface DeploymentRequestSummary {
   title: string;
   /** @minimum 1 */
   applicationCount: number;
+  scheduledFor?: string;
+  scheduleState: DeploymentRequestScheduleState;
+  nextEligibleAt: string;
+  scheduleReason: DeploymentScheduleReason;
   updatedAt: string;
 }

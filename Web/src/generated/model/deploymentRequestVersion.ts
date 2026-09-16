@@ -6,10 +6,12 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { DeploymentRequestApplicationSnapshot } from './deploymentRequestApplicationSnapshot';
+import type { DeploymentRequestScheduleState } from './deploymentRequestScheduleState';
 import type { DeploymentRequestStatus } from './deploymentRequestStatus';
 import type { DeploymentRequestVersionClassification } from './deploymentRequestVersionClassification';
 import type { DeploymentRequestVersionExecutionStatus } from './deploymentRequestVersionExecutionStatus';
 import type { DeploymentReviewTask } from './deploymentReviewTask';
+import type { DeploymentScheduleReason } from './deploymentScheduleReason';
 
 export interface DeploymentRequestVersion {
   id: string;
@@ -28,6 +30,9 @@ export interface DeploymentRequestVersion {
   changeDescription: string;
   issueUrl: string;
   scheduledFor?: string;
+  scheduleState: DeploymentRequestScheduleState;
+  nextEligibleAt: string;
+  scheduleReason: DeploymentScheduleReason;
   /** @minimum 1 */
   lockVersion: number;
   applications: DeploymentRequestApplicationSnapshot[];

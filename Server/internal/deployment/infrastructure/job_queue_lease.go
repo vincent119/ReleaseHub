@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	"gorm.io/gorm"
+
 	deployapp "github.com/vincent119/ReleaseHub/Server/internal/deployment/application"
 	deploydomain "github.com/vincent119/ReleaseHub/Server/internal/deployment/domain"
 )
@@ -29,6 +31,19 @@ func (queue *DeploymentJobQueue) Succeed(ctx context.Context, lease deploydomain
 	}
 	changes := terminalJobChanges("Succeeded", now, "", "")
 	return queue.updateLease(ctx, lease, now, changes)
+}
+
+// Defer returns a claimed job to Pending without consuming a failure attempt.
+func (queue *DeploymentJobQueue) Defer(ctx context.Context, request deployapp.JobDeferRequest) error {
+	if request.Now.IsZero() || !request.AvailableAt.After(request.Now) || request.Lease.Job.Attempts < 1 {
+		return deploydomain.ErrInvalidJob
+	}
+	changes := map[string]any{
+		"status": "Pending", "available_at": request.AvailableAt.UTC(),
+		"lease_owner": nil, "lease_expires_at": nil,
+		"attempts": gorm.Expr("attempts - 1"), "updated_at": request.Now.UTC(),
+	}
+	return queue.updateLease(ctx, request.Lease, request.Now, changes)
 }
 
 func (queue *DeploymentJobQueue) Retry(ctx context.Context, request deployapp.JobRetryRequest) error {

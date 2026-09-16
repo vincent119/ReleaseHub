@@ -87,6 +87,10 @@ vi.mock('./components/DeploymentBindingPanel', () => ({
   DeploymentBindingPanel: () => null,
 }))
 
+vi.mock('./components/DeploymentSchedulePanel', () => ({
+  DeploymentSchedulePanel: () => null,
+}))
+
 vi.mock('./components/PlanEditorWorkspace', () => ({
   PlanEditorWorkspace: ({
     title,

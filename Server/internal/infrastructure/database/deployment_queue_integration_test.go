@@ -146,6 +146,112 @@ func TestDeploymentJobQueueRetryReusesJobAndStopsAtMaximum(t *testing.T) {
 	assertJobState(t, db, job.ID, "Failed", 2)
 }
 
+func TestDeploymentJobQueueDeferPreservesBudgetAndFencesStaleWorker(t *testing.T) {
+	ctx := context.Background()
+	db := workflowTestDatabase(t, ctx)
+	queue, _ := deployinfra.NewDeploymentJobQueue(db)
+	now := time.Date(2026, 9, 16, 8, 0, 0, 0, time.UTC)
+	job := deploymentJobFixtureAt(t, "queue-schedule-defer", 2, now)
+	if _, _, err := queue.Enqueue(ctx, job); err != nil {
+		t.Fatalf("enqueue deployment job: %v", err)
+	}
+
+	first := claimJob(t, ctx, queue, "worker-a", now)
+	availableAt := now.Add(2 * time.Minute)
+	if err := queue.Defer(ctx, deployapp.JobDeferRequest{Lease: first, Now: now.Add(time.Second), AvailableAt: availableAt}); err != nil {
+		t.Fatalf("defer deployment job: %v", err)
+	}
+	assertJobState(t, db, job.ID, "Pending", 0)
+	assertNoJob(t, ctx, queue, availableAt.Add(-time.Second))
+
+	second := claimJob(t, ctx, queue, "worker-b", availableAt)
+	if second.FencingToken <= first.FencingToken || second.Job.Attempts != 1 {
+		t.Fatalf("deferred lease = %#v", second)
+	}
+	if err := queue.Defer(ctx, deployapp.JobDeferRequest{
+		Lease: first, Now: availableAt.Add(time.Second), AvailableAt: availableAt.Add(time.Hour),
+	}); !errors.Is(err, deploydomain.ErrStaleJobLease) {
+		t.Fatalf("stale worker defer error = %v", err)
+	}
+	assertJobState(t, db, job.ID, "Running", 1)
+}
+
+func TestJobConsumerDefersDeploymentWhenScheduleChanges(t *testing.T) {
+	ctx := context.Background()
+	db := workflowTestDatabase(t, ctx)
+	ids := seedDeploymentDefinitions(t, db, seedDeploymentSchemaScope(t, db))
+	requestVersionID, _ := seedDeploymentRequest(t, db, ids)
+	now := time.Now().UTC()
+	location, err := time.LoadLocation("Asia/Taipei")
+	if err != nil {
+		t.Fatalf("load schedule location: %v", err)
+	}
+	nextDay := (int(now.In(location).Weekday()) + 1) % 7
+	policy, err := deploydomain.NewDeploymentSchedulePolicy(deploydomain.DeploymentSchedulePolicyDraft{
+		EnvironmentID: ids.environmentID, Enabled: true, TimeZone: location.String(), Version: 1,
+		WeeklyWindows: []deploydomain.DeploymentScheduleWeeklyWindow{{
+			DayOfWeek: time.Weekday(nextDay), StartMinute: 0, EndMinute: 24 * 60,
+		}},
+	})
+	if err != nil {
+		t.Fatalf("create changed deployment schedule: %v", err)
+	}
+	schedules, _ := deployinfra.NewDeploymentScheduleRepository(db)
+	if _, err := schedules.Put(ctx, deployapp.DeploymentScheduleMutation{
+		ActorID: ids.userID, OrganizationID: ids.organizationID, RequestID: "schedule-worker-gate",
+		IdempotencyKey: "schedule-worker-gate", OccurredAt: now,
+	}, policy); err != nil {
+		t.Fatalf("persist changed deployment schedule: %v", err)
+	}
+	job, err := deploydomain.NewDeploymentJob(deploydomain.DeploymentJobDraft{
+		Type: deploydomain.JobExecuteDeployment, AggregateType: "deployment_request_version",
+		AggregateID: requestVersionID, Payload: json.RawMessage(`{}`), IdempotencyKey: "schedule-worker-job",
+		AvailableAt: now.Add(-time.Minute), MaxAttempts: 3,
+	}, now)
+	if err != nil {
+		t.Fatalf("create stale scheduled Job: %v", err)
+	}
+	queue, _ := deployinfra.NewDeploymentJobQueue(db)
+	if _, _, err := queue.Enqueue(ctx, job); err != nil {
+		t.Fatalf("enqueue stale scheduled Job: %v", err)
+	}
+	gate, _ := deployinfra.NewDeploymentScheduleGate(db)
+	executor := &scheduleIntegrationExecutor{}
+	consumer, err := deployapp.NewDeploymentJobConsumer(deployapp.DeploymentJobConsumerOptions{
+		Queue: queue, Executor: executor, Schedules: gate, Observer: scheduleIntegrationObserver{},
+		Owner: "schedule-worker", PollInterval: time.Second, LeaseTTL: time.Minute, RetryDelay: time.Minute,
+	})
+	if err != nil {
+		t.Fatalf("create scheduled Job consumer: %v", err)
+	}
+	if err := consumer.ProcessOnce(ctx); err != nil {
+		t.Fatalf("process changed schedule Job: %v", err)
+	}
+	assertJobState(t, db, job.ID, "Pending", 0)
+	assertCountWhere(t, db, "deployment_executions", "request_version_id = ?", requestVersionID, 0)
+	assertCountWhere(t, db, "deployment_application_locks", "application_id <> ?", uuid.Nil, 0)
+	if executor.calls != 0 {
+		t.Fatalf("deferred schedule executed %d times", executor.calls)
+	}
+}
+
+type scheduleIntegrationExecutor struct{ calls int }
+
+func (s *scheduleIntegrationExecutor) Execute(context.Context, uuid.UUID) error {
+	s.calls++
+	return nil
+}
+
+func (s *scheduleIntegrationExecutor) ExecuteAttempt(context.Context, uuid.UUID) error {
+	s.calls++
+	return nil
+}
+
+type scheduleIntegrationObserver struct{}
+
+func (scheduleIntegrationObserver) ObserveDeploymentScheduleDefer(deployapp.DeploymentScheduleDeferObservation) {
+}
+
 func assertSingleConcurrentClaim(t *testing.T, ctx context.Context, queue *deployinfra.DeploymentJobQueue) {
 	t.Helper()
 	now := time.Now().UTC()

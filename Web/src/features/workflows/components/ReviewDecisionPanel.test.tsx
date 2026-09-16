@@ -212,6 +212,9 @@ function deploymentRequest(): DeploymentRequestVersion {
     title: 'Release payment',
     changeDescription: '',
     issueUrl: '',
+    scheduleState: 'Ready',
+    nextEligibleAt: '2026-09-07T00:00:00Z',
+    scheduleReason: 'Ready',
     lockVersion: 4,
     applications: [],
     reviews: [

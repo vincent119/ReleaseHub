@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -22,6 +23,16 @@ func appendRuntimeEffects(ctx context.Context, tx *gorm.DB, effects runtimeEffec
 }
 
 func insertDeploymentIntent(ctx context.Context, tx *gorm.DB, effects runtimeEffects) error {
+	eligibility, err := calculateDeploymentScheduleEligibility(
+		ctx, tx, effects.result.Instance.RequestVersionID, effects.mutation.OccurredAt,
+	)
+	if err != nil {
+		return runtimeWriteError("calculate workflow deployment schedule", err)
+	}
+	return createDeploymentIntentJob(ctx, tx, effects, eligibility.NextEligibleAt)
+}
+
+func createDeploymentIntentJob(ctx context.Context, tx *gorm.DB, effects runtimeEffects, availableAt time.Time) error {
 	payload, _ := json.Marshal(map[string]any{
 		"requestVersionId":   effects.result.Instance.RequestVersionID,
 		"workflowInstanceId": effects.result.Instance.ID,
@@ -31,7 +42,7 @@ func insertDeploymentIntent(ctx context.Context, tx *gorm.DB, effects runtimeEff
 		ID: uuid.New(), JobType: "ExecuteDeployment", AggregateType: "deployment_request_version",
 		AggregateID: effects.result.Instance.RequestVersionID, Payload: payload, Status: "Pending",
 		IdempotencyKey: "workflow-deployment:" + effects.mutation.IdempotencyKey,
-		AvailableAt:    effects.mutation.OccurredAt, MaxAttempts: 10,
+		AvailableAt:    availableAt, MaxAttempts: 10,
 		CreatedAt: effects.mutation.OccurredAt, UpdatedAt: effects.mutation.OccurredAt,
 	}
 	if err := tx.WithContext(ctx).Create(&model).Error; err != nil {

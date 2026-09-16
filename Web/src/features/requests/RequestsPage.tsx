@@ -67,7 +67,7 @@ export function RequestsPage() {
             loading={requests.isPending}
             pagination={false}
             locale={{ emptyText: t('requests.empty') }}
-            scroll={{ x: 880 }}
+            scroll={{ x: 1080 }}
           />
         </Card>
       )}
@@ -107,6 +107,30 @@ function requestColumns(
     {
       title: t('requests.columns.applications'),
       dataIndex: 'applicationCount',
+    },
+    {
+      title: t('requests.columns.schedule'),
+      dataIndex: 'scheduleState',
+      render: (state: string, request) => (
+        <div className={styles.scheduleCell}>
+          <Tag color={state === 'Ready' ? 'green' : 'gold'}>
+            {t(`requestDetail.schedule.states.${state}`)}
+          </Tag>
+          <span className={styles.subtle}>
+            {t(`requestDetail.schedule.reasons.${request.scheduleReason}`)}
+          </span>
+          <span>
+            {t('requests.schedule.requested')}：
+            {request.scheduledFor
+              ? new Date(request.scheduledFor).toLocaleString()
+              : t('requestDetail.values.notSet')}
+          </span>
+          <span>
+            {t('requests.schedule.next')}：
+            {new Date(request.nextEligibleAt).toLocaleString()}
+          </span>
+        </div>
+      ),
     },
     {
       title: t('requests.columns.updatedAt'),

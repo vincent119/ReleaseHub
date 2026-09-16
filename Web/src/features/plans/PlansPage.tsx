@@ -19,6 +19,7 @@ import definitionStyles from '@/shared/definition/DefinitionWorkspace.module.css
 import { useFeedback } from '@/shared/feedback/useFeedback'
 
 import { DeploymentBindingPanel } from './components/DeploymentBindingPanel'
+import { DeploymentSchedulePanel } from './components/DeploymentSchedulePanel'
 import { PlanDetail } from './components/PlanDetail'
 import {
   PlanEditorWorkspace,
@@ -228,13 +229,16 @@ export function PlansPage() {
             />
           </div>
           {scope.environmentId && (
-            <DeploymentBindingPanel
-              organizationId={scope.organizationId}
-              projectId={scope.projectId}
-              environmentId={scope.environmentId}
-              workflows={workflowValues}
-              plans={plans}
-            />
+            <>
+              <DeploymentBindingPanel
+                organizationId={scope.organizationId}
+                projectId={scope.projectId}
+                environmentId={scope.environmentId}
+                workflows={workflowValues}
+                plans={plans}
+              />
+              <DeploymentSchedulePanel environmentId={scope.environmentId} />
+            </>
           )}
         </>
       )}
