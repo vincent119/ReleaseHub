@@ -22,8 +22,10 @@ import { NotificationCenter } from '@/features/notifications'
 import { useThemePreference } from '@/shared/theme/useThemePreference'
 import {
   changeLocalPassword,
+  getGetAuditCapabilitiesQueryKey,
   loginLocal,
   useGetAuthSession,
+  useGetAuditCapabilities,
   useGetSystemStatus,
 } from '@/generated/api'
 import { useFeedback } from '@/shared/feedback/useFeedback'
@@ -37,6 +39,11 @@ import { useSidebarPreference } from './useSidebarPreference'
 const AccessPage = lazy(() =>
   import('@/features/access').then(({ AccessPage }) => ({
     default: AccessPage,
+  })),
+)
+const AuditPage = lazy(() =>
+  import('@/features/audit').then(({ AuditPage }) => ({
+    default: AuditPage,
   })),
 )
 const ApplicationDetailPage = lazy(() =>
@@ -98,6 +105,14 @@ function ApplicationShell() {
     () => window.matchMedia('(max-width: 991.98px)').matches,
   )
   const session = useGetAuthSession()
+  const sessionUserID =
+    session.data?.status === 200 ? session.data.data.data.userId : undefined
+  const auditCapabilities = useGetAuditCapabilities({
+    query: {
+      enabled: Boolean(sessionUserID),
+      queryKey: [...getGetAuditCapabilitiesQueryKey(), sessionUserID],
+    },
+  })
   useSessionExpiryCheck(
     session.data?.status === 200
       ? session.data.data.data.idleExpiresAt
@@ -149,7 +164,11 @@ function ApplicationShell() {
           mode="inline"
           inlineCollapsed={sidebarCollapsed}
           selectedKeys={[selectedNavigationKey(location.pathname)]}
-          items={navigationItems(t)}
+          items={navigationItems(
+            t,
+            auditCapabilities.data?.status === 200 &&
+              auditCapabilities.data.data.data.visible,
+          )}
         />
         {!belowLg && (
           <div className={styles.sidebarControl}>
@@ -209,6 +228,10 @@ function ApplicationShell() {
                 element={<ApplicationDetailPage />}
               />
               <Route path="access" element={<AccessPage />} />
+              <Route
+                path="audit"
+                element={<AuditPage principalID={userId} />}
+              />
               <Route path="workflows" element={<WorkflowsPage />} />
               <Route path="plans" element={<PlansPage />} />
               <Route path="requests" element={<RequestsPage />} />

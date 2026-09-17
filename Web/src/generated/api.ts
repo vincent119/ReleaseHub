@@ -44,6 +44,10 @@ import type {
   ArgoCDCandidateAssignmentRequest,
   ArgoCDCandidateAssignmentScopeListResponse,
   ArgoCDCandidateListResponse,
+  AuditCapabilitiesResponse,
+  AuditEventDetailResponse,
+  AuditEventListResponse,
+  AuditFilterOptionListResponse,
   AuthSessionResponse,
   BackchannelLogoutRequest,
   BindDeploymentDefinitionsRequest,
@@ -98,6 +102,8 @@ import type {
   ListAccessMembershipsParams,
   ListAccessRolesParams,
   ListAccessUsersParams,
+  ListAuditEventsParams,
+  ListAuditFilterOptionsParams,
   ListCatalogApplicationsParams,
   ListDeploymentHistoryParams,
   ListDeploymentPlansParams,
@@ -142,6 +148,553 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
   }
   return result;
 };
+
+export type getAuditCapabilitiesResponse200 = {
+  data: AuditCapabilitiesResponse
+  status: 200
+}
+
+export type getAuditCapabilitiesResponse401 = {
+  data: void
+  status: 401
+}
+
+export type getAuditCapabilitiesResponseSuccess = (getAuditCapabilitiesResponse200) & {
+  headers: Headers;
+};
+export type getAuditCapabilitiesResponseError = (getAuditCapabilitiesResponse401) & {
+  headers: Headers;
+};
+
+export type getAuditCapabilitiesResponse = (getAuditCapabilitiesResponseSuccess | getAuditCapabilitiesResponseError)
+
+export const getGetAuditCapabilitiesUrl = () => {
+
+
+
+
+  return `/api/v1/audit/capabilities`
+}
+
+/**
+ * @summary Get server-owned Audit Trail visibility and scope roots
+ */
+export const getAuditCapabilities = async ( options?: RequestInit): Promise<getAuditCapabilitiesResponse> => {
+
+  const res = await fetch(getGetAuditCapabilitiesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getAuditCapabilitiesResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as getAuditCapabilitiesResponse
+}
+
+
+
+
+
+export const getGetAuditCapabilitiesQueryKey = () => {
+    return [
+    `/api/v1/audit/capabilities`
+    ] as const;
+    }
+
+
+export const getGetAuditCapabilitiesQueryOptions = <TData = Awaited<ReturnType<typeof getAuditCapabilities>>, TError = void>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAuditCapabilities>>, TError, TData>>, fetch?: RequestInit}
+) => {
+
+const {query: queryOptions, fetch: fetchOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAuditCapabilitiesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAuditCapabilities>>> = ({ signal }) => getAuditCapabilities({ signal, ...fetchOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAuditCapabilities>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetAuditCapabilitiesQueryResult = NonNullable<Awaited<ReturnType<typeof getAuditCapabilities>>>
+export type GetAuditCapabilitiesQueryError = void
+
+
+export function useGetAuditCapabilities<TData = Awaited<ReturnType<typeof getAuditCapabilities>>, TError = void>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAuditCapabilities>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getAuditCapabilities>>,
+          TError,
+          Awaited<ReturnType<typeof getAuditCapabilities>>
+        > , 'initialData'
+      >, fetch?: RequestInit}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetAuditCapabilities<TData = Awaited<ReturnType<typeof getAuditCapabilities>>, TError = void>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAuditCapabilities>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getAuditCapabilities>>,
+          TError,
+          Awaited<ReturnType<typeof getAuditCapabilities>>
+        > , 'initialData'
+      >, fetch?: RequestInit}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetAuditCapabilities<TData = Awaited<ReturnType<typeof getAuditCapabilities>>, TError = void>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAuditCapabilities>>, TError, TData>>, fetch?: RequestInit}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Get server-owned Audit Trail visibility and scope roots
+ */
+
+export function useGetAuditCapabilities<TData = Awaited<ReturnType<typeof getAuditCapabilities>>, TError = void>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAuditCapabilities>>, TError, TData>>, fetch?: RequestInit}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetAuditCapabilitiesQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export type listAuditFilterOptionsResponse200 = {
+  data: AuditFilterOptionListResponse
+  status: 200
+}
+
+export type listAuditFilterOptionsResponse400 = {
+  data: void
+  status: 400
+}
+
+export type listAuditFilterOptionsResponse401 = {
+  data: void
+  status: 401
+}
+
+export type listAuditFilterOptionsResponse404 = {
+  data: void
+  status: 404
+}
+
+export type listAuditFilterOptionsResponseSuccess = (listAuditFilterOptionsResponse200) & {
+  headers: Headers;
+};
+export type listAuditFilterOptionsResponseError = (listAuditFilterOptionsResponse400 | listAuditFilterOptionsResponse401 | listAuditFilterOptionsResponse404) & {
+  headers: Headers;
+};
+
+export type listAuditFilterOptionsResponse = (listAuditFilterOptionsResponseSuccess | listAuditFilterOptionsResponseError)
+
+export const getListAuditFilterOptionsUrl = (params: ListAuditFilterOptionsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/v1/audit/filter-options?${stringifiedParams}` : `/api/v1/audit/filter-options`
+}
+
+/**
+ * @summary Search authorized Audit Trail filter options
+ */
+export const listAuditFilterOptions = async (params: ListAuditFilterOptionsParams, options?: RequestInit): Promise<listAuditFilterOptionsResponse> => {
+
+  const res = await fetch(getListAuditFilterOptionsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listAuditFilterOptionsResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as listAuditFilterOptionsResponse
+}
+
+
+
+
+
+export const getListAuditFilterOptionsQueryKey = (params?: ListAuditFilterOptionsParams,) => {
+    return [
+    `/api/v1/audit/filter-options`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListAuditFilterOptionsQueryOptions = <TData = Awaited<ReturnType<typeof listAuditFilterOptions>>, TError = void>(params: ListAuditFilterOptionsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAuditFilterOptions>>, TError, TData>>, fetch?: RequestInit}
+) => {
+
+const {query: queryOptions, fetch: fetchOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListAuditFilterOptionsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAuditFilterOptions>>> = ({ signal }) => listAuditFilterOptions(params, { signal, ...fetchOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAuditFilterOptions>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListAuditFilterOptionsQueryResult = NonNullable<Awaited<ReturnType<typeof listAuditFilterOptions>>>
+export type ListAuditFilterOptionsQueryError = void
+
+
+export function useListAuditFilterOptions<TData = Awaited<ReturnType<typeof listAuditFilterOptions>>, TError = void>(
+ params: ListAuditFilterOptionsParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAuditFilterOptions>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listAuditFilterOptions>>,
+          TError,
+          Awaited<ReturnType<typeof listAuditFilterOptions>>
+        > , 'initialData'
+      >, fetch?: RequestInit}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListAuditFilterOptions<TData = Awaited<ReturnType<typeof listAuditFilterOptions>>, TError = void>(
+ params: ListAuditFilterOptionsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAuditFilterOptions>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listAuditFilterOptions>>,
+          TError,
+          Awaited<ReturnType<typeof listAuditFilterOptions>>
+        > , 'initialData'
+      >, fetch?: RequestInit}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListAuditFilterOptions<TData = Awaited<ReturnType<typeof listAuditFilterOptions>>, TError = void>(
+ params: ListAuditFilterOptionsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAuditFilterOptions>>, TError, TData>>, fetch?: RequestInit}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Search authorized Audit Trail filter options
+ */
+
+export function useListAuditFilterOptions<TData = Awaited<ReturnType<typeof listAuditFilterOptions>>, TError = void>(
+ params: ListAuditFilterOptionsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAuditFilterOptions>>, TError, TData>>, fetch?: RequestInit}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getListAuditFilterOptionsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export type listAuditEventsResponse200 = {
+  data: AuditEventListResponse
+  status: 200
+}
+
+export type listAuditEventsResponse400 = {
+  data: void
+  status: 400
+}
+
+export type listAuditEventsResponse401 = {
+  data: void
+  status: 401
+}
+
+export type listAuditEventsResponse404 = {
+  data: void
+  status: 404
+}
+
+export type listAuditEventsResponseSuccess = (listAuditEventsResponse200) & {
+  headers: Headers;
+};
+export type listAuditEventsResponseError = (listAuditEventsResponse400 | listAuditEventsResponse401 | listAuditEventsResponse404) & {
+  headers: Headers;
+};
+
+export type listAuditEventsResponse = (listAuditEventsResponseSuccess | listAuditEventsResponseError)
+
+export const getListAuditEventsUrl = (params: ListAuditEventsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/v1/audit/events?${stringifiedParams}` : `/api/v1/audit/events`
+}
+
+/**
+ * @summary List authorized immutable audit events
+ */
+export const listAuditEvents = async (params: ListAuditEventsParams, options?: RequestInit): Promise<listAuditEventsResponse> => {
+
+  const res = await fetch(getListAuditEventsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listAuditEventsResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as listAuditEventsResponse
+}
+
+
+
+
+
+export const getListAuditEventsQueryKey = (params?: ListAuditEventsParams,) => {
+    return [
+    `/api/v1/audit/events`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListAuditEventsQueryOptions = <TData = Awaited<ReturnType<typeof listAuditEvents>>, TError = void>(params: ListAuditEventsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAuditEvents>>, TError, TData>>, fetch?: RequestInit}
+) => {
+
+const {query: queryOptions, fetch: fetchOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListAuditEventsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAuditEvents>>> = ({ signal }) => listAuditEvents(params, { signal, ...fetchOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAuditEvents>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListAuditEventsQueryResult = NonNullable<Awaited<ReturnType<typeof listAuditEvents>>>
+export type ListAuditEventsQueryError = void
+
+
+export function useListAuditEvents<TData = Awaited<ReturnType<typeof listAuditEvents>>, TError = void>(
+ params: ListAuditEventsParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAuditEvents>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listAuditEvents>>,
+          TError,
+          Awaited<ReturnType<typeof listAuditEvents>>
+        > , 'initialData'
+      >, fetch?: RequestInit}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListAuditEvents<TData = Awaited<ReturnType<typeof listAuditEvents>>, TError = void>(
+ params: ListAuditEventsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAuditEvents>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listAuditEvents>>,
+          TError,
+          Awaited<ReturnType<typeof listAuditEvents>>
+        > , 'initialData'
+      >, fetch?: RequestInit}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListAuditEvents<TData = Awaited<ReturnType<typeof listAuditEvents>>, TError = void>(
+ params: ListAuditEventsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAuditEvents>>, TError, TData>>, fetch?: RequestInit}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary List authorized immutable audit events
+ */
+
+export function useListAuditEvents<TData = Awaited<ReturnType<typeof listAuditEvents>>, TError = void>(
+ params: ListAuditEventsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAuditEvents>>, TError, TData>>, fetch?: RequestInit}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getListAuditEventsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export type getAuditEventResponse200 = {
+  data: AuditEventDetailResponse
+  status: 200
+}
+
+export type getAuditEventResponse401 = {
+  data: void
+  status: 401
+}
+
+export type getAuditEventResponse404 = {
+  data: void
+  status: 404
+}
+
+export type getAuditEventResponseSuccess = (getAuditEventResponse200) & {
+  headers: Headers;
+};
+export type getAuditEventResponseError = (getAuditEventResponse401 | getAuditEventResponse404) & {
+  headers: Headers;
+};
+
+export type getAuditEventResponse = (getAuditEventResponseSuccess | getAuditEventResponseError)
+
+export const getGetAuditEventUrl = (auditEventId: string,) => {
+
+
+
+
+  return `/api/v1/audit/events/${auditEventId}`
+}
+
+/**
+ * @summary Get one authorized audit event with safe metadata
+ */
+export const getAuditEvent = async (auditEventId: string, options?: RequestInit): Promise<getAuditEventResponse> => {
+
+  const res = await fetch(getGetAuditEventUrl(auditEventId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getAuditEventResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as getAuditEventResponse
+}
+
+
+
+
+
+export const getGetAuditEventQueryKey = (auditEventId: string,) => {
+    return [
+    `/api/v1/audit/events/${auditEventId}`
+    ] as const;
+    }
+
+
+export const getGetAuditEventQueryOptions = <TData = Awaited<ReturnType<typeof getAuditEvent>>, TError = void>(auditEventId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAuditEvent>>, TError, TData>>, fetch?: RequestInit}
+) => {
+
+const {query: queryOptions, fetch: fetchOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAuditEventQueryKey(auditEventId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAuditEvent>>> = ({ signal }) => getAuditEvent(auditEventId, { signal, ...fetchOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: auditEventId !== null && auditEventId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAuditEvent>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetAuditEventQueryResult = NonNullable<Awaited<ReturnType<typeof getAuditEvent>>>
+export type GetAuditEventQueryError = void
+
+
+export function useGetAuditEvent<TData = Awaited<ReturnType<typeof getAuditEvent>>, TError = void>(
+ auditEventId: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAuditEvent>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getAuditEvent>>,
+          TError,
+          Awaited<ReturnType<typeof getAuditEvent>>
+        > , 'initialData'
+      >, fetch?: RequestInit}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetAuditEvent<TData = Awaited<ReturnType<typeof getAuditEvent>>, TError = void>(
+ auditEventId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAuditEvent>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getAuditEvent>>,
+          TError,
+          Awaited<ReturnType<typeof getAuditEvent>>
+        > , 'initialData'
+      >, fetch?: RequestInit}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetAuditEvent<TData = Awaited<ReturnType<typeof getAuditEvent>>, TError = void>(
+ auditEventId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAuditEvent>>, TError, TData>>, fetch?: RequestInit}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Get one authorized audit event with safe metadata
+ */
+
+export function useGetAuditEvent<TData = Awaited<ReturnType<typeof getAuditEvent>>, TError = void>(
+ auditEventId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAuditEvent>>, TError, TData>>, fetch?: RequestInit}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetAuditEventQueryOptions(auditEventId,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export type getAccessCapabilitiesResponse200 = {
   data: AccessCapabilitiesResponse

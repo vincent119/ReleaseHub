@@ -81,6 +81,7 @@ func apiErrorDefinitionSets() [][]apiErrorDefinition {
 		localAuthAPIErrorDefinitions,
 		transportAPIErrorDefinitions,
 		workflowAPIErrorDefinitions,
+		auditAPIErrorDefinitions,
 	}
 }
 

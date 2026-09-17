@@ -66,6 +66,7 @@ type apiHandlerParts struct {
 	workflow    httpserver.WorkflowHandlerOptions
 	plan        httpserver.PlanHandlerOptions
 	deployment  httpserver.DeploymentHandlerOptions
+	audit       httpserver.AuditHandlerOptions
 }
 
 func newAPIModulesWithLocal(cfg config.Config, version string, resources *processResources, local *identityapp.LocalAuthService) (*apiModules, error) {
@@ -120,16 +121,10 @@ func newAPIHandlerOptions(dependencies apiHandlerDependencies) (httpserver.APIOp
 	if err != nil {
 		return httpserver.APIOptions{}, err
 	}
-	parts.workflow, err = newWorkflowHandlerOptions(dependencies.resources.db, dependencies.policy)
-	if err != nil {
+	if err := buildVersionedHandlerParts(dependencies, &parts); err != nil {
 		return httpserver.APIOptions{}, err
 	}
-	parts.plan, err = newPlanHandlerOptions(dependencies.resources.db, dependencies.policy)
-	if err != nil {
-		return httpserver.APIOptions{}, err
-	}
-	parts.deployment, err = newDeploymentHandlerOptions(dependencies.resources.db, dependencies.policy, dependencies.resources.argoClient)
-	return apiHandlerOptions(dependencies, parts), err
+	return apiHandlerOptions(dependencies, parts), nil
 }
 
 func buildCoreHandlerParts(dependencies apiHandlerDependencies) (apiHandlerParts, error) {
@@ -154,6 +149,7 @@ func apiHandlerOptions(dependencies apiHandlerDependencies, parts apiHandlerPart
 		Auth: parts.auth, Catalog: parts.catalog,
 		ArgoCD: parts.argoCD, Access: parts.access, Workflow: parts.workflow, Plan: parts.plan,
 		Deployment: parts.deployment,
+		Audit:      parts.audit,
 	}
 }
 

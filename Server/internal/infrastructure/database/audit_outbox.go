@@ -2,7 +2,6 @@ package database
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"time"
 
@@ -15,26 +14,33 @@ import (
 
 // AuditRecord is the infrastructure input used to persist one immutable audit entry.
 type AuditRecord struct {
-	OccurredAt     time.Time
-	ActorID        *uuid.UUID
-	OrganizationID *uuid.UUID
-	Action         string
-	ResourceType   string
-	ResourceID     string
-	RequestID      string
-	Metadata       map[string]any
+	OccurredAt       time.Time
+	ActorID          *uuid.UUID
+	ActorDisplayName string
+	OrganizationID   *uuid.UUID
+	ProjectID        *uuid.UUID
+	EnvironmentID    *uuid.UUID
+	ApplicationID    *uuid.UUID
+	ScopeResolution  string
+	Action           string
+	ResourceType     string
+	ResourceID       string
+	RequestID        string
+	Metadata         map[string]any
 }
 
 // AppendAudit writes an audit record into the transaction supplied by the caller.
 func AppendAudit(ctx context.Context, tx *gorm.DB, record AuditRecord) error {
-	metadata, err := json.Marshal(record.Metadata)
+	metadata, err := prepareAuditRecord(ctx, tx, &record)
 	if err != nil {
-		return fmt.Errorf("marshal audit metadata: %w", err)
+		return err
 	}
 	if err := tx.WithContext(ctx).Create(&auditLogModel{
-		OccurredAt: record.OccurredAt.UTC(), ActorID: record.ActorID, OrganizationID: record.OrganizationID,
-		Action: record.Action, ResourceType: record.ResourceType, ResourceID: record.ResourceID,
-		RequestID: record.RequestID, Metadata: datatypes.JSON(metadata),
+		OccurredAt: record.OccurredAt.UTC(), ActorID: record.ActorID, ActorDisplayName: nullableString(record.ActorDisplayName),
+		OrganizationID: record.OrganizationID, ProjectID: record.ProjectID, EnvironmentID: record.EnvironmentID,
+		ApplicationID: record.ApplicationID, ScopeResolution: record.ScopeResolution, Action: record.Action,
+		ResourceType: record.ResourceType, ResourceID: record.ResourceID, RequestID: record.RequestID,
+		Metadata: datatypes.JSON(metadata),
 	}).Error; err != nil {
 		return fmt.Errorf("insert audit log: %w", err)
 	}
@@ -53,15 +59,20 @@ func AppendOutbox(ctx context.Context, tx *gorm.DB, event domain.Event) error {
 }
 
 type auditLogModel struct {
-	ID             uuid.UUID  `gorm:"type:uuid;default:gen_random_uuid();primaryKey"`
-	OccurredAt     time.Time  `gorm:"not null"`
-	ActorID        *uuid.UUID `gorm:"type:uuid"`
-	OrganizationID *uuid.UUID `gorm:"type:uuid"`
-	Action         string     `gorm:"not null"`
-	ResourceType   string     `gorm:"not null"`
-	ResourceID     string     `gorm:"not null"`
-	RequestID      string
-	Metadata       datatypes.JSON `gorm:"type:jsonb;not null"`
+	ID               uuid.UUID  `gorm:"type:uuid;default:gen_random_uuid();primaryKey"`
+	OccurredAt       time.Time  `gorm:"not null"`
+	ActorID          *uuid.UUID `gorm:"type:uuid"`
+	ActorDisplayName *string
+	OrganizationID   *uuid.UUID `gorm:"type:uuid"`
+	ProjectID        *uuid.UUID `gorm:"type:uuid"`
+	EnvironmentID    *uuid.UUID `gorm:"type:uuid"`
+	ApplicationID    *uuid.UUID `gorm:"type:uuid"`
+	ScopeResolution  string     `gorm:"not null"`
+	Action           string     `gorm:"not null"`
+	ResourceType     string     `gorm:"not null"`
+	ResourceID       string     `gorm:"not null"`
+	RequestID        string
+	Metadata         datatypes.JSON `gorm:"type:jsonb;not null"`
 }
 
 func (auditLogModel) TableName() string { return "audit_logs" }
