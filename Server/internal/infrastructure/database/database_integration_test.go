@@ -79,6 +79,20 @@ func TestMigrationsAndTransactionalAuditOutbox(t *testing.T) {
 	assertCount(t, db, "outbox_events", 0)
 
 	err = database.WithinTransaction(ctx, db, func(tx *gorm.DB) error {
+		if execErr := tx.Exec(`INSERT INTO transaction_probes (id) VALUES (?)`, "audit-validation-failure").Error; execErr != nil {
+			return execErr
+		}
+		invalid := auditRecord()
+		invalid.Metadata = map[string]any{"nested": map[string]any{"access-token": "must-not-persist"}}
+		return database.AppendAudit(ctx, tx, invalid)
+	})
+	if err == nil {
+		t.Fatal("unsafe audit metadata should reject the transaction")
+	}
+	assertCount(t, db, "transaction_probes", 0)
+	assertCount(t, db, "audit_logs", 0)
+
+	err = database.WithinTransaction(ctx, db, func(tx *gorm.DB) error {
 		if err := tx.Exec(`INSERT INTO transaction_probes (id) VALUES (?)`, "commit").Error; err != nil {
 			return err
 		}
@@ -218,6 +232,20 @@ func verifyAccessAndLocalAuthenticationMigrationRollback(t *testing.T, cfg confi
 	}
 	t.Cleanup(func() { _, _ = migrator.Close() })
 	if err := migrator.Steps(-1); err != nil {
+		t.Fatalf("roll back platform administrator audit permission migration: %v", err)
+	}
+	var platformAdministratorAuditPermissionCount int64
+	if err := db.Raw(`SELECT count(*) FROM authorization_role_permissions WHERE role_id = '00000000-0000-0000-0000-000000000100' AND permission_key = 'audit.view'`).Scan(&platformAdministratorAuditPermissionCount).Error; err != nil || platformAdministratorAuditPermissionCount != 0 {
+		t.Fatalf("platform administrator audit permission was not removed: count=%d error=%v", platformAdministratorAuditPermissionCount, err)
+	}
+	if err := migrator.Steps(-1); err != nil {
+		t.Fatalf("roll back audit trail migration: %v", err)
+	}
+	var auditTrailColumns int64
+	if err := db.Raw(`SELECT count(*) FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'audit_logs' AND column_name IN ('project_id', 'environment_id', 'application_id', 'actor_display_name', 'scope_resolution')`).Scan(&auditTrailColumns).Error; err != nil || auditTrailColumns != 0 {
+		t.Fatalf("audit trail migration was not removed: columns=%d error=%v", auditTrailColumns, err)
+	}
+	if err := migrator.Steps(-1); err != nil {
 		t.Fatalf("roll back deployment schedule migration: %v", err)
 	}
 	var scheduleRemoved bool
@@ -238,8 +266,8 @@ func verifyAccessAndLocalAuthenticationMigrationRollback(t *testing.T, cfg confi
 	if err := db.Raw(`SELECT to_regclass('public.local_credentials') IS NULL`).Scan(&removed).Error; err != nil || !removed {
 		t.Fatalf("local credential table was not removed: removed=%t error=%v", removed, err)
 	}
-	if err := migrator.Steps(3); err != nil {
-		t.Fatalf("reapply local, access lifecycle, and deployment schedule migrations: %v", err)
+	if err := migrator.Steps(5); err != nil {
+		t.Fatalf("reapply local, access lifecycle, deployment schedule, audit trail, and platform administrator audit permission migrations: %v", err)
 	}
 	var restored bool
 	if err := db.Raw(`SELECT to_regclass('public.local_credentials') IS NOT NULL`).Scan(&restored).Error; err != nil || !restored {
@@ -247,6 +275,12 @@ func verifyAccessAndLocalAuthenticationMigrationRollback(t *testing.T, cfg confi
 	}
 	if err := db.Raw(`SELECT count(*) FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'authorization_groups' AND column_name = 'system_key'`).Scan(&systemKeyColumns).Error; err != nil || systemKeyColumns != 1 {
 		t.Fatalf("access lifecycle migration was not restored: columns=%d error=%v", systemKeyColumns, err)
+	}
+	if err := db.Raw(`SELECT count(*) FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'audit_logs' AND column_name IN ('project_id', 'environment_id', 'application_id', 'actor_display_name', 'scope_resolution')`).Scan(&auditTrailColumns).Error; err != nil || auditTrailColumns != 5 {
+		t.Fatalf("audit trail migration was not restored: columns=%d error=%v", auditTrailColumns, err)
+	}
+	if err := db.Raw(`SELECT count(*) FROM authorization_role_permissions WHERE role_id = '00000000-0000-0000-0000-000000000100' AND permission_key = 'audit.view'`).Scan(&platformAdministratorAuditPermissionCount).Error; err != nil || platformAdministratorAuditPermissionCount != 1 {
+		t.Fatalf("platform administrator audit permission was not restored: count=%d error=%v", platformAdministratorAuditPermissionCount, err)
 	}
 }
 

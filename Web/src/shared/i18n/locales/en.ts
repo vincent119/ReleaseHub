@@ -22,6 +22,62 @@ export const en = {
     workflows: 'Workflows',
     plans: 'Plans',
     access: 'Access',
+    audit: 'Audit Trail',
+  },
+  audit: {
+    title: 'Audit Trail',
+    description:
+      'Query immutable operation records and safe event summaries within authorized scopes.',
+    unavailable: {
+      title: 'Audit Trail not found',
+      description:
+        'This feature is unavailable or you do not have a visible scope.',
+    },
+    queryError: {
+      title: 'Audit events are unavailable',
+      description:
+        'Refresh and try again. Existing results are not treated as current.',
+    },
+    filters: {
+      scope: 'Query scope',
+      action: 'Action',
+      resourceType: 'Resource type',
+      actor: 'Actor ID or name',
+      requestId: 'Request ID',
+      occurredFrom: 'From',
+      occurredTo: 'To',
+    },
+    actions: {
+      apply: 'Apply filters',
+      refresh: 'Refresh',
+      retry: 'Retry',
+      previous: 'Previous',
+      next: 'Next',
+      view: 'View',
+    },
+    columns: {
+      time: 'Occurred at',
+      actor: 'Actor',
+      action: 'Action',
+      resource: 'Resource',
+      scope: 'Scope',
+      requestId: 'Request ID',
+      details: 'Details',
+    },
+    empty: {
+      scope: 'There are no audit events in this scope.',
+      filtered:
+        'No events match the current filters. Adjust them and try again.',
+    },
+    detail: {
+      title: 'Audit event details',
+      unavailable:
+        'The event does not exist, is outside your access, or cannot be read.',
+      metadata: 'Safe metadata',
+      truncated: 'Some metadata was redacted or truncated.',
+    },
+    values: { notSet: 'Not set' },
+    page: 'Page {{page}}',
   },
   candidates: {
     title: 'Argo CD candidate queue',

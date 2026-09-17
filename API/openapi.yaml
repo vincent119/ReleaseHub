@@ -26,7 +26,123 @@ tags:
     description: Deployment execution, retry, terminate, unlock, and history.
   - name: Notifications
     description: In-app notifications, read state, and the SSE event stream.
+  - name: AuditTrail
+    description: Authorized immutable Audit Trail queries.
 paths:
+  /api/v1/audit/capabilities:
+    get:
+      operationId: getAuditCapabilities
+      summary: Get server-owned Audit Trail visibility and scope roots
+      tags: [AuditTrail]
+      security: [{ sessionCookie: [] }]
+      responses:
+        "200":
+          description: Audit Trail capability and presentation-safe scope roots.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuditCapabilitiesResponse" }
+        "401": { description: The user is unauthenticated or the session has expired. }
+  /api/v1/audit/filter-options:
+    get:
+      operationId: listAuditFilterOptions
+      summary: Search authorized Audit Trail filter options
+      tags: [AuditTrail]
+      security: [{ sessionCookie: [] }]
+      parameters:
+        - name: scopeKind
+          in: query
+          required: true
+          schema: { $ref: "#/components/schemas/AuditScopeKind" }
+        - name: scopeId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: occurredFrom
+          in: query
+          schema: { type: string, format: date-time }
+        - name: occurredTo
+          in: query
+          schema: { type: string, format: date-time }
+        - name: field
+          in: query
+          required: true
+          schema: { $ref: "#/components/schemas/AuditFilterOptionField" }
+        - name: search
+          in: query
+          schema: { type: string, maxLength: 255 }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 50, default: 20 }
+      responses:
+        "200":
+          description: Bounded autocomplete values visible in the requested scope and time range.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuditFilterOptionListResponse" }
+        "400": { description: The option query is invalid. }
+        "401": { description: The user is unauthenticated or the session has expired. }
+        "404": { description: The Scope does not exist or the caller lacks audit.view. }
+  /api/v1/audit/events:
+    get:
+      operationId: listAuditEvents
+      summary: List authorized immutable audit events
+      tags: [AuditTrail]
+      security: [{ sessionCookie: [] }]
+      parameters:
+        - name: scopeKind
+          in: query
+          required: true
+          schema: { $ref: "#/components/schemas/AuditScopeKind" }
+        - name: scopeId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: occurredFrom
+          in: query
+          schema: { type: string, format: date-time }
+        - name: occurredTo
+          in: query
+          schema: { type: string, format: date-time }
+        - name: action
+          in: query
+          schema: { type: string, maxLength: 255 }
+        - name: resourceType
+          in: query
+          schema: { type: string, maxLength: 255 }
+        - name: actor
+          in: query
+          schema: { type: string, maxLength: 255 }
+        - name: requestId
+          in: query
+          schema: { type: string, maxLength: 255 }
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: One stable metadata-free Audit Trail page.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuditEventListResponse" }
+        "400": { description: The filter or cursor is invalid. }
+        "401": { description: The user is unauthenticated or the session has expired. }
+        "404": { description: The Scope does not exist or the caller lacks audit.view. }
+  /api/v1/audit/events/{auditEventId}:
+    get:
+      operationId: getAuditEvent
+      summary: Get one authorized audit event with safe metadata
+      tags: [AuditTrail]
+      security: [{ sessionCookie: [] }]
+      parameters:
+        - name: auditEventId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: The authorized event and defensively sanitized metadata.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuditEventDetailResponse" }
+        "401": { description: The user is unauthenticated or the session has expired. }
+        "404": { description: The event does not exist or is not visible to the caller. }
   /api/v1/access/capabilities:
     get:
       operationId: getAccessCapabilities
@@ -3689,6 +3805,118 @@ components:
           type: string
         hasMore:
           type: boolean
+    AuditScopeKind:
+      type: string
+      enum: [platform, project, environment, application]
+    AuditScopeRoot:
+      type: object
+      required: [kind, label]
+      properties:
+        kind: { $ref: "#/components/schemas/AuditScopeKind" }
+        id: { type: string, format: uuid }
+        label: { type: string }
+    AuditCapabilities:
+      type: object
+      required: [visible, scopeRoots]
+      properties:
+        visible: { type: boolean }
+        scopeRoots:
+          type: array
+          items: { $ref: "#/components/schemas/AuditScopeRoot" }
+    AuditCapabilitiesResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data: { $ref: "#/components/schemas/AuditCapabilities" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+    AuditFilterOptionField:
+      type: string
+      enum: [action, resourceType, actor]
+    AuditFilterOption:
+      type: object
+      required: [value, label]
+      properties:
+        value: { type: string }
+        label: { type: string }
+    AuditFilterOptionListResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: array
+          items: { $ref: "#/components/schemas/AuditFilterOption" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+    AuditActorKind:
+      type: string
+      enum: [user, system, unknown]
+    AuditActorSummary:
+      type: object
+      required: [kind]
+      properties:
+        kind: { $ref: "#/components/schemas/AuditActorKind" }
+        id: { type: string, format: uuid }
+        displayName: { type: string }
+    AuditResourceSummary:
+      type: object
+      required: [type, id]
+      properties:
+        type: { type: string }
+        id: { type: string }
+    AuditScopeSummary:
+      type: object
+      required: [kind, resolution]
+      properties:
+        kind: { $ref: "#/components/schemas/AuditScopeKind" }
+        id: { type: string, format: uuid }
+        organizationId: { type: string, format: uuid }
+        projectId: { type: string, format: uuid }
+        environmentId: { type: string, format: uuid }
+        applicationId: { type: string, format: uuid }
+        resolution:
+          type: string
+          enum: [resolved, unresolved]
+    AuditEventSummary:
+      type: object
+      required: [id, occurredAt, actor, action, resource, scope, hasMetadata]
+      properties:
+        id: { type: string, format: uuid }
+        occurredAt: { type: string, format: date-time }
+        actor: { $ref: "#/components/schemas/AuditActorSummary" }
+        action: { type: string }
+        resource: { $ref: "#/components/schemas/AuditResourceSummary" }
+        scope: { $ref: "#/components/schemas/AuditScopeSummary" }
+        requestId: { type: string }
+        hasMetadata: { type: boolean }
+    AuditEventDetail:
+      type: object
+      required: [id, occurredAt, actor, action, resource, scope, hasMetadata, metadata, metadataTruncated]
+      properties:
+        id: { type: string, format: uuid }
+        occurredAt: { type: string, format: date-time }
+        actor: { $ref: "#/components/schemas/AuditActorSummary" }
+        action: { type: string }
+        resource: { $ref: "#/components/schemas/AuditResourceSummary" }
+        scope: { $ref: "#/components/schemas/AuditScopeSummary" }
+        requestId: { type: string }
+        hasMetadata: { type: boolean }
+        metadata:
+          type: object
+          additionalProperties: true
+        metadataTruncated: { type: boolean }
+    AuditEventListResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: array
+          items: { $ref: "#/components/schemas/AuditEventSummary" }
+        meta: { $ref: "#/components/schemas/CursorPageMeta" }
+    AuditEventDetailResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data: { $ref: "#/components/schemas/AuditEventDetail" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
     DeploymentRequestListResponse:
       type: object
       required:

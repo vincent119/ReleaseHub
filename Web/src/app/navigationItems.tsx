@@ -6,12 +6,16 @@ import {
   NodeIndexOutlined,
   SafetyCertificateOutlined,
   TeamOutlined,
+  AuditOutlined,
 } from '@ant-design/icons'
 import { NavLink } from 'react-router'
 import type { useTranslation } from 'react-i18next'
 
-export function navigationItems(t: ReturnType<typeof useTranslation>['t']) {
-  return [
+export function navigationItems(
+  t: ReturnType<typeof useTranslation>['t'],
+  auditVisible = false,
+) {
+  const items = [
     {
       key: '/',
       icon: <AppstoreOutlined />,
@@ -85,4 +89,15 @@ export function navigationItems(t: ReturnType<typeof useTranslation>['t']) {
       ),
     },
   ]
+  if (auditVisible)
+    items.push({
+      key: '/audit',
+      icon: <AuditOutlined />,
+      label: (
+        <NavLink to="/audit" aria-label={t('audit.title')}>
+          {t('navigation.audit')}
+        </NavLink>
+      ),
+    })
+  return items
 }

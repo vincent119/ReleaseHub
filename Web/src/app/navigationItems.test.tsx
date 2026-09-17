@@ -34,4 +34,13 @@ describe('English sidebar navigation', () => {
       screen.getByRole('link', { name: 'Access management' }),
     ).toHaveTextContent('Access')
   })
+
+  it('only includes Audit Trail when the server capability is visible', async () => {
+    await i18n.changeLanguage('en')
+    const hidden = navigationItems(i18n.t)
+    const visible = navigationItems(i18n.t, true)
+
+    expect(hidden.some((item) => item.key === '/audit')).toBe(false)
+    expect(visible.some((item) => item.key === '/audit')).toBe(true)
+  })
 })

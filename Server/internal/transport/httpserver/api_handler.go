@@ -65,6 +65,11 @@ type DeploymentHandlerOptions struct {
 	Notifications deploymentNotificationService
 }
 
+// AuditHandlerOptions supplies Audit Trail query ports.
+type AuditHandlerOptions struct {
+	Queries auditQueryService
+}
+
 // APIOptions groups feature dependencies for the generated OpenAPI contract.
 type APIOptions struct {
 	System     SystemHandlerOptions
@@ -75,6 +80,7 @@ type APIOptions struct {
 	Workflow   WorkflowHandlerOptions
 	Plan       PlanHandlerOptions
 	Deployment DeploymentHandlerOptions
+	Audit      AuditHandlerOptions
 }
 
 type apiHandler struct {
@@ -85,6 +91,7 @@ type apiHandler struct {
 	*workflowHandler
 	*planHandler
 	*deploymentHandler
+	*auditHandler
 	*systemHandler
 }
 
@@ -107,6 +114,7 @@ func NewAPIHandler(options APIOptions) contract.ServerInterface {
 		deploymentHandler: &deploymentHandler{authn: authn, requests: options.Deployment.Requests,
 			workflows: options.Deployment.Workflows, executions: options.Deployment.Executions,
 			history: options.Deployment.History, notifications: options.Deployment.Notifications},
+		auditHandler: &auditHandler{authn: authn, queries: options.Audit.Queries},
 		systemHandler: &systemHandler{
 			version: options.System.Version, tenancyMode: options.System.TenancyMode,
 			oidcEnabled: options.System.OIDCEnabled,
