@@ -19,7 +19,7 @@ import { useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router'
 
 import {
-  createAccessBinding,
+  createAccessBindingsBatch,
   createAccessDeny,
   createAccessGroup,
   createAccessRole,
@@ -55,6 +55,7 @@ import { parseAPIErrorResponse } from '@/shared/api/apiError'
 import { useFeedback } from '@/shared/feedback/useFeedback'
 import { GroupMembersModal } from './GroupMembersModal'
 import { accessMutationErrorKey } from './mutationError'
+import styles from './AccessPage.module.css'
 import {
   scopePayload,
   scopeResourceOptions,
@@ -77,7 +78,7 @@ interface Fields {
   permissions?: string[]
   groupId?: string
   userId?: string
-  roleId?: string
+  roleIds?: string[]
   permission?: string
   scopeKind?: ScopeKind
   scopeId?: string
@@ -292,11 +293,11 @@ export function AccessPage() {
       )
     if (action === 'binding')
       await mutate((options) =>
-        createAccessBinding(
+        createAccessBindingsBatch(
           {
             ...scopePayload(fields, organizationData),
             groupId: fields.groupId!,
-            roleId: fields.roleId!,
+            roleIds: fields.roleIds ?? [],
           },
           options,
         ),
@@ -893,7 +894,7 @@ function AccessModal({
                   form.setFieldsValue({
                     scopeId: undefined,
                     groupId: undefined,
-                    roleId: undefined,
+                    roleIds: undefined,
                     permission: undefined,
                   })
                 }
@@ -916,7 +917,7 @@ function AccessModal({
                   onChange={() =>
                     form.setFieldsValue({
                       groupId: undefined,
-                      roleId: undefined,
+                      roleIds: undefined,
                       permission: undefined,
                     })
                   }
@@ -937,11 +938,14 @@ function AccessModal({
             </Form.Item>
             {action === 'binding' ? (
               <Form.Item
-                name="roleId"
+                name="roleIds"
                 label={t('access.columns.role')}
                 rules={[{ required: true }]}
               >
                 <Select
+                  mode="multiple"
+                  showSearch
+                  optionFilterProp="label"
                   loading={scopeOptions.isFetching}
                   options={(options?.roles ?? [])
                     .filter((item) => item.active)
@@ -1015,7 +1019,7 @@ function ActionConfirm({
 function StatusTag({ active }: { active: boolean }) {
   const { t } = useTranslation()
   return (
-    <Tag color={active ? 'green' : 'default'}>
+    <Tag className={active ? styles.statusActive : styles.statusInactive}>
       {active ? t('access.status.active') : t('access.status.inactive')}
     </Tag>
   )

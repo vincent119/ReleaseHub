@@ -167,6 +167,61 @@ func TestAccessCommandRechecksPermissionAfterCapabilityProjection(t *testing.T) 
 	}
 }
 
+func TestRoleBindingOptionsAndCommandRejectRolesWithoutEffectiveScopePermission(t *testing.T) {
+	organizationID, projectID := uuid.New(), uuid.New()
+	groupID := uuid.New()
+	platformAdministratorID, devopsManagerID := uuid.New(), uuid.New()
+	projectScope, err := authz.NewProjectScope(organizationID, projectID)
+	if err != nil {
+		t.Fatalf("create Project scope: %v", err)
+	}
+	repository := &accessRepositoryStub{
+		resolvedScope: projectScope,
+		snapshot: AccessSnapshot{
+			Groups: []AccessGroup{{ID: groupID, OwnerKind: "project", OwnerID: &projectID, Name: "status-webhooks-group"}},
+			Roles: []AccessRole{
+				{ID: platformAdministratorID, OwnerKind: "platform", Name: "platform_administrator", Active: true, Permissions: []string{"platform.manage"}},
+				{ID: devopsManagerID, OwnerKind: "platform", Name: "devops_manager", Active: true, Permissions: []string{"resource.view"}},
+			},
+			Permissions: []AccessPermission{
+				{Key: "platform.manage", PlatformOnly: true},
+				{Key: "resource.view", PlatformOnly: false, ProjectRoleDelegable: true},
+			},
+		},
+	}
+	service, err := NewAccessManagementService(repository, &accessAuthorizerStub{allowPlatform: true})
+	if err != nil {
+		t.Fatalf("create access management service: %v", err)
+	}
+
+	options, err := service.ScopeOptions(context.Background(), AccessPrincipal{UserID: uuid.New()}, "project", projectID.String())
+	if err != nil {
+		t.Fatalf("load Project scope options: %v", err)
+	}
+	if len(options.Roles) != 1 || options.Roles[0].ID != devopsManagerID {
+		t.Fatalf("Project Role options = %#v", options.Roles)
+	}
+
+	_, err = service.CreateBinding(context.Background(), AccessPrincipal{UserID: uuid.New()}, AccessMutation{}, CreateBindingInput{
+		GroupID: groupID, RoleID: platformAdministratorID, OrganizationID: organizationID, ScopeKind: "project", ProjectID: projectID,
+	})
+	if !errors.Is(err, ErrInvalidAccessRequest) {
+		t.Fatalf("incompatible Project Role error = %v", err)
+	}
+}
+
+func TestCreateBindingsRejectsDuplicateRolesBeforePersistence(t *testing.T) {
+	roleID := uuid.New()
+	service, err := NewAccessManagementService(&accessRepositoryStub{}, &accessAuthorizerStub{allowPlatform: true})
+	if err != nil {
+		t.Fatalf("create access management service: %v", err)
+	}
+	_, err = service.CreateBindings(context.Background(), AccessPrincipal{UserID: uuid.New()}, AccessMutation{}, CreateBindingsInput{GroupID: uuid.New(), RoleIDs: []uuid.UUID{roleID, roleID}, ScopeKind: "platform"})
+	if !errors.Is(err, ErrInvalidAccessRequest) {
+		t.Fatalf("duplicate batch Role error = %v", err)
+	}
+}
+
 func TestAccessUserPaginationUsesStableRowCursor(t *testing.T) {
 	first, second, third := uuid.New(), uuid.New(), uuid.New()
 	repository := &accessRepositoryStub{snapshot: AccessSnapshot{Users: []AccessUser{
@@ -269,6 +324,7 @@ func stringPointer(value string) *string { return &value }
 
 type accessRepositoryStub struct {
 	scopes           []ProjectScope
+	resolvedScope    authz.Scope
 	snapshot         AccessSnapshot
 	createGroupCalls int
 	disableUserCalls int
@@ -282,7 +338,7 @@ func (s *accessRepositoryStub) ListProjectScopes(context.Context) ([]ProjectScop
 }
 
 func (s *accessRepositoryStub) ResolveAccessScope(context.Context, string, uuid.UUID) (authz.Scope, error) {
-	return authz.Scope{}, nil
+	return s.resolvedScope, nil
 }
 
 func (s *accessRepositoryStub) FindMembershipCandidates(_ context.Context, _ uuid.UUID, query string, after *MembershipCandidateCursor, limit int) ([]AccessUser, error) {
@@ -324,6 +380,14 @@ func (s *accessRepositoryStub) AddMembership(context.Context, AccessMutation, uu
 
 func (s *accessRepositoryStub) CreateBinding(context.Context, AccessMutation, CreateBindingInput) (AccessBinding, error) {
 	return AccessBinding{}, nil
+}
+
+func (s *accessRepositoryStub) CreateBindings(_ context.Context, _ AccessMutation, input CreateBindingsInput) ([]AccessBinding, error) {
+	values := make([]AccessBinding, 0, len(input.RoleIDs))
+	for _, roleID := range input.RoleIDs {
+		values = append(values, AccessBinding{ID: uuid.New(), GroupID: input.GroupID, RoleID: roleID, ScopeKind: input.ScopeKind, Active: true})
+	}
+	return values, nil
 }
 
 func (s *accessRepositoryStub) CreateDeny(context.Context, AccessMutation, CreateDenyInput) (AccessDeny, error) {

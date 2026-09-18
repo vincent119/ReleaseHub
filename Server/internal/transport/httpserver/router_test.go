@@ -1145,6 +1145,14 @@ func (*fakeAccessManagementService) AddMembership(context.Context, authzapp.Acce
 func (*fakeAccessManagementService) CreateBinding(context.Context, authzapp.AccessPrincipal, authzapp.AccessMutation, authzapp.CreateBindingInput) (authzapp.AccessBinding, error) {
 	return authzapp.AccessBinding{}, nil
 }
+
+func (*fakeAccessManagementService) CreateBindings(_ context.Context, _ authzapp.AccessPrincipal, _ authzapp.AccessMutation, input authzapp.CreateBindingsInput) ([]authzapp.AccessBinding, error) {
+	values := make([]authzapp.AccessBinding, 0, len(input.RoleIDs))
+	for _, roleID := range input.RoleIDs {
+		values = append(values, authzapp.AccessBinding{ID: uuid.New(), GroupID: input.GroupID, RoleID: roleID, ScopeKind: input.ScopeKind, Active: true})
+	}
+	return values, nil
+}
 func (*fakeAccessManagementService) CreateDeny(context.Context, authzapp.AccessPrincipal, authzapp.AccessMutation, authzapp.CreateDenyInput) (authzapp.AccessDeny, error) {
 	return authzapp.AccessDeny{}, nil
 }

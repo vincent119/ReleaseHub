@@ -84,6 +84,19 @@ func TestAccessManagementRepositoryLoadsNullableOwnersAndPolicyRecords(t *testin
 	if len(value.Users) != 2 || len(value.Groups) != 2 || len(value.Memberships) != 2 || len(value.Bindings) != 2 || len(value.Roles) < 6 {
 		t.Fatalf("access snapshot did not preserve policy records: %#v", value)
 	}
+	batchValues, batchErr := repository.CreateBindings(ctx, authzapp.AccessMutation{ActorID: platformUserID, RequestID: "atomic-batch-conflict"}, authzapp.CreateBindingsInput{
+		GroupID: groupID, RoleIDs: []uuid.UUID{
+			uuid.MustParse("00000000-0000-0000-0000-000000000104"),
+			uuid.MustParse("00000000-0000-0000-0000-000000000101"),
+		}, OrganizationID: organizationID, ScopeKind: "project", ProjectID: projectID,
+	})
+	if !errors.Is(batchErr, authzapp.ErrAccessManagementConflict) || batchValues != nil {
+		t.Fatalf("conflicting batch result = %#v, error = %v", batchValues, batchErr)
+	}
+	var rolledBackBindings int64
+	if err := db.Table("authorization_group_role_bindings").Where("group_id = ? AND role_id = ? AND active", groupID, uuid.MustParse("00000000-0000-0000-0000-000000000104")).Count(&rolledBackBindings).Error; err != nil || rolledBackBindings != 0 {
+		t.Fatalf("rolled back batch bindings = %d, error = %v", rolledBackBindings, err)
+	}
 	var platformRoleFound bool
 	for _, role := range value.Roles {
 		if role.SystemKey != nil && *role.SystemKey == "platform_administrator" && role.OwnerID == nil {

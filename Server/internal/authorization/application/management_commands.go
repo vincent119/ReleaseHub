@@ -43,6 +43,17 @@ type CreateBindingInput struct {
 	ApplicationID  *uuid.UUID
 }
 
+// CreateBindingsInput grants multiple Roles to one Group at one exact scope.
+type CreateBindingsInput struct {
+	GroupID        uuid.UUID
+	RoleIDs        []uuid.UUID
+	OrganizationID uuid.UUID
+	ScopeKind      string
+	ProjectID      uuid.UUID
+	EnvironmentID  *uuid.UUID
+	ApplicationID  *uuid.UUID
+}
+
 // CreateDenyInput explicitly denies one permission at one exact scope.
 type CreateDenyInput struct {
 	GroupID        uuid.UUID
@@ -142,6 +153,9 @@ func (s *AccessManagementService) CreateBinding(ctx context.Context, principal A
 		if !groupOK || !roleOK || group.DisabledAt != nil || !role.Active || group.OwnerKind != "platform" || role.OwnerKind != "platform" {
 			return AccessBinding{}, ErrAccessManagementNotFound
 		}
+		if !roleHasEffectivePermission(role, value.Permissions, input.ScopeKind) {
+			return AccessBinding{}, fmt.Errorf("%w: Role has no effective permission at scope", ErrInvalidAccessRequest)
+		}
 		mutation.ActorID = principal.UserID
 		return s.repository.CreateBinding(ctx, mutation, input)
 	}
@@ -163,8 +177,77 @@ func (s *AccessManagementService) CreateBinding(ctx context.Context, principal A
 	if !groupOK || !roleOK || group.DisabledAt != nil || !role.Active || (!platform && role.SystemKey != nil && *role.SystemKey == "project_manager") || !groupMayBind(group, input.OrganizationID, input.ProjectID, platform) {
 		return AccessBinding{}, ErrAccessManagementNotFound
 	}
+	if (role.OwnerKind == "project" && (role.OwnerID == nil || *role.OwnerID != input.ProjectID)) || !roleHasEffectivePermission(role, value.Permissions, input.ScopeKind) {
+		return AccessBinding{}, fmt.Errorf("%w: Role is not compatible with scope", ErrInvalidAccessRequest)
+	}
 	mutation.ActorID = principal.UserID
 	return s.repository.CreateBinding(ctx, mutation, input)
+}
+
+// CreateBindings atomically assigns multiple Roles to one Group at one exact scope.
+func (s *AccessManagementService) CreateBindings(ctx context.Context, principal AccessPrincipal, mutation AccessMutation, input CreateBindingsInput) ([]AccessBinding, error) {
+	if len(input.RoleIDs) == 0 || len(input.RoleIDs) > 20 {
+		return nil, fmt.Errorf("%w: Role count must be between 1 and 20", ErrInvalidAccessRequest)
+	}
+	seen := make(map[uuid.UUID]struct{}, len(input.RoleIDs))
+	for _, roleID := range input.RoleIDs {
+		if roleID == uuid.Nil {
+			return nil, fmt.Errorf("%w: Role ID is required", ErrInvalidAccessRequest)
+		}
+		if _, ok := seen[roleID]; ok {
+			return nil, fmt.Errorf("%w: Role IDs must be unique", ErrInvalidAccessRequest)
+		}
+		seen[roleID] = struct{}{}
+	}
+
+	platform, err := s.platformAllowed(ctx, principal)
+	if err != nil {
+		return nil, accessDecision(err)
+	}
+	if input.ScopeKind == "platform" {
+		if !platform {
+			return nil, accessDecision(nil)
+		}
+	} else {
+		scope, scopeErr := commandScope(input.OrganizationID, input.ProjectID, input.ScopeKind, input.EnvironmentID, input.ApplicationID)
+		if scopeErr != nil {
+			return nil, fmt.Errorf("%w: %v", ErrInvalidAccessRequest, scopeErr)
+		}
+		allowed, authErr := s.authorizer.AuthorizeFresh(ctx, authz.AuthorizationRequest{UserID: principal.UserID, Disabled: principal.Disabled, Permission: s.groupManage, Scope: scope})
+		if authErr != nil || (!allowed && !platform) {
+			return nil, accessDecision(authErr)
+		}
+	}
+
+	value, err := s.repository.LoadAccessSnapshot(ctx)
+	if err != nil {
+		return nil, err
+	}
+	group, groupOK := findGroup(value.Groups, input.GroupID)
+	if !groupOK || group.DisabledAt != nil {
+		return nil, ErrAccessManagementNotFound
+	}
+	if input.ScopeKind == "platform" {
+		if group.OwnerKind != "platform" {
+			return nil, ErrAccessManagementNotFound
+		}
+	} else if !groupMayBind(group, input.OrganizationID, input.ProjectID, platform) {
+		return nil, ErrAccessManagementNotFound
+	}
+	for _, roleID := range input.RoleIDs {
+		role, ok := findRole(value.Roles, roleID)
+		if !ok || !role.Active || (input.ScopeKind == "platform" && role.OwnerKind != "platform") || (!platform && role.SystemKey != nil && *role.SystemKey == "project_manager") {
+			return nil, ErrAccessManagementNotFound
+		}
+		if input.ScopeKind != "platform" && role.OwnerKind == "project" && (role.OwnerID == nil || *role.OwnerID != input.ProjectID) {
+			return nil, fmt.Errorf("%w: Role is not compatible with scope", ErrInvalidAccessRequest)
+		}
+		if !roleHasEffectivePermission(role, value.Permissions, input.ScopeKind) {
+			return nil, fmt.Errorf("%w: Role has no effective permission at scope", ErrInvalidAccessRequest)
+		}
+	}
+	mutation.ActorID = principal.UserID
+	return s.repository.CreateBindings(ctx, mutation, input)
 }
 
 // CreateDeny creates an explicit deny policy at a validated Project descendant scope.

@@ -27,6 +27,7 @@ import type {
 import type {
   AccessBindingListResponse,
   AccessBindingResponse,
+  AccessBindingsResponse,
   AccessCapabilitiesResponse,
   AccessDenyListResponse,
   AccessDenyResponse,
@@ -62,6 +63,7 @@ import type {
   ChangePasswordRequest,
   CompleteAuthCallbackParams,
   CreateAccessBindingRequest,
+  CreateAccessBindingsBatchRequest,
   CreateAccessDenyRequest,
   CreateAccessGroupRequest,
   CreateAccessMembershipRequest,
@@ -2427,6 +2429,122 @@ export const useCreateAccessBinding = <TError = void,
         TContext
       > => {
       return useMutation(getCreateAccessBindingMutationOptions(options), queryClient);
+    }
+
+export type createAccessBindingsBatchResponse201 = {
+  data: AccessBindingsResponse
+  status: 201
+}
+
+export type createAccessBindingsBatchResponse400 = {
+  data: void
+  status: 400
+}
+
+export type createAccessBindingsBatchResponse404 = {
+  data: void
+  status: 404
+}
+
+export type createAccessBindingsBatchResponse409 = {
+  data: void
+  status: 409
+}
+
+export type createAccessBindingsBatchResponseSuccess = (createAccessBindingsBatchResponse201) & {
+  headers: Headers;
+};
+export type createAccessBindingsBatchResponseError = (createAccessBindingsBatchResponse400 | createAccessBindingsBatchResponse404 | createAccessBindingsBatchResponse409) & {
+  headers: Headers;
+};
+
+export type createAccessBindingsBatchResponse = (createAccessBindingsBatchResponseSuccess | createAccessBindingsBatchResponseError)
+
+export const getCreateAccessBindingsBatchUrl = () => {
+
+
+
+
+  return `/api/v1/access/bindings/batch`
+}
+
+/**
+ * @summary Bind a Group and multiple Roles to a scope atomically
+ */
+export const createAccessBindingsBatch = async (createAccessBindingsBatchRequest: CreateAccessBindingsBatchRequest, options?: RequestInit): Promise<createAccessBindingsBatchResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+const res = await fetch(getCreateAccessBindingsBatchUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(createAccessBindingsBatchRequest)
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: createAccessBindingsBatchResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as createAccessBindingsBatchResponse
+}
+
+
+
+
+
+export const getCreateAccessBindingsBatchMutationKey = () => ['createAccessBindingsBatch'] as const;
+
+export const getCreateAccessBindingsBatchMutationOptions = <TError = void,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createAccessBindingsBatch>>, TError,CreateAccessBindingsBatchMutationVariables, TContext>, fetch?: RequestInit}
+): UseMutationOptions<Awaited<ReturnType<typeof createAccessBindingsBatch>>, TError,CreateAccessBindingsBatchMutationVariables, TContext> => {
+
+const mutationKey = getCreateAccessBindingsBatchMutationKey();
+const {mutation: mutationOptions, fetch: fetchOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, fetch: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createAccessBindingsBatch>>, CreateAccessBindingsBatchMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  createAccessBindingsBatch(data,fetchOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateAccessBindingsBatchMutationResult = NonNullable<Awaited<ReturnType<typeof createAccessBindingsBatch>>>
+    export type CreateAccessBindingsBatchMutationBody = CreateAccessBindingsBatchRequest
+    export type CreateAccessBindingsBatchMutationError = void
+    export type CreateAccessBindingsBatchMutationVariables = {data: CreateAccessBindingsBatchRequest}
+
+    /**
+ * @summary Bind a Group and multiple Roles to a scope atomically
+ */
+export const useCreateAccessBindingsBatch = <TError = void,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createAccessBindingsBatch>>, TError,CreateAccessBindingsBatchMutationVariables, TContext>, fetch?: RequestInit}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof createAccessBindingsBatch>>,
+        TError,
+        CreateAccessBindingsBatchMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCreateAccessBindingsBatchMutationOptions(options), queryClient);
     }
 
 export type listAccessDeniesResponse200 = {

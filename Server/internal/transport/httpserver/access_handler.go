@@ -21,6 +21,7 @@ type accessManagementService interface {
 	CreateRole(context.Context, authzapp.AccessPrincipal, authzapp.AccessMutation, authzapp.CreateRoleInput) (authzapp.AccessRole, error)
 	AddMembership(context.Context, authzapp.AccessPrincipal, authzapp.AccessMutation, uuid.UUID, uuid.UUID) (authzapp.AccessMembership, error)
 	CreateBinding(context.Context, authzapp.AccessPrincipal, authzapp.AccessMutation, authzapp.CreateBindingInput) (authzapp.AccessBinding, error)
+	CreateBindings(context.Context, authzapp.AccessPrincipal, authzapp.AccessMutation, authzapp.CreateBindingsInput) ([]authzapp.AccessBinding, error)
 	CreateDeny(context.Context, authzapp.AccessPrincipal, authzapp.AccessMutation, authzapp.CreateDenyInput) (authzapp.AccessDeny, error)
 	DisableUser(context.Context, authzapp.AccessPrincipal, authzapp.AccessMutation, uuid.UUID) error
 	Capabilities(context.Context, authzapp.AccessPrincipal) (authzapp.AccessCapabilities, error)
