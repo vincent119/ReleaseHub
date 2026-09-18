@@ -4,6 +4,19 @@
 
 ReleaseHub uses one Argo CD instance for Application discovery, onboarding, preflight validation, Sync, and result reconciliation. Worker must use a dedicated Argo CD account and gRPC token. Grant that account only the permissions required to read Applications, manifests, and resource diffs; remove automated sync; start Sync; and terminate operations.
 
+### gRPC Transport
+
+ReleaseHub uses verified TLS for Argo CD by default. When `argocd-cmd-params-cm` sets `server.insecure: "true"`, and ReleaseHub directly reaches port 80 of `argocd-server` through the same cluster or another trusted private network, use:
+
+```yaml
+argocd:
+  address: argocd-server.argocd.svc:80
+  plaintext: true
+  insecure: false
+```
+
+Plaintext does not require both services to run in the same EKS cluster, but DNS and network routing must reach the Service and the transport path has no TLS protection. Keep TLS with a verifiable certificate across clusters or untrusted networks. `insecure: true` only skips TLS certificate verification; it does not select plaintext. Never enable `plaintext` and `insecure` together.
+
 An Application must carry this exact label:
 
 ```yaml

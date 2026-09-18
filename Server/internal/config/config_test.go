@@ -209,6 +209,47 @@ func TestArgoCDConfigRequiresAddressTokenAndTimeout(t *testing.T) {
 	}
 }
 
+func TestArgoCDConfigRejectsConflictingTransportModes(t *testing.T) {
+	cfg := config.ArgoCDConfig{
+		Address:              "argocd-server.argocd.svc:80",
+		Token:                "token",
+		Plaintext:            true,
+		Insecure:             true,
+		RequestTimeout:       10 * time.Second,
+		ApplicationNamespace: "argocd",
+	}
+
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "argocd.plaintext") {
+		t.Fatalf("conflicting Argo CD transport modes should fail: %v", err)
+	}
+}
+
+func TestLoadMapsArgoCDTransportEnvironment(t *testing.T) {
+	t.Setenv("RELEASEHUB_ARGOCD_PLAINTEXT", "true")
+	t.Setenv("RELEASEHUB_ARGOCD_INSECURE", "false")
+	path := writeConfig(t, `
+database:
+  server: postgres.internal
+  user: releasehub
+  password: database-secret
+  database: releasehub
+redis:
+  address: redis.internal:6379
+argocd:
+  address: argocd-server.argocd.svc:80
+  token: token
+`)
+
+	cfg, err := config.Load(path, config.Overrides{})
+	if err != nil {
+		t.Fatalf("load Argo CD transport environment: %v", err)
+	}
+	if !cfg.ArgoCD.Plaintext || cfg.ArgoCD.Insecure {
+		t.Fatalf("Argo CD transport environment mapping mismatch: %#v", cfg.ArgoCD)
+	}
+}
+
 func TestAWSConfigValidatesECRScope(t *testing.T) {
 	valid := config.AWSConfig{AccountID: "123456789012", Region: "ap-northeast-1", ECRRepositories: []string{"platform/admin", "payments/api"}}
 	if err := valid.ValidateECR(); err != nil {

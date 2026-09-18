@@ -50,6 +50,7 @@ configuration:
     postLogoutRedirectUrl: https://releasehub.example.com/
   argocd:
     address: argocd-server.argocd.svc:443
+    plaintext: false
     insecure: false
     applicationNamespace: argocd
   aws:

@@ -73,6 +73,7 @@ data:
       access_token_max_ttl: 5m
     argocd:
       address: argocd-server.argocd.svc:443
+      plaintext: false
       insecure: false
       request_timeout: 10s
       application_namespace: argocd

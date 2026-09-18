@@ -131,6 +131,7 @@ type OIDCConfig struct {
 type ArgoCDConfig struct {
 	Address              string        `mapstructure:"address" json:"address"`
 	Token                string        `mapstructure:"token" json:"token"`
+	Plaintext            bool          `mapstructure:"plaintext" json:"plaintext"`
 	Insecure             bool          `mapstructure:"insecure" json:"insecure"`
 	RequestTimeout       time.Duration `mapstructure:"request_timeout" json:"requestTimeout"`
 	ApplicationNamespace string        `mapstructure:"application_namespace" json:"applicationNamespace"`
@@ -149,6 +150,9 @@ func (c ArgoCDConfig) Validate() error {
 	}
 	if strings.TrimSpace(c.ApplicationNamespace) == "" {
 		return errors.New("argocd.application_namespace is required")
+	}
+	if c.Plaintext && c.Insecure {
+		return errors.New("argocd.plaintext and argocd.insecure cannot both be true")
 	}
 	return nil
 }
@@ -423,6 +427,8 @@ func setDefaults(v *viper.Viper, cfg Config) {
 	v.SetDefault("observability.tracing.insecure", cfg.Observability.Tracing.Insecure)
 	v.SetDefault("observability.tracing.sample_ratio", cfg.Observability.Tracing.SampleRatio)
 	v.SetDefault("oidc.access_token_max_ttl", cfg.OIDC.AccessTokenMaxTTL)
+	v.SetDefault("argocd.plaintext", cfg.ArgoCD.Plaintext)
+	v.SetDefault("argocd.insecure", cfg.ArgoCD.Insecure)
 	v.SetDefault("argocd.request_timeout", cfg.ArgoCD.RequestTimeout)
 	v.SetDefault("argocd.application_namespace", cfg.ArgoCD.ApplicationNamespace)
 	v.SetDefault("aws.ecr_repositories", cfg.AWS.ECRRepositories)
@@ -452,7 +458,8 @@ func bindEnvironment(v *viper.Viper) error {
 		"redis.password", "oidc.issuer", "oidc.client_id", "oidc.client_secret", "oidc.redirect_url",
 		"oidc.web_redirect_url", "oidc.logout_url", "oidc.post_logout_redirect_url",
 		"oidc.access_token_max_ttl",
-		"argocd.address", "argocd.token", "argocd.request_timeout", "argocd.application_namespace", "aws.account_id", "aws.region", "aws.ecr_repositories",
+		"argocd.address", "argocd.token", "argocd.plaintext", "argocd.insecure", "argocd.request_timeout", "argocd.application_namespace",
+		"aws.account_id", "aws.region", "aws.ecr_repositories",
 		"session.encryption_key", "observability.tracing.otlp_endpoint",
 		"tenancy.mode", "tenancy.default_organization_id",
 	} {

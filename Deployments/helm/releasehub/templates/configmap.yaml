@@ -75,6 +75,7 @@ data:
       access_token_max_ttl: 5m
     argocd:
       address: {{ .Values.configuration.argocd.address | quote }}
+      plaintext: {{ .Values.configuration.argocd.plaintext }}
       insecure: {{ .Values.configuration.argocd.insecure }}
       request_timeout: 10s
       application_namespace: {{ .Values.configuration.argocd.applicationNamespace | quote }}

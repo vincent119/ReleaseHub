@@ -82,6 +82,7 @@ oidc:
 argocd:
   address: ""
   token: ""
+  plaintext: false
   insecure: false
   request_timeout: 10s
   application_namespace: argocd

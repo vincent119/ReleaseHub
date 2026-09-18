@@ -19,6 +19,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
+	grpcinsecure "google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
@@ -67,19 +68,14 @@ type Client struct {
 	controlPlaneNamespace string
 }
 
-// NewClient creates an official Argo CD Application client with TLS and OpenTelemetry propagation.
+// NewClient creates an official Argo CD Application client with the configured transport and OpenTelemetry propagation.
 func NewClient(cfg config.ArgoCDConfig) (*Client, error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
-	tlsConfig := &tls.Config{MinVersion: tls.VersionTLS12}
-	if cfg.Insecure {
-		// This option is explicit because private Argo CD installations may use an internal certificate during bootstrap.
-		tlsConfig.InsecureSkipVerify = true //nolint:gosec
-	}
 	connection, err := grpc.NewClient(
 		cfg.Address,
-		grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig)),
+		grpc.WithTransportCredentials(transportCredentials(cfg)),
 		grpc.WithStatsHandler(otelgrpc.NewClientHandler()),
 	)
 	if err != nil {
@@ -91,6 +87,18 @@ func NewClient(cfg config.ArgoCDConfig) (*Client, error) {
 		permissions: accountpkg.NewAccountServiceClient(connection), token: cfg.Token,
 		requestTimeout: cfg.RequestTimeout, controlPlaneNamespace: cfg.ApplicationNamespace,
 	}, nil
+}
+
+func transportCredentials(cfg config.ArgoCDConfig) credentials.TransportCredentials {
+	if cfg.Plaintext {
+		return grpcinsecure.NewCredentials()
+	}
+	tlsConfig := &tls.Config{MinVersion: tls.VersionTLS12}
+	if cfg.Insecure {
+		// This option remains explicit for internal TLS endpoints whose certificate chain is not trusted by the container.
+		tlsConfig.InsecureSkipVerify = true //nolint:gosec
+	}
+	return credentials.NewTLS(tlsConfig)
 }
 
 func newClientForTest(connection io.Closer, applications applicationLister, token string, requestTimeout time.Duration) (*Client, error) {

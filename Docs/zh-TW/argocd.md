@@ -4,6 +4,19 @@
 
 ReleaseHub 透過單一 Argo CD instance 執行 Application discovery、onboarding、部署前驗證、Sync 與結果對帳。Worker 必須使用專用 Argo CD account 與 gRPC token；該 account 只授予讀取 Application／manifests／resource diff、移除 automated sync、執行 Sync 及終止 operation 所需權限。
 
+### gRPC transport
+
+ReleaseHub 預設以 TLS 連線並驗證 Argo CD 憑證。若 `argocd-cmd-params-cm` 設定 `server.insecure: "true"`，且 ReleaseHub 經由同一叢集或可受信任私有網路直接連線 `argocd-server` 的 port 80，可使用：
+
+```yaml
+argocd:
+  address: argocd-server.argocd.svc:80
+  plaintext: true
+  insecure: false
+```
+
+`plaintext` 不要求兩個服務位於同一個 EKS cluster，但 DNS 與網路路由必須可達，且傳輸路徑沒有 TLS 保護。跨 cluster 或跨不受信任網路時，應保留 TLS，並配置可驗證的憑證；`insecure: true` 只會略過 TLS 憑證驗證，不會切換為 plaintext。禁止同時設定 `plaintext: true` 與 `insecure: true`。
+
 Application 必須精確設定：
 
 ```yaml

@@ -43,7 +43,8 @@ project_runtime_configuration() {
       from_yaml |
       {
         "worker": .worker,
-        "notifications": .notifications
+        "notifications": .notifications,
+        "argocd": .argocd
       }
   ' "$1"
 }
