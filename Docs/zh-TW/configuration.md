@@ -34,6 +34,8 @@ oidc:
 argocd:
   address: ""
   token: ""
+  plaintext: false
+  insecure: false
 
 session:
   encryption_key: ""
@@ -68,6 +70,8 @@ go run ./cmd/releasehub api --config ./configs/config.yaml
 - `RELEASEHUB_SESSION_ENCRYPTION_KEY`
 
 Secret 不得寫入 values、Kustomize base、image 或 Git。非 Secret 設定放在 ConfigMap。啟用 Worker 前，必須設定有效的 Argo CD address/token，以及單一 AWS account、region 與允許的 ECR repository 清單。
+
+Argo CD gRPC transport 預設使用並驗證 TLS。只有連線到明確停用 TLS 的內部 `argocd-server` Service 時，才設定 `argocd.plaintext: true`；使用 TLS 但暫時無法驗證內部憑證鏈時，才設定 `argocd.insecure: true`。兩者不得同時啟用，設定衝突時 Worker 會拒絕啟動，也不會自動降級連線。
 
 Session、Queue、Audit 與 Outbox 目前保存於 PostgreSQL。設定 schema 仍要求有效的 `redis.address` 並保留 pool 欄位，但 runtime 尚未建立 Redis client；不得把 Redis 視為目前的 session store 或 Queue store。
 
@@ -118,4 +122,5 @@ Policy 欄位與限制：
 3. PostgreSQL 可連線且已依[資料庫初始化文件](database-initialization.md)完成 versioned migrations。
 4. 啟用 OIDC 時，其 redirect URL 與外部 ReleaseHub URL 一致。
 5. Argo CD 與 ECR 身分符合最小權限。
-6. Migration 已建立 `deployment_schedule_policies`、`deployment_schedule_commands` 與 `deployment_schedule.manage` permission；此功能不需要新增 Server runtime config。
+6. Argo CD transport 與目標 Service 一致；plaintext 只能用於受信任的內部網路路徑。
+7. Migration 已建立 `deployment_schedule_policies`、`deployment_schedule_commands` 與 `deployment_schedule.manage` permission；此功能不需要新增 Server runtime config。

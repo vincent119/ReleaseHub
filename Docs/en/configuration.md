@@ -34,6 +34,8 @@ oidc:
 argocd:
   address: ""
   token: ""
+  plaintext: false
+  insecure: false
 
 session:
   encryption_key: ""
@@ -68,6 +70,8 @@ The deployment templates require an existing Kubernetes Secret named `releasehub
 - `RELEASEHUB_SESSION_ENCRYPTION_KEY`
 
 Secrets must not be stored in values, the Kustomize base, container images, or Git. Non-secret settings belong in the ConfigMap. Before enabling Worker, configure a valid Argo CD address and token plus the allowed ECR repositories in one AWS account and region.
+
+The Argo CD gRPC transport uses verified TLS by default. Set `argocd.plaintext: true` only for an internal `argocd-server` Service that explicitly disables TLS. Set `argocd.insecure: true` only when TLS remains enabled but its internal certificate chain cannot yet be verified. The options are mutually exclusive; conflicting configuration prevents Worker startup, and ReleaseHub never downgrades the transport automatically.
 
 Sessions, the queue, Audit, and Outbox records are currently stored in PostgreSQL. The schema still requires a valid `redis.address` and reserves pool fields, but the runtime does not create a Redis client. Do not treat Redis as the current session or queue store.
 
@@ -118,4 +122,5 @@ The Server fails before creating a runtime when the database, Redis address, ses
 3. PostgreSQL is reachable and versioned migrations have completed according to [Database Initialization](database-initialization.md).
 4. When OIDC is enabled, its redirect URL matches the externally reachable ReleaseHub URL.
 5. Argo CD and ECR identities follow least privilege.
-6. Migrations created `deployment_schedule_policies`, `deployment_schedule_commands`, and the `deployment_schedule.manage` permission. This feature adds no Server runtime configuration field.
+6. The Argo CD transport matches the target Service; plaintext is limited to a trusted internal network path.
+7. Migrations created `deployment_schedule_policies`, `deployment_schedule_commands`, and the `deployment_schedule.manage` permission. This feature adds no Server runtime configuration field.

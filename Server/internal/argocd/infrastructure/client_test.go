@@ -2,9 +2,13 @@ package infrastructure
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"io"
+	"net"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -14,12 +18,107 @@ import (
 	repositorypkg "github.com/argoproj/argo-cd/v3/reposerver/apiclient"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	argodomain "github.com/vincent119/ReleaseHub/Server/internal/argocd/domain"
+	"github.com/vincent119/ReleaseHub/Server/internal/config"
 )
+
+func TestArgoCDTransportDefaultsToVerifiedTLS(t *testing.T) {
+	address := startTransportTestServer(t, testTLSCredentials(t))
+	client, err := NewClient(transportTestConfig(address))
+	if err != nil {
+		t.Fatalf("create verified TLS client: %v", err)
+	}
+	t.Cleanup(func() { _ = client.Close() })
+
+	if _, err := client.ListApplications(context.Background()); err == nil {
+		t.Fatal("default Argo CD transport must reject an untrusted TLS certificate")
+	}
+}
+
+func TestArgoCDTransportAllowsExplicitTLSVerificationBypass(t *testing.T) {
+	address := startTransportTestServer(t, testTLSCredentials(t))
+	cfg := transportTestConfig(address)
+	cfg.Insecure = true
+	client, err := NewClient(cfg)
+	if err != nil {
+		t.Fatalf("create TLS verification bypass client: %v", err)
+	}
+	t.Cleanup(func() { _ = client.Close() })
+
+	if _, err := client.ListApplications(context.Background()); err != nil {
+		t.Fatalf("list Applications over explicitly unverified TLS: %v", err)
+	}
+}
+
+func TestArgoCDTransportConnectsToPlaintextGRPCServer(t *testing.T) {
+	address := startTransportTestServer(t, nil)
+	cfg := transportTestConfig(address)
+	cfg.Plaintext = true
+	client, err := NewClient(cfg)
+	if err != nil {
+		t.Fatalf("create plaintext client: %v", err)
+	}
+	t.Cleanup(func() { _ = client.Close() })
+
+	if _, err := client.ListApplications(context.Background()); err != nil {
+		t.Fatalf("list Applications over plaintext gRPC: %v", err)
+	}
+}
+
+type transportTestApplicationServer struct {
+	applicationpkg.UnimplementedApplicationServiceServer
+	expectedToken string
+}
+
+func (s *transportTestApplicationServer) List(ctx context.Context, _ *applicationpkg.ApplicationQuery) (*argov1alpha1.ApplicationList, error) {
+	values := metadata.ValueFromIncomingContext(ctx, "token")
+	if len(values) != 1 || values[0] != s.expectedToken {
+		return nil, status.Error(codes.Unauthenticated, "missing service account token")
+	}
+	return &argov1alpha1.ApplicationList{}, nil
+}
+
+func transportTestConfig(address string) config.ArgoCDConfig {
+	return config.ArgoCDConfig{
+		Address: address, Token: "token", RequestTimeout: time.Second, ApplicationNamespace: "argocd",
+	}
+}
+
+func startTransportTestServer(t *testing.T, transport credentials.TransportCredentials) string {
+	t.Helper()
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen for transport test: %v", err)
+	}
+	options := make([]grpc.ServerOption, 0, 1)
+	if transport != nil {
+		options = append(options, grpc.Creds(transport))
+	}
+	server := grpc.NewServer(options...)
+	applicationpkg.RegisterApplicationServiceServer(server, &transportTestApplicationServer{expectedToken: "token"})
+	go func() { _ = server.Serve(listener) }()
+	t.Cleanup(func() {
+		server.Stop()
+		_ = listener.Close()
+	})
+	return listener.Addr().String()
+}
+
+func testTLSCredentials(t *testing.T) credentials.TransportCredentials {
+	t.Helper()
+	certificateServer := httptest.NewTLSServer(http.NotFoundHandler())
+	certificate := certificateServer.TLS.Certificates[0]
+	certificateServer.Close()
+	return credentials.NewTLS(&tls.Config{
+		Certificates: []tls.Certificate{certificate},
+		MinVersion:   tls.VersionTLS12,
+	})
+}
 
 func TestOfficialClientMapsApplicationWithoutRequestingMutation(t *testing.T) {
 	enabled := true
