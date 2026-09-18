@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { App } from 'antd'
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import { I18nextProvider } from 'react-i18next'
 import { MemoryRouter } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -9,6 +9,7 @@ import type { CatalogOrganizationNode } from '@/generated/model'
 import i18n from '@/shared/i18n/config'
 
 import { AccessPage } from './AccessPage'
+import styles from './AccessPage.module.css'
 import { scopePayload, scopeResourceOptions } from './scopeResources'
 
 const api = vi.hoisted(() => ({
@@ -41,7 +42,7 @@ vi.mock('@/generated/api', () => ({
   useGetAccessScopeOptions: api.scopeOptions,
   useGetCatalogResourceTree: api.resources,
   useGetSystemStatus: api.system,
-  createAccessBinding: vi.fn(),
+  createAccessBindingsBatch: vi.fn(),
   createAccessDeny: vi.fn(),
   createAccessGroup: vi.fn(),
   createAccessMembership: vi.fn(),
@@ -184,6 +185,45 @@ describe('AccessPage', () => {
     expect(
       screen.queryByRole('button', { name: '停用' }),
     ).not.toBeInTheDocument()
+  })
+
+  it('uses semantic theme tokens for the inactive status', () => {
+    api.users.mockReturnValue(
+      query([
+        {
+          id: '019c1230-0000-7000-8000-000000000001',
+          username: 'vincent',
+          disabled: true,
+          allowedActions: [],
+        },
+      ]),
+    )
+
+    renderPage()
+
+    expect(screen.getByText('停用')).toHaveClass(styles.statusInactive)
+  })
+
+  it('uses a multiple Role selector when creating bindings', async () => {
+    api.capabilities.mockReturnValue(
+      query({
+        collections: [
+          { key: 'users', visible: true, canCreate: true },
+          { key: 'bindings', visible: true, canCreate: true },
+        ],
+        permissions: [],
+      }),
+    )
+    api.scopeOptions.mockReturnValue(
+      query({ groups: [], roles: [], permissions: [] }),
+    )
+
+    const rendered = renderPage('/access?tab=bindings')
+    fireEvent.click(screen.getByRole('button', { name: '建立角色綁定' }))
+
+    expect(document.querySelector('.ant-select-multiple')).not.toBeNull()
+    rendered.unmount()
+    await new Promise((resolve) => setTimeout(resolve, 0))
   })
 
   it('offers Group member management from the Group row', () => {

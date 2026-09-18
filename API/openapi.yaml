@@ -333,6 +333,21 @@ paths:
         "201": { description: The Role binding was created, content: { application/json: { schema: { $ref: "#/components/schemas/AccessBindingResponse" } } } }
         "404": { description: "The Group, Role, or scope does not exist, or the caller lacks management permission." }
         "409": { description: The binding conflicts or the current data state does not permit creation. }
+  /api/v1/access/bindings/batch:
+    post:
+      operationId: createAccessBindingsBatch
+      summary: Bind a Group and multiple Roles to a scope atomically
+      tags: [Access]
+      security: [{ sessionCookie: [] }]
+      parameters: [{ $ref: "#/components/parameters/CsrfToken" }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/CreateAccessBindingsBatchRequest" } } }
+      responses:
+        "201": { description: All Role bindings were created, content: { application/json: { schema: { $ref: "#/components/schemas/AccessBindingsResponse" } } } }
+        "400": { description: "The request contains no Roles, duplicate Roles, or more than 20 Roles." }
+        "404": { description: "The Group, Role, or scope does not exist, or the caller lacks management permission." }
+        "409": { description: "At least one binding conflicts, so no binding was created." }
   /api/v1/access/denies:
     get:
       operationId: listAccessDenies
@@ -2334,6 +2349,19 @@ components:
           properties:
             groupId: { type: string, format: uuid }
             roleId: { type: string, format: uuid }
+    CreateAccessBindingsBatchRequest:
+      allOf:
+        - $ref: "#/components/schemas/AccessScopeInput"
+        - type: object
+          required: [groupId, roleIds]
+          properties:
+            groupId: { type: string, format: uuid }
+            roleIds:
+              type: array
+              minItems: 1
+              maxItems: 20
+              uniqueItems: true
+              items: { type: string, format: uuid }
     CreateAccessDenyRequest:
       allOf:
         - $ref: "#/components/schemas/AccessScopeInput"
@@ -2365,6 +2393,14 @@ components:
       required: [data, meta]
       properties:
         data: { $ref: "#/components/schemas/AccessBinding" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+    AccessBindingsResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: array
+          items: { $ref: "#/components/schemas/AccessBinding" }
         meta: { $ref: "#/components/schemas/ResponseMeta" }
     AccessDenyResponse:
       type: object

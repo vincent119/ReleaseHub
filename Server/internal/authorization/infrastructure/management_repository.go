@@ -288,6 +288,78 @@ func (r *AccessManagementRepository) CreateBinding(ctx context.Context, mutation
 	return value, nil
 }
 
+// CreateBindings creates multiple active Role bindings in one transaction.
+func (r *AccessManagementRepository) CreateBindings(ctx context.Context, mutation authzapp.AccessMutation, input authzapp.CreateBindingsInput) ([]authzapp.AccessBinding, error) {
+	values := make([]authzapp.AccessBinding, 0, len(input.RoleIDs))
+	for _, roleID := range input.RoleIDs {
+		values = append(values, authzapp.AccessBinding{ID: uuid.New(), GroupID: input.GroupID, RoleID: roleID, OrganizationID: input.OrganizationID, ScopeKind: input.ScopeKind, ProjectID: input.ProjectID, EnvironmentID: input.EnvironmentID, ApplicationID: input.ApplicationID, Active: true})
+	}
+	now := time.Now().UTC()
+	err := database.WithinTransaction(ctx, r.db, func(tx *gorm.DB) error {
+		lockKey := fmt.Sprintf("access-binding:%s:%s:%s:%s:%s", input.GroupID, input.ScopeKind, input.ProjectID, nullableUUID(input.EnvironmentID), nullableUUID(input.ApplicationID))
+		if err := tx.WithContext(ctx).Exec(`SELECT pg_advisory_xact_lock(hashtextextended(?, 0))`, lockKey).Error; err != nil {
+			return fmt.Errorf("lock Role binding scope: %w", err)
+		}
+		for _, value := range values {
+			if err := ensureBindingAbsent(ctx, tx, value); err != nil {
+				return err
+			}
+			resourceType, eventType := "authorization_group_role_binding", "authorization.role_binding.created"
+			var organizationID *uuid.UUID = &input.OrganizationID
+			if input.ScopeKind == "platform" {
+				resourceType, eventType, organizationID = "authorization_platform_role_binding", "authorization.platform_role_binding.created", nil
+				if err := tx.WithContext(ctx).Exec(`INSERT INTO authorization_platform_role_bindings (id, group_id, role_id) VALUES (?, ?, ?)`, value.ID, value.GroupID, value.RoleID).Error; err != nil {
+					return err
+				}
+			} else if err := tx.WithContext(ctx).Exec(`INSERT INTO authorization_group_role_bindings (id, group_id, role_id, organization_id, scope_kind, project_id, environment_id, application_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, value.ID, value.GroupID, value.RoleID, value.OrganizationID, value.ScopeKind, value.ProjectID, value.EnvironmentID, value.ApplicationID).Error; err != nil {
+				return err
+			}
+			metadata := map[string]any{"groupId": value.GroupID.String(), "roleId": value.RoleID.String(), "scopeKind": value.ScopeKind}
+			payload, err := json.Marshal(metadata)
+			if err != nil {
+				return fmt.Errorf("marshal Role binding event: %w", err)
+			}
+			event, err := platform.NewEvent(eventType, resourceType, value.ID.String(), payload, now)
+			if err != nil {
+				return fmt.Errorf("create Role binding event: %w", err)
+			}
+			if err := database.AppendAudit(ctx, tx, database.AuditRecord{OccurredAt: now, ActorID: &mutation.ActorID, OrganizationID: organizationID, Action: eventType, ResourceType: resourceType, ResourceID: value.ID.String(), RequestID: mutation.RequestID, Metadata: metadata}); err != nil {
+				return err
+			}
+			if err := database.AppendOutbox(ctx, tx, event); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("create Role bindings: %w", classifyAccessMutationError(err))
+	}
+	return values, nil
+}
+
+func ensureBindingAbsent(ctx context.Context, tx *gorm.DB, value authzapp.AccessBinding) error {
+	var count int64
+	query := tx.WithContext(ctx).Table("authorization_group_role_bindings").Where("group_id = ? AND role_id = ? AND scope_kind = ? AND project_id = ? AND environment_id IS NOT DISTINCT FROM ? AND application_id IS NOT DISTINCT FROM ? AND active", value.GroupID, value.RoleID, value.ScopeKind, value.ProjectID, value.EnvironmentID, value.ApplicationID)
+	if value.ScopeKind == "platform" {
+		query = tx.WithContext(ctx).Table("authorization_platform_role_bindings").Where("group_id = ? AND role_id = ?", value.GroupID, value.RoleID)
+	}
+	if err := query.Count(&count).Error; err != nil {
+		return err
+	}
+	if count != 0 {
+		return authzapp.ErrAccessManagementConflict
+	}
+	return nil
+}
+
+func nullableUUID(value *uuid.UUID) string {
+	if value == nil {
+		return ""
+	}
+	return value.String()
+}
+
 // CreateDeny creates one active explicit deny policy.
 func (r *AccessManagementRepository) CreateDeny(ctx context.Context, mutation authzapp.AccessMutation, input authzapp.CreateDenyInput) (authzapp.AccessDeny, error) {
 	value := authzapp.AccessDeny{ID: uuid.New(), GroupID: input.GroupID, Permission: input.Permission, OrganizationID: input.OrganizationID, ScopeKind: input.ScopeKind, ProjectID: input.ProjectID, EnvironmentID: input.EnvironmentID, ApplicationID: input.ApplicationID, Active: true}

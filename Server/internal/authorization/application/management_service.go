@@ -182,6 +182,7 @@ type AccessManagementRepository interface {
 	CreateRole(context.Context, AccessMutation, CreateRoleInput) (AccessRole, error)
 	AddMembership(context.Context, AccessMutation, uuid.UUID, uuid.UUID) (AccessMembership, error)
 	CreateBinding(context.Context, AccessMutation, CreateBindingInput) (AccessBinding, error)
+	CreateBindings(context.Context, AccessMutation, CreateBindingsInput) ([]AccessBinding, error)
 	CreateDeny(context.Context, AccessMutation, CreateDenyInput) (AccessDeny, error)
 	DisableUser(context.Context, AccessMutation, uuid.UUID) error
 	RevokeMembership(context.Context, AccessMutation, uuid.UUID) error

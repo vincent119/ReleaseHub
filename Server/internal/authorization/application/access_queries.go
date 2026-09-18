@@ -147,7 +147,7 @@ func (s *AccessManagementService) ScopeOptions(ctx context.Context, principal Ac
 		}
 	}
 	for _, role := range value.Roles {
-		if !role.Active {
+		if !role.Active || !roleHasEffectivePermission(role, value.Permissions, scopeKind) {
 			continue
 		}
 		if scopeKind == "platform" {

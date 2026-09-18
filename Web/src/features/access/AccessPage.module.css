@@ -1,0 +1,11 @@
+.statusActive {
+  color: var(--rh-color-success);
+  background: var(--rh-color-success-soft);
+  border-color: var(--rh-color-success);
+}
+
+.statusInactive {
+  color: var(--rh-color-text-secondary);
+  background: var(--rh-color-surface-soft);
+  border-color: var(--rh-color-border);
+}
