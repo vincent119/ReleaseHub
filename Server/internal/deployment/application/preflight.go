@@ -63,6 +63,24 @@ func (s *PreflightService) Check(ctx context.Context, target PreflightTarget) (d
 	return deploydomain.EvaluatePreflight(target.Snapshot, evidence), nil
 }
 
+func (s *PreflightService) manifestHashMatchesAtRevision(ctx context.Context, target PreflightTarget, revision string) (bool, error) {
+	if revision == "" {
+		return false, errors.New("completed Application revision is empty")
+	}
+	manifests, resolved, err := s.argo.GetTargetManifestsAtRevision(ctx, target.Identity, target.ArgoProject, revision)
+	if err != nil {
+		return false, fmt.Errorf("read completed revision manifests: %w", err)
+	}
+	if resolved != revision {
+		return false, fmt.Errorf("completed manifest revision mismatch: expected %q, got %q", revision, resolved)
+	}
+	hash, err := HashTargetManifests(manifests)
+	if err != nil {
+		return false, fmt.Errorf("hash completed revision manifests: %w", err)
+	}
+	return hash == target.Snapshot.ManifestHash, nil
+}
+
 func (s *PreflightService) collectEvidence(ctx context.Context, target PreflightTarget, application argodomain.Application) (deploydomain.PreflightEvidence, error) {
 	if application.ResolvedRevision == "" {
 		return deploydomain.PreflightEvidence{}, errors.New("preflight application resolved revision is empty")

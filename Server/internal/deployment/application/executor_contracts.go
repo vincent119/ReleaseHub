@@ -62,9 +62,10 @@ type nodeResult struct {
 }
 
 type conditionTiming struct {
-	startedAt   time.Time
-	stableSince time.Time
-	now         time.Time
+	startedAt        time.Time
+	stableSince      time.Time
+	now              time.Time
+	verifiedRevision string
 }
 
 // ExecutionRepository persists snapshots and node progress.

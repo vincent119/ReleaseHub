@@ -44,13 +44,13 @@ func (e *DeploymentExecutor) evaluateObservation(ctx context.Context, execution 
 		cause := errors.New("Argo CD operation failed")
 		return true, e.failNode(ctx, execution, "operation_failed", cause)
 	}
-	if application.OperationID == execution.operationID && application.OperationPhase == "Succeeded" && !revisionMatches(execution, application) {
-		cause := errors.New("Argo CD completed a different target revision")
-		return true, e.failNodeWithObservation(ctx, execution, application, "target_revision_mismatch", cause)
+	revisionAccepted, err := e.acceptRevision(ctx, execution, application, timing)
+	if err != nil {
+		return true, e.failNodeWithObservation(ctx, execution, application, "target_revision_mismatch", err)
 	}
 	timing.stableSince = conditionStableSince(execution.target.Node, application, timing.stableSince, timing.now)
 	condition := nodeConditionResult(execution.target.Node, application, *timing)
-	if condition == deploydomain.DeploymentConditionSucceeded && operationMatches(execution, application) {
+	if condition == deploydomain.DeploymentConditionSucceeded && application.OperationID == execution.operationID && revisionAccepted {
 		return true, e.saveNode(ctx, execution, application, "Succeeded")
 	}
 	if condition == deploydomain.DeploymentConditionTimedOut {
@@ -60,11 +60,32 @@ func (e *DeploymentExecutor) evaluateObservation(ctx context.Context, execution 
 	return false, nil
 }
 
-func operationMatches(execution nodeExecution, application argodomain.Application) bool {
-	if application.OperationID != execution.operationID {
-		return false
+func (e *DeploymentExecutor) acceptRevision(ctx context.Context, execution nodeExecution, application argodomain.Application, timing *conditionTiming) (bool, error) {
+	if revisionMatches(execution, application) {
+		return true, nil
 	}
-	return revisionMatches(execution, application)
+	if application.OperationID != execution.operationID || application.OperationPhase != "Succeeded" {
+		return false, nil
+	}
+	if len(execution.target.Preflight.Snapshot.TargetRevisions) > 0 {
+		return false, errors.New("Argo CD completed a different multi-source revision vector")
+	}
+	return e.acceptSingleSourceRevision(ctx, execution, application, timing)
+}
+
+func (e *DeploymentExecutor) acceptSingleSourceRevision(ctx context.Context, execution nodeExecution, application argodomain.Application, timing *conditionTiming) (bool, error) {
+	if timing.verifiedRevision == application.ResolvedRevision && timing.verifiedRevision != "" {
+		return true, nil
+	}
+	matches, err := e.preflight.manifestHashMatchesAtRevision(ctx, execution.target.Preflight, application.ResolvedRevision)
+	if err != nil {
+		return false, fmt.Errorf("verify completed target revision: %w", err)
+	}
+	if !matches {
+		return false, errors.New("Argo CD completed a different target revision")
+	}
+	timing.verifiedRevision = application.ResolvedRevision
+	return true, nil
 }
 
 func revisionMatches(execution nodeExecution, application argodomain.Application) bool {
