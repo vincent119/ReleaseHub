@@ -1,5 +1,7 @@
 # Argo CD 整合
 
+CI 到 Argo CD Sync 的操作順序在 [Production 發布操作指南](release-flow.md)。本頁集中說明 Application onboarding、gRPC 連線及部署時的 Argo CD 行為。
+
 ## 目的與前置條件
 
 ReleaseHub 透過單一 Argo CD instance 執行 Application discovery、onboarding、部署前驗證、Sync 與結果對帳。Worker 必須使用專用 Argo CD account 與 gRPC token；該 account 只授予讀取 Application／manifests／resource diff、移除 automated sync、執行 Sync 及終止 operation 所需權限。

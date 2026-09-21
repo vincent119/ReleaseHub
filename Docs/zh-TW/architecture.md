@@ -1,5 +1,7 @@
 # 架構
 
+要準備或執行 Production 發布，從 [Production 發布操作指南](release-flow.md)開始。本頁只談 runtime 邊界與控制流。
+
 ## 目的與範圍
 
 本文件供平台開發者與維運人員理解 ReleaseHub 的 runtime 邊界、資料來源與部署控制流。ReleaseHub 負責發佈治理，不取代 GitOps repository、Image Updater、Argo CD 或 Kubernetes controller。

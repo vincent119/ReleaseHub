@@ -1,5 +1,7 @@
 # ReleaseHub Operations Runbook
 
+The normal path is in the [Production Release Guide](release-flow.md). This runbook starts when a Queue waits, an Execution fails, or an operator must recover it.
+
 ## Scope
 
 This runbook covers the production Deployment Queue, `Partial Failed`, manual unlock, Argo CD outages, and Forward Rollback. Operators need read access to the target Organization, Project, and Environment. Retry, terminate, and unlock also require the effective capability shown by the UI.

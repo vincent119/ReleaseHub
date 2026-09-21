@@ -1,5 +1,7 @@
 # Architecture
 
+Start with the [Production Release Guide](release-flow.md) when preparing or running a release. This page stays focused on runtime boundaries and control flow.
+
 ## Purpose and Scope
 
 This document explains ReleaseHub runtime boundaries, data sources, and deployment control flow to platform developers and operators. ReleaseHub governs releases; it does not replace the GitOps repository, Image Updater, Argo CD, or Kubernetes controllers.

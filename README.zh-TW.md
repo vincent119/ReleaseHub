@@ -2,28 +2,37 @@
 
 [English](README.en.md)
 
-ReleaseHub 是以 Argo CD 為部署執行端的發佈治理平台，讓平台團隊集中管理 Application onboarding、Production Deployment Request、審核、部署順序、執行狀態與稽核紀錄。GitOps repository 仍是期望狀態來源；ReleaseHub 不寫 Git、不控制 Image Updater，也不以 image override 取代既有 GitOps 流程。
+ReleaseHub 把 Production 發布的候選版本、審核、部署順序和執行證據收在同一個地方，供平台團隊管理 Argo CD Application。CI 仍負責建置 image，GitOps repository 仍保存期望狀態，實際套用則交給 Argo CD。ReleaseHub 介入的是中間那段治理流程。
 
-## 目前能力
+## ReleaseHub 管理什麼
 
-- 從 Argo CD 探索並 onboarding 帶有管理 label 的 Application。
-- 從 Argo CD target manifests 與 ECR digest 建立不可變的 Deployment Request Version。
-- 以 Release Workflow 管理審核與人工或自動轉換。
-- 以 Deployment Plan DAG 定義 Application 相依關係與平行上限。
-- 執行部署前 hard refresh、內容漂移檢查、指定 revision Sync 與結果對帳。
-- 提供 `Partial Failed`、失敗 Application retry、terminate、人工解鎖及 Forward Rollback 流程。
-- 使用 OIDC、Group／Role／Scope／Deny、站內通知與 Audit 管理存取及操作證據。
-- 依 `manager_password` 建立本機 `admin` 帳號，並強制首次登入後變更密碼。
+- 從 Argo CD 找出帶有管理 label 的 Application，完成 onboarding 後持續檢查設定漂移。
+- 依 target manifests、live resource diff 與 ECR digest 建立不可變的 Deployment Request Version。
+- 用 Release Workflow 處理審核及人工或自動 transition。
+- 用 Deployment Plan DAG 控制 Application 相依關係與平行上限。
+- 在 Sync 前重新比對 revision、resource diff 和 image digest，內容變動就停止部署。
+- 保存 `Partial Failed`、retry、terminate、人工解鎖、Forward Rollback、通知及 Audit 證據。
+- 以 OIDC、Group、Role、Scope 與明確 Deny 控制操作權限。
 
-## 開發驗證
+ReleaseHub 不寫 Git，也不控制 Argo CD Image Updater。Production Application 的 automated sync 必須停用，核准後由 ReleaseHub 要求 Argo CD Sync 指定 revision。
 
-### 前置需求
+## 從哪裡開始
 
-| 工具 | 需求來源 |
+準備部署環境時，依序閱讀[設定](Docs/zh-TW/configuration.md)與[部署](Docs/zh-TW/deployment.md)。PostgreSQL、Argo CD、AWS ECR 和 Kubernetes 都是必要外部服務。OIDC 只在啟用 OIDC 登入時需要。
+
+第一次接 Application，先看 [Argo CD 整合](Docs/zh-TW/argocd.md)和 [Amazon ECR 整合](Docs/zh-TW/ecr.md)。完成 onboarding、Workflow、Plan 及 Environment Binding 後，再依 [Production 發布操作指南](Docs/zh-TW/release-flow.md)跑第一個受管發布。
+
+遇到 Queue 等待、`Partial Failed`、終止、解鎖或 Argo CD 中斷時，直接查[操作 Runbook](Docs/zh-TW/operations-runbook.md)。
+
+## 驗證 repository
+
+### 工具版本
+
+| 工具 | 版本或用途 |
 | --- | --- |
-| Go `1.26.6` | `Server/go.mod` |
-| Node.js `22.22.0` 以上 | `Web/package.json` |
-| pnpm `11.19.0` | `Web/package.json` |
+| Go | `1.26.6`，來源為 `Server/go.mod` |
+| Node.js | `22.22.0` 以上，來源為 `Web/package.json` |
+| pnpm | `11.19.0`，來源為 `Web/package.json` |
 | Docker | PostgreSQL Testcontainers 整合測試 |
 | Helm、Kustomize、kubeconform、Trivy、yq | 部署描述驗證 |
 
@@ -38,11 +47,18 @@ cd ..
 make verify
 ```
 
-`make verify` 成功時會以 exit code `0` 結束，並完成 OpenAPI 產物一致性、Server／Web 測試、lint、build、雙語文件配對，以及 Helm／Kustomize schema 與安全設定驗證。若只想查看可用 target，可執行 `make help`。
+成功時 `make verify` 以 exit code `0` 結束。它會檢查 OpenAPI 產物、Server 與 Web 測試、lint、build、雙語文件配對，以及 Helm／Kustomize schema 和安全設定。`make help` 可列出個別 target。
 
-啟動完整服務前，仍需提供 PostgreSQL、Argo CD、AWS ECR 與 Kubernetes 環境；啟用本機登入時，OIDC 為選用整合。請依[設定文件](Docs/zh-TW/configuration.md)及[部署文件](Docs/zh-TW/deployment.md)準備。
+本機初始化可用 `manager_password: admin` 建立 `admin / admin`。第一次登入後必須立刻變更密碼，詳細設定在[初始管理員](Docs/zh-TW/configuration.md#初始管理員)。
 
-本機初始化可設定 `manager_password: admin` 以建立 `admin / admin`。首次登入後必須先變更密碼，才能執行其他已認證操作。詳情請參考[設定文件](Docs/zh-TW/configuration.md#初始管理員)。
+## 文件
+
+- 第一次部署：[設定](Docs/zh-TW/configuration.md) → [部署](Docs/zh-TW/deployment.md) → [操作 Runbook](Docs/zh-TW/operations-runbook.md)
+- Production 發布：[發布操作指南](Docs/zh-TW/release-flow.md)
+- 平台設計：[架構](Docs/zh-TW/architecture.md)
+- Application 整合：[Argo CD](Docs/zh-TW/argocd.md) → [Amazon ECR](Docs/zh-TW/ecr.md)
+- 登入與權限：[OIDC](Docs/zh-TW/oidc.md)
+- 資料庫建置：[資料庫初始化](Docs/zh-TW/database-initialization.md)
 
 ## Repository 結構
 
@@ -52,21 +68,14 @@ make verify
 - `Deployments/`：Helm 與 Kustomize 部署描述。
 - `Docs/zh-TW/`、`Docs/en/`：中英文技術文件。
 
-## 文件導覽
-
-- 第一次部署：[設定](Docs/zh-TW/configuration.md) → [部署](Docs/zh-TW/deployment.md) → [操作 Runbook](Docs/zh-TW/operations-runbook.md)
-- 平台與資料流：[架構](Docs/zh-TW/architecture.md)
-- Application 整合：[Argo CD](Docs/zh-TW/argocd.md) → [Amazon ECR](Docs/zh-TW/ecr.md)
-- 身分與 Session：[OIDC](Docs/zh-TW/oidc.md)
-
 ## 第一階段限制
 
-- 單一 Argo CD instance。
-- 單一 AWS account 與單一 region。
-- Worker replica 固定為 `1`，以維持全平台 Application 並行上限。
-- 真實 Argo CD／ECR 隔離環境仍需另行完成端對端驗證，repository 驗證不能取代 production 演練。
+- 只連接一個 Argo CD instance。
+- 只使用一個 AWS account 和 region。
+- Worker replica 固定為 `1`，讓 Application 並行上限維持全平台一致。
+- Repository 內的測試已通過，但真實 Argo CD／ECR 隔離環境端到端演練仍未完成。
 
-## 開發命令
+## 常用開發命令
 
 ```bash
 make generate       # 重新產生 Go 與 TypeScript OpenAPI 程式碼
@@ -78,4 +87,4 @@ make verify         # 執行完整 repository 驗證
 
 ## 授權
 
-授權方式尚未決定，因此目前沒有 `LICENSE` 檔案。
+授權方式尚未決定，目前沒有 `LICENSE` 檔案。

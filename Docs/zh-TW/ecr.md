@@ -1,5 +1,7 @@
 # Amazon ECR 整合
 
+ECR image 進入 GitOps 後如何成為 Deployment Request，寫在 [Production 發布操作指南](release-flow.md)。本頁只處理 image 驗證與 digest 鎖定。
+
 ## 目的與範圍
 
 ReleaseHub 使用 Amazon ECR 驗證 Argo CD target manifests 中的 image 是否存在，並將 tag 解析為不可變 digest。第一階段限制為單一 AWS account 與單一 region；`aws.ecr_repositories` 是明確 allow-list，範圍外的 image 會失敗封閉。

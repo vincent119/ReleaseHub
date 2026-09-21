@@ -1,5 +1,7 @@
 # ReleaseHub 操作 Runbook
 
+正常發布程序在 [Production 發布操作指南](release-flow.md)。本 Runbook 從 Queue 等待、執行失敗或人工復原開始。
+
 ## 適用範圍
 
 本文件處理 production Deployment Queue、`Partial Failed`、人工解鎖、Argo CD 中斷及 Forward Rollback。操作者必須具有目標 Organization、Project、Environment 的檢視權限；執行 retry、terminate 或 unlock 時，還需具備畫面顯示的 effective capability。

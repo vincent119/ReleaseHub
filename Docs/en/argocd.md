@@ -1,5 +1,7 @@
 # Argo CD Integration
 
+The [Production Release Guide](release-flow.md) follows a release from CI through Argo CD Sync. This page covers Application onboarding, gRPC transport, and Argo CD behavior during deployment.
+
 ## Purpose and Prerequisites
 
 ReleaseHub uses one Argo CD instance for Application discovery, onboarding, preflight validation, Sync, and result reconciliation. Worker must use a dedicated Argo CD account and gRPC token. Grant that account only the permissions required to read Applications, manifests, and resource diffs; remove automated sync; start Sync; and terminate operations.

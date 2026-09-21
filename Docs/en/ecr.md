@@ -1,5 +1,7 @@
 # Amazon ECR Integration
 
+The [Production Release Guide](release-flow.md) follows an ECR image through GitOps and Argo CD into a Deployment Request. This page covers image verification and digest locking.
+
 ## Purpose and Scope
 
 ReleaseHub uses Amazon ECR to verify images found in Argo CD target manifests and resolve tags to immutable digests. Phase one is restricted to one AWS account and one region. `aws.ecr_repositories` is an explicit allow-list, and images outside this boundary fail closed.
