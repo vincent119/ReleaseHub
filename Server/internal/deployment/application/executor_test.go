@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"errors"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -106,26 +107,120 @@ func TestDeploymentExecutorRejectsDifferentOperationAfterWatchTimeout(t *testing
 	}
 }
 
-func TestDeploymentExecutorRejectsCompletedOperationWithTargetRevisionMismatch(t *testing.T) {
+func TestDeploymentExecutorAcceptsEquivalentManifestsAtAdvancedRevision(t *testing.T) {
 	executor, argo, repository := newExecutorFixture(t, "sha256:approved")
 	argo.syncPending = true
 	argo.resolvedRevision = "newer-commit"
 	argo.watch = newBlockingApplicationWatch()
 	executor.watchTimeout = time.Millisecond
-	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
-	defer cancel()
-	if err := executor.Execute(ctx, repository.snapshot.RequestVersionID); err != nil {
+	if err := executor.Execute(context.Background(), repository.snapshot.RequestVersionID); err != nil {
+		t.Fatalf("equivalent manifests should complete deployment: %v", err)
+	}
+	if len(argo.syncs) != 1 || argo.getCalls == 0 || len(repository.updates) != 2 || repository.updates[1].Status != "Succeeded" {
+		t.Fatalf("equivalent manifests did not succeed: syncs=%d gets=%d updates=%#v", len(argo.syncs), argo.getCalls, repository.updates)
+	}
+	if update := repository.updates[1]; update.ActualRevision != "newer-commit" {
+		t.Fatalf("success did not preserve actual revision: %#v", update)
+	}
+	if !slices.Contains(argo.targetManifestRevisions(), "newer-commit") {
+		t.Fatalf("completion did not verify the actual revision: %#v", argo.targetManifestRevisions())
+	}
+	if countRevision(argo.targetManifestRevisions(), "newer-commit") != 1 {
+		t.Fatalf("completion repeated manifest verification: %#v", argo.targetManifestRevisions())
+	}
+}
+
+func TestDeploymentExecutorRejectsChangedManifestsAtAdvancedRevision(t *testing.T) {
+	testDeploymentExecutorRejectsChangedManifestsAtAdvancedRevision(t)
+}
+
+func TestDeploymentExecutorRejectsCompletedOperationWithTargetRevisionMismatch(t *testing.T) {
+	testDeploymentExecutorRejectsChangedManifestsAtAdvancedRevision(t)
+}
+
+func testDeploymentExecutorRejectsChangedManifestsAtAdvancedRevision(t *testing.T) {
+	t.Helper()
+	executor, argo, repository := newExecutorFixture(t, "sha256:approved")
+	argo.syncPending = true
+	argo.resolvedRevision = "newer-commit"
+	argo.manifestsByRevision = map[string][]string{"newer-commit": {"apiVersion: v1\nkind: Service\n"}}
+	argo.watch = newBlockingApplicationWatch()
+	executor.watchTimeout = time.Millisecond
+	if err := executor.Execute(context.Background(), repository.snapshot.RequestVersionID); err != nil {
 		t.Fatalf("revision mismatch should be a business failure: %v", err)
 	}
+	assertTargetRevisionMismatch(t, argo, repository)
+}
+
+func TestDeploymentExecutorFailsClosedWhenAdvancedRevisionCannotBeVerified(t *testing.T) {
+	tests := map[string]func(*deploymentArgoStub){
+		"query error": func(argo *deploymentArgoStub) {
+			argo.manifestErrors = map[string]error{"newer-commit": errors.New("manifest unavailable")}
+		},
+		"revision mismatch": func(argo *deploymentArgoStub) {
+			argo.manifestResolvedRevisions = map[string]string{"newer-commit": "different-commit"}
+		},
+		"invalid manifests": func(argo *deploymentArgoStub) {
+			argo.manifestsByRevision = map[string][]string{"newer-commit": {"apiVersion: ["}}
+		},
+	}
+	for name, configure := range tests {
+		t.Run(name, func(t *testing.T) {
+			executor, argo, repository := newExecutorFixture(t, "sha256:approved")
+			argo.syncPending = true
+			argo.resolvedRevision = "newer-commit"
+			configure(argo)
+			argo.watch = newBlockingApplicationWatch()
+			executor.watchTimeout = time.Millisecond
+			if err := executor.Execute(context.Background(), repository.snapshot.RequestVersionID); err != nil {
+				t.Fatalf("unverifiable revision should be a business failure: %v", err)
+			}
+			assertTargetRevisionMismatch(t, argo, repository)
+		})
+	}
+}
+
+func TestDeploymentExecutorKeepsMultiSourceRevisionMismatchFailClosed(t *testing.T) {
+	executor, argo, repository := newExecutorFixture(t, "sha256:approved")
+	repository.snapshot.Targets[0].Preflight.Snapshot.TargetRevision = ""
+	repository.snapshot.Targets[0].Preflight.Snapshot.TargetRevisions = []string{"approved-a", "approved-b"}
+	argo.syncPending = true
+	argo.resolvedRevisions = []string{"newer-a", "approved-b"}
+	argo.watch = newBlockingApplicationWatch()
+	executor.watchTimeout = time.Millisecond
+	if err := executor.Execute(context.Background(), repository.snapshot.RequestVersionID); err != nil {
+		t.Fatalf("multi-source mismatch should be a business failure: %v", err)
+	}
+	assertTargetRevisionMismatch(t, argo, repository)
+	if slices.Contains(argo.targetManifestRevisions(), "newer-a") {
+		t.Fatalf("multi-source mismatch used a partial manifest query: %#v", argo.targetManifestRevisions())
+	}
+}
+
+func assertTargetRevisionMismatch(t *testing.T, argo *deploymentArgoStub, repository *executionRepositoryStub) {
+	t.Helper()
 	if len(argo.syncs) != 1 || argo.getCalls == 0 || len(repository.updates) != 2 || repository.updates[1].ErrorCode != "target_revision_mismatch" {
 		t.Fatalf("completed operation revision mismatch was not rejected: syncs=%d gets=%d updates=%#v", len(argo.syncs), argo.getCalls, repository.updates)
 	}
-	if update := repository.updates[1]; update.ActualRevision != "newer-commit" || update.SyncStatus != "Synced" || update.HealthStatus != "Healthy" {
-		t.Fatalf("revision mismatch did not preserve actual deployment evidence: %#v", update)
+	if update := repository.updates[1]; update.SyncStatus != "Synced" || update.HealthStatus != "Healthy" {
+		t.Fatalf("revision mismatch did not preserve deployment evidence: %#v", update)
+	}
+	if len(repository.snapshot.Targets[0].Preflight.Snapshot.TargetRevisions) == 0 && repository.updates[1].ActualRevision != "newer-commit" {
+		t.Fatalf("revision mismatch did not preserve actual revision: %#v", repository.updates[1])
 	}
 	if repository.completed != deploydomain.ExecutionFailed {
 		t.Fatalf("revision mismatch execution status = %q", repository.completed)
 	}
+}
+
+func countRevision(values []string, target string) int {
+	count := 0
+	for _, value := range values {
+		if value == target {
+			count++
+		}
+	}
+	return count
 }
 
 func TestWorkerRestartResumesPersistedOperationWithoutSync(t *testing.T) {
@@ -262,20 +357,26 @@ func (s *executionRepositoryStub) Block(_ context.Context, value ExecutionBlock)
 }
 
 type deploymentArgoStub struct {
-	mu               sync.Mutex
-	manifests        []string
-	syncs            []argodomain.SyncRequest
-	syncPending      bool
-	watch            *blockingApplicationWatch
-	operationID      string
-	resolvedRevision string
-	manifestRevision string
-	getCalls         int
-	failName         string
+	mu                        sync.Mutex
+	manifests                 []string
+	syncs                     []argodomain.SyncRequest
+	syncPending               bool
+	watch                     *blockingApplicationWatch
+	operationID               string
+	refreshRevision           string
+	resolvedRevision          string
+	resolvedRevisions         []string
+	manifestRevision          string
+	manifestRevisions         []string
+	manifestsByRevision       map[string][]string
+	manifestErrors            map[string]error
+	manifestResolvedRevisions map[string]string
+	getCalls                  int
+	failName                  string
 }
 
 func (s *deploymentArgoStub) HardRefreshApplication(context.Context, argodomain.ApplicationIdentity, string) (argodomain.Application, error) {
-	revision := s.resolvedRevision
+	revision := s.refreshRevision
 	if revision == "" {
 		revision = "latest-commit"
 	}
@@ -285,13 +386,32 @@ func (s *deploymentArgoStub) GetTargetManifestsAtRevision(_ context.Context, _ a
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.manifestRevision = revision
-	return s.manifests, revision, nil
+	s.manifestRevisions = append(s.manifestRevisions, revision)
+	if err := s.manifestErrors[revision]; err != nil {
+		return nil, "", err
+	}
+	if manifests, ok := s.manifestsByRevision[revision]; ok {
+		return manifests, s.manifestResolvedRevision(revision), nil
+	}
+	return s.manifests, s.manifestResolvedRevision(revision), nil
+}
+
+func (s *deploymentArgoStub) manifestResolvedRevision(revision string) string {
+	if resolved, ok := s.manifestResolvedRevisions[revision]; ok {
+		return resolved
+	}
+	return revision
 }
 
 func (s *deploymentArgoStub) targetManifestRevision() string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.manifestRevision
+}
+func (s *deploymentArgoStub) targetManifestRevisions() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return slices.Clone(s.manifestRevisions)
 }
 func (s *deploymentArgoStub) GetManagedResourceDiffs(context.Context, argodomain.ApplicationIdentity, string) ([]argodomain.ResourceDiff, error) {
 	return nil, nil
@@ -309,7 +429,8 @@ func (s *deploymentArgoStub) GetApplication(context.Context, argodomain.Applicat
 		revision = s.syncs[len(s.syncs)-1].Revision
 	}
 	return argodomain.Application{OperationID: operationID, OperationPhase: "Succeeded",
-		SyncStatus: "Synced", HealthStatus: "Healthy", ResolvedRevision: revision, ResourceVersion: "3"}, nil
+		SyncStatus: "Synced", HealthStatus: "Healthy", ResolvedRevision: revision,
+		ResolvedRevisions: slices.Clone(s.resolvedRevisions), ResourceVersion: "3"}, nil
 }
 func (s *deploymentArgoStub) SyncApplication(_ context.Context, value argodomain.SyncRequest) (argodomain.Application, error) {
 	s.mu.Lock()
