@@ -53,6 +53,7 @@ import type {
 } from '@/generated/model'
 import { parseAPIErrorResponse } from '@/shared/api/apiError'
 import { useFeedback } from '@/shared/feedback/useFeedback'
+import { SemanticTag } from '@/shared/tag/SemanticTag'
 import { GroupMembersModal } from './GroupMembersModal'
 import { accessMutationErrorKey } from './mutationError'
 import styles from './AccessPage.module.css'
@@ -600,7 +601,7 @@ function renderTable(key: TabKey, context: TableContext) {
             render: (items: string[]) => (
               <Space wrap>
                 {items.map((item) => (
-                  <Tag key={item}>{item}</Tag>
+                  <SemanticTag key={item}>{item}</SemanticTag>
                 ))}
               </Space>
             ),

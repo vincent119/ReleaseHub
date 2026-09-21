@@ -1,8 +1,9 @@
-import { Card, Collapse, Descriptions, Space, Tag, Typography } from 'antd'
+import { Card, Collapse, Descriptions, Space, Typography } from 'antd'
 import { useTranslation } from 'react-i18next'
 
 import type { DeploymentRequestApplicationSnapshot } from '@/generated/model'
 import { SemanticList, SemanticListItemContent } from '@/shared/list'
+import { SemanticTag } from '@/shared/tag/SemanticTag'
 
 import styles from '../RequestDetailPage.module.css'
 
@@ -22,7 +23,7 @@ export function ApplicationSnapshots({
         items={applications.map((application) => ({
           key: application.id,
           label: `${application.order + 1}. ${application.applicationKey}`,
-          extra: <Tag>{application.targetRevision}</Tag>,
+          extra: <SemanticTag>{application.targetRevision}</SemanticTag>,
           children: <ApplicationSnapshot value={application} />,
         }))}
       />

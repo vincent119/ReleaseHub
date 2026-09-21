@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { CatalogOrganizationNode } from '@/generated/model'
 import i18n from '@/shared/i18n/config'
+import tagStyles from '@/shared/tag/SemanticTag.module.css'
 
 import { AccessPage } from './AccessPage'
 import styles from './AccessPage.module.css'
@@ -202,6 +203,25 @@ describe('AccessPage', () => {
     renderPage()
 
     expect(screen.getByText('停用')).toHaveClass(styles.statusInactive)
+  })
+
+  it('renders Role permissions with the neutral semantic tone', () => {
+    api.roles.mockReturnValue(
+      query([
+        {
+          id: '019c1230-0000-7000-8000-000000000002',
+          name: 'viewer',
+          ownerKind: 'platform',
+          permissions: ['resource.view'],
+          active: true,
+          allowedActions: [],
+        },
+      ]),
+    )
+
+    renderPage('/access?tab=roles')
+
+    expect(screen.getByText('resource.view')).toHaveClass(tagStyles.neutral)
   })
 
   it('uses a multiple Role selector when creating bindings', async () => {

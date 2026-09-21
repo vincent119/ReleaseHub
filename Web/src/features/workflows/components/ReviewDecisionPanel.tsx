@@ -1,4 +1,4 @@
-import { Button, Card, Empty, Form, Input, Modal, Space, Tag } from 'antd'
+import { Button, Card, Empty, Form, Input, Modal, Space } from 'antd'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -12,6 +12,7 @@ import type {
 } from '@/generated/model'
 import { useFeedback } from '@/shared/feedback/useFeedback'
 import { SemanticList, SemanticListItemContent } from '@/shared/list'
+import { SemanticTag } from '@/shared/tag/SemanticTag'
 
 import {
   ReviewReassignmentModal,
@@ -150,7 +151,7 @@ export function ReviewDecisionPanel({
               title={`${review.stateKey} · ${t('workflows.review.stage', { stage: review.stageNumber })}`}
               description={
                 <Space>
-                  <Tag>{review.policyType}</Tag>
+                  <SemanticTag>{review.policyType}</SemanticTag>
                   <span>
                     {t('workflows.review.required', {
                       count: review.requiredApprovals,

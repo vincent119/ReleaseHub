@@ -9,6 +9,7 @@ import {
   useListDeploymentRequests,
 } from '@/generated/api'
 import type { DeploymentRequestSummary } from '@/generated/model'
+import { SemanticTag } from '@/shared/tag/SemanticTag'
 
 import {
   RequestScopeSelector,
@@ -101,7 +102,7 @@ function requestColumns(
     {
       title: t('requests.columns.classification'),
       dataIndex: 'classification',
-      render: (value: string) => <Tag>{value}</Tag>,
+      render: (value: string) => <SemanticTag>{value}</SemanticTag>,
     },
     { title: t('requests.columns.version'), dataIndex: 'activeVersionNumber' },
     {

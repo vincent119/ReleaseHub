@@ -1,5 +1,5 @@
 import { BellOutlined } from '@ant-design/icons'
-import { Badge, Button, Drawer, Empty, Space, Tag, Typography } from 'antd'
+import { Badge, Button, Drawer, Empty, Space, Typography } from 'antd'
 import { useState } from 'react'
 import { Link } from 'react-router'
 import { useTranslation } from 'react-i18next'
@@ -12,6 +12,7 @@ import {
 import type { Notification } from '@/generated/model'
 import { useFeedback } from '@/shared/feedback/useFeedback'
 import { SemanticList, SemanticListItemContent } from '@/shared/list'
+import { SemanticTag } from '@/shared/tag/SemanticTag'
 
 import { useNotificationEvents } from './useNotificationEvents'
 import styles from './NotificationCenter.module.css'
@@ -101,7 +102,7 @@ export function NotificationCenter() {
                       })}
                     </span>
                     {notification.restricted && (
-                      <Tag>{t('notifications.restricted')}</Tag>
+                      <SemanticTag>{t('notifications.restricted')}</SemanticTag>
                     )}
                   </Space>
                 }

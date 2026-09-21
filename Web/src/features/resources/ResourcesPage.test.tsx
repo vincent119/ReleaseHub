@@ -11,6 +11,7 @@ import { MemoryRouter } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import i18n from '@/shared/i18n/config'
+import tagStyles from '@/shared/tag/SemanticTag.module.css'
 
 import { ResourcesPage } from './ResourcesPage'
 
@@ -106,6 +107,32 @@ describe('ResourcesPage', () => {
     expect(screen.getByText('Project: Payment')).toBeInTheDocument()
     expect(screen.queryByText('Organization: default')).not.toBeInTheDocument()
     expect(screen.getByText('工作區: default')).toBeInTheDocument()
+  })
+
+  it('renders the Environment type with the neutral semantic tone', () => {
+    const state = api.useResources()
+    state.data.data.data[0].projects[0].environments = [
+      {
+        id: '019c1230-0000-7000-8000-000000000003',
+        name: 'production',
+        type: 'Production',
+        applications: [],
+      },
+    ]
+    api.useResources.mockReturnValue(state)
+
+    render(
+      <AntdApp>
+        <MemoryRouter>
+          <I18nextProvider i18n={i18n}>
+            <ResourcesPage />
+          </I18nextProvider>
+        </MemoryRouter>
+      </AntdApp>,
+    )
+
+    fireEvent.click(screen.getByText('Project: Payment'))
+    expect(screen.getByText('Production')).toHaveClass(tagStyles.neutral)
   })
 
   it('renames the single-tenant workspace with the current version', async () => {

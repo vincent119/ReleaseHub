@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import i18n from '@/shared/i18n/config'
+import tagStyles from '@/shared/tag/SemanticTag.module.css'
 
 import { RequestsPage } from './RequestsPage'
 
@@ -86,6 +87,7 @@ describe('RequestsPage schedule projection', () => {
 
     expect(screen.getByText('目前位於禁止時段')).toBeInTheDocument()
     expect(screen.getByText('等待排程')).toBeInTheDocument()
+    expect(screen.getByText('Standard')).toHaveClass(tagStyles.neutral)
     expect(
       screen.getByText(
         `下一個可部署時間：${new Date('2026-09-17T02:00:00Z').toLocaleString()}`,
