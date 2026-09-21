@@ -771,6 +771,12 @@ export const zhTW = {
       trigger: '觸發來源',
       id: 'Execution ID',
       selectRetry: '選取 {{application}} 進行重試',
+      revisionMismatch: {
+        title: '實際部署已成功，但審核版本不一致',
+        actualRevision: '實際部署 revision',
+        targetRevision: '審核 revision',
+        notRecorded: '未記錄',
+      },
     },
     commands: {
       reason: '操作理由',

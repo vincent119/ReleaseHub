@@ -46,7 +46,7 @@ func (e *DeploymentExecutor) evaluateObservation(ctx context.Context, execution 
 	}
 	if application.OperationID == execution.operationID && application.OperationPhase == "Succeeded" && !revisionMatches(execution, application) {
 		cause := errors.New("Argo CD completed a different target revision")
-		return true, e.failNode(ctx, execution, "target_revision_mismatch", cause)
+		return true, e.failNodeWithObservation(ctx, execution, application, "target_revision_mismatch", cause)
 	}
 	timing.stableSince = conditionStableSince(execution.target.Node, application, timing.stableSince, timing.now)
 	condition := nodeConditionResult(execution.target.Node, application, *timing)
@@ -139,9 +139,14 @@ func (e *DeploymentExecutor) saveNode(ctx context.Context, execution nodeExecuti
 }
 
 func (e *DeploymentExecutor) failNode(ctx context.Context, execution nodeExecution, code string, cause error) error {
+	return e.failNodeWithObservation(ctx, execution, argodomain.Application{}, code, cause)
+}
+
+func (e *DeploymentExecutor) failNodeWithObservation(ctx context.Context, execution nodeExecution, application argodomain.Application, code string, cause error) error {
 	if err := e.repository.UpdateNode(ctx, ExecutionNodeUpdate{
 		ExecutionID: execution.executionID, ApplicationID: execution.target.Preflight.Snapshot.ApplicationID,
-		Status: "Failed", OperationID: execution.operationID, ErrorCode: code,
+		Status: "Failed", OperationID: execution.operationID, SyncStatus: application.SyncStatus,
+		HealthStatus: application.HealthStatus, ActualRevision: application.ResolvedRevision, ErrorCode: code,
 		ErrorMessage: cause.Error(), UpdatedAt: e.now().UTC(),
 	}); err != nil {
 		return fmt.Errorf("persist failed deployment node %s: %w", execution.target.Node.Key, err)

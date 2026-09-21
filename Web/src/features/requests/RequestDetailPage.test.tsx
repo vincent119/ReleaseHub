@@ -3,7 +3,10 @@ import { I18nextProvider } from 'react-i18next'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { DeploymentRequestVersion } from '@/generated/model'
+import type {
+  DeploymentExecution,
+  DeploymentRequestVersion,
+} from '@/generated/model'
 import i18n from '@/shared/i18n/config'
 
 import { RequestDetailPage } from './RequestDetailPage'
@@ -88,6 +91,27 @@ describe('RequestDetailPage', () => {
     expect(screen.getByText(/"group": "apps"/)).toBeInTheDocument()
     expect(screen.getByText(/"kind": "Deployment"/)).toBeInTheDocument()
   })
+
+  it('explains successful deployment evidence when the reviewed revision differs', () => {
+    const request = requestFixture()
+    request.executionId = 'execution-1'
+    api.request.mockReturnValue(
+      queryResult({ status: 200, data: { data: request } }),
+    )
+    api.execution.mockReturnValue(
+      queryResult({ status: 200, data: { data: revisionMismatchExecution() } }),
+    )
+
+    renderPage()
+
+    expect(
+      screen.getByText('實際部署已成功，但審核版本不一致'),
+    ).toBeInTheDocument()
+    expect(screen.getByText('實際部署 revision')).toBeInTheDocument()
+    expect(screen.getByText('newer-commit')).toBeInTheDocument()
+    expect(screen.getByText('審核 revision')).toBeInTheDocument()
+    expect(screen.getAllByText('commit-b').length).toBeGreaterThan(0)
+  })
 })
 
 function renderPage() {
@@ -170,5 +194,33 @@ function requestFixture(): DeploymentRequestVersion {
         },
       },
     ],
+  }
+}
+
+function revisionMismatchExecution(): DeploymentExecution {
+  return {
+    id: 'execution-1',
+    requestVersionId: 'version-1',
+    planVersionId: 'plan-version-1',
+    attempt: 1,
+    status: 'Failed',
+    triggerKind: 'Workflow',
+    lockVersion: 1,
+    nodes: [
+      {
+        id: 'node-1',
+        applicationId: 'application-1',
+        nodeKey: 'payment-api',
+        status: 'Failed',
+        operationId: 'operation-1',
+        syncStatus: 'Synced',
+        healthStatus: 'Healthy',
+        actualRevision: 'newer-commit',
+        actualImages: [],
+        errorCode: 'target_revision_mismatch',
+        errorMessage: 'Argo CD completed a different target revision',
+      },
+    ],
+    createdAt: '2026-09-21T00:00:00Z',
   }
 }

@@ -817,6 +817,12 @@ export const en = {
       trigger: 'Trigger',
       id: 'Execution ID',
       selectRetry: 'Select {{application}} for retry',
+      revisionMismatch: {
+        title: 'Deployment succeeded, but the reviewed revision differs',
+        actualRevision: 'Deployed revision',
+        targetRevision: 'Reviewed revision',
+        notRecorded: 'Not recorded',
+      },
     },
     commands: {
       reason: 'Reason',
