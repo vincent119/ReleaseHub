@@ -21,6 +21,7 @@ import {
 } from '@/generated/api'
 import type { CatalogApplication } from '@/generated/model'
 import { useFeedback } from '@/shared/feedback/useFeedback'
+import { ThemedLink } from '@/shared/link'
 
 import styles from './ApplicationsPage.module.css'
 
@@ -34,7 +35,7 @@ export function ApplicationsPage() {
       key: 'name',
       ellipsis: true,
       render: (name: string, application) => (
-        <Link to={`/applications/${application.id}`}>{name}</Link>
+        <ThemedLink to={`/applications/${application.id}`}>{name}</ThemedLink>
       ),
     },
     {

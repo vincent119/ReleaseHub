@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import i18n from '@/shared/i18n/config'
+import linkStyles from '@/shared/link/ThemedLink.module.css'
 import tagStyles from '@/shared/tag/SemanticTag.module.css'
 
 import { RequestsPage } from './RequestsPage'
@@ -87,6 +88,9 @@ describe('RequestsPage schedule projection', () => {
 
     expect(screen.getByText('目前位於禁止時段')).toBeInTheDocument()
     expect(screen.getByText('等待排程')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Deploy payment' })).toHaveClass(
+      linkStyles.link,
+    )
     expect(screen.getByText('Standard')).toHaveClass(tagStyles.neutral)
     expect(
       screen.getByText(

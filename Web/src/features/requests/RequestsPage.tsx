@@ -1,6 +1,5 @@
 import { Alert, Card, Empty, Flex, Space, Table, Tag, Typography } from 'antd'
 import type { TableProps } from 'antd'
-import { Link } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import { useState } from 'react'
 
@@ -9,6 +8,7 @@ import {
   useListDeploymentRequests,
 } from '@/generated/api'
 import type { DeploymentRequestSummary } from '@/generated/model'
+import { ThemedLink } from '@/shared/link'
 import { SemanticTag } from '@/shared/tag/SemanticTag'
 
 import {
@@ -85,7 +85,7 @@ function requestColumns(
       dataIndex: 'title',
       render: (title: string, request) => (
         <div className={styles.titleCell}>
-          <Link to={`/requests/${request.id}`}>{title}</Link>
+          <ThemedLink to={`/requests/${request.id}`}>{title}</ThemedLink>
           <div className={styles.subtle}>{request.id}</div>
         </div>
       ),

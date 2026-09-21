@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import i18n from '@/shared/i18n/config'
+import linkStyles from '@/shared/link/ThemedLink.module.css'
 
 import { ApplicationsPage } from './ApplicationsPage'
 
@@ -50,6 +51,9 @@ describe('ApplicationsPage', () => {
     expect(screen.getByRole('link', { name: 'Payment' })).toHaveAttribute(
       'href',
       '/applications/application-1',
+    )
+    expect(screen.getByRole('link', { name: 'Payment' })).toHaveClass(
+      linkStyles.link,
     )
     expect(screen.getByText('payment-production')).toBeInTheDocument()
   })
