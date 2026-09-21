@@ -106,6 +106,25 @@ func TestDeploymentExecutorRejectsDifferentOperationAfterWatchTimeout(t *testing
 	}
 }
 
+func TestDeploymentExecutorRejectsCompletedOperationWithTargetRevisionMismatch(t *testing.T) {
+	executor, argo, repository := newExecutorFixture(t, "sha256:approved")
+	argo.syncPending = true
+	argo.resolvedRevision = "newer-commit"
+	argo.watch = newBlockingApplicationWatch()
+	executor.watchTimeout = time.Millisecond
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	if err := executor.Execute(ctx, repository.snapshot.RequestVersionID); err != nil {
+		t.Fatalf("revision mismatch should be a business failure: %v", err)
+	}
+	if len(argo.syncs) != 1 || argo.getCalls == 0 || len(repository.updates) != 2 || repository.updates[1].ErrorCode != "target_revision_mismatch" {
+		t.Fatalf("completed operation revision mismatch was not rejected: syncs=%d gets=%d updates=%#v", len(argo.syncs), argo.getCalls, repository.updates)
+	}
+	if repository.completed != deploydomain.ExecutionFailed {
+		t.Fatalf("revision mismatch execution status = %q", repository.completed)
+	}
+}
+
 func TestWorkerRestartResumesPersistedOperationWithoutSync(t *testing.T) {
 	executor, argo, repository := newExecutorFixture(t, "sha256:approved")
 	target := &repository.snapshot.Targets[0]

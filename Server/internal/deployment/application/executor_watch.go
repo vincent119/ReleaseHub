@@ -44,6 +44,10 @@ func (e *DeploymentExecutor) evaluateObservation(ctx context.Context, execution 
 		cause := errors.New("Argo CD operation failed")
 		return true, e.failNode(ctx, execution, "operation_failed", cause)
 	}
+	if application.OperationID == execution.operationID && application.OperationPhase == "Succeeded" && !revisionMatches(execution, application) {
+		cause := errors.New("Argo CD completed a different target revision")
+		return true, e.failNode(ctx, execution, "target_revision_mismatch", cause)
+	}
 	timing.stableSince = conditionStableSince(execution.target.Node, application, timing.stableSince, timing.now)
 	condition := nodeConditionResult(execution.target.Node, application, *timing)
 	if condition == deploydomain.DeploymentConditionSucceeded && operationMatches(execution, application) {
@@ -60,6 +64,10 @@ func operationMatches(execution nodeExecution, application argodomain.Applicatio
 	if application.OperationID != execution.operationID {
 		return false
 	}
+	return revisionMatches(execution, application)
+}
+
+func revisionMatches(execution nodeExecution, application argodomain.Application) bool {
 	snapshot := execution.target.Preflight.Snapshot
 	if len(snapshot.TargetRevisions) > 0 {
 		return slices.Equal(snapshot.TargetRevisions, application.ResolvedRevisions)
