@@ -18,7 +18,6 @@ import {
   Skeleton,
   Space,
   Table,
-  Tag,
   Typography,
 } from 'antd'
 import type { TableProps } from 'antd'
@@ -41,6 +40,7 @@ import type {
   AuditScopeRoot,
   ListAuditEventsParams,
 } from '@/generated/model'
+import { SemanticTag } from '@/shared/tag/SemanticTag'
 
 import styles from './AuditPage.module.css'
 
@@ -287,7 +287,7 @@ export function AuditPage({ principalID }: { principalID: string }) {
                 >
                   <Flex justify="space-between" gap="small">
                     <strong>{event.action}</strong>
-                    <Tag>{event.scope.kind}</Tag>
+                    <SemanticTag>{event.scope.kind}</SemanticTag>
                   </Flex>
                   <span>{event.resource.type}</span>
                   <span>{new Date(event.occurredAt).toLocaleString()}</span>
@@ -502,7 +502,7 @@ function auditColumns(
       title: t('audit.columns.scope'),
       dataIndex: 'scope',
       width: 130,
-      render: (_, value) => <Tag>{value.scope.kind}</Tag>,
+      render: (_, value) => <SemanticTag>{value.scope.kind}</SemanticTag>,
     },
     {
       title: t('audit.columns.details'),

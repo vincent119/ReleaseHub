@@ -11,6 +11,7 @@ import { I18nextProvider } from 'react-i18next'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import i18n from '@/shared/i18n/config'
+import tagStyles from '@/shared/tag/SemanticTag.module.css'
 
 import { AuditPage } from './AuditPage'
 
@@ -157,6 +158,14 @@ describe('AuditPage', () => {
         }),
       }),
     )
+  })
+
+  it('renders desktop and mobile Scope labels with the neutral semantic tone', () => {
+    renderPage()
+
+    const scopeTags = screen.getAllByText('project')
+    expect(scopeTags).toHaveLength(2)
+    for (const tag of scopeTags) expect(tag).toHaveClass(tagStyles.neutral)
   })
 
   it('opens safe metadata detail and advances with the server cursor', async () => {

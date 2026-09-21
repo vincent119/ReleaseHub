@@ -35,6 +35,28 @@ test.describe('ReleaseHub themes', () => {
     await expectConciseNavigation(page)
   })
 
+  for (const theme of ['light', 'dark'] as const) {
+    test(`${theme} theme keeps neutral resource tags readable`, async ({
+      page,
+    }) => {
+      await prepareTheme(page, theme)
+      await prepareResources(page)
+      await page.goto('/resources')
+      await page.getByText('Project: Payment').click()
+
+      const tag = page.getByText('Production', { exact: true })
+      await expect(tag).toBeVisible()
+      await expect(tag).toHaveCSS(
+        'background-color',
+        theme === 'light' ? 'rgb(234, 242, 255)' : 'rgb(23, 32, 51)',
+      )
+      await expect(tag).toHaveCSS(
+        'color',
+        theme === 'light' ? 'rgb(82, 96, 116)' : 'rgb(203, 213, 225)',
+      )
+    })
+  }
+
   test('dark theme remains usable below the desktop sidebar breakpoint', async ({
     page,
   }) => {
@@ -74,6 +96,58 @@ async function prepareTheme(page: Page, theme: 'light' | 'dark') {
         meta: meta(),
       }),
     ),
+  )
+}
+
+async function prepareResources(page: Page) {
+  await page.route('**/api/v1/system/status', (route) =>
+    route.fulfill(
+      json({
+        data: {
+          name: 'ReleaseHub',
+          version: 'test',
+          tenancyMode: 'single',
+          oidcEnabled: false,
+        },
+        meta: meta(),
+      }),
+    ),
+  )
+  await page.route('**/api/v1/catalog/resource-tree', (route) =>
+    route.fulfill(
+      json({
+        data: [
+          {
+            id: '019c1230-0000-7000-8000-000000000001',
+            name: 'default',
+            version: 1,
+            isDefault: true,
+            canRename: true,
+            canDelete: false,
+            canCreateProject: true,
+            projects: [
+              {
+                id: '019c1230-0000-7000-8000-000000000002',
+                name: 'Payment',
+                canManage: true,
+                environments: [
+                  {
+                    id: '019c1230-0000-7000-8000-000000000003',
+                    name: 'production',
+                    type: 'Production',
+                    applications: [],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+        meta: meta(),
+      }),
+    ),
+  )
+  await page.route('**/api/v1/notifications**', (route) =>
+    route.fulfill(json({ data: [], meta: meta() })),
   )
 }
 

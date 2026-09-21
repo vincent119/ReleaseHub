@@ -8,7 +8,6 @@ import {
   Select,
   Space,
   Table,
-  Tag,
   Typography,
 } from 'antd'
 import { useEffect, useMemo, useState } from 'react'
@@ -21,6 +20,7 @@ import {
   revokeAccessMembership,
 } from '@/generated/api'
 import type { AccessMembership } from '@/generated/model'
+import { SemanticTag } from '@/shared/tag/SemanticTag'
 import { membershipCandidateParams } from './membershipCandidates'
 
 type MutationRunner = (
@@ -190,9 +190,9 @@ export function GroupMembersModal({
             title: t('access.columns.source'),
             dataIndex: 'source',
             render: (source: AccessMembership['source']) => (
-              <Tag>
+              <SemanticTag>
                 {source === 'oidc' ? 'OIDC' : t('access.groupMembers.manual')}
-              </Tag>
+              </SemanticTag>
             ),
           },
           {

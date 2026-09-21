@@ -11,6 +11,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { DeploymentRequestVersion } from '@/generated/model'
 import i18n from '@/shared/i18n/config'
+import tagStyles from '@/shared/tag/SemanticTag.module.css'
 
 import { ReviewDecisionPanel } from './ReviewDecisionPanel'
 
@@ -77,6 +78,7 @@ describe('ReviewDecisionPanel', () => {
     const onUpdated = vi.fn()
 
     renderPanel(request, onUpdated)
+    expect(screen.getByText('AnyApprover')).toHaveClass(tagStyles.neutral)
     fireEvent.click(screen.getByRole('button', { name: '核准申請' }))
 
     await waitFor(() =>

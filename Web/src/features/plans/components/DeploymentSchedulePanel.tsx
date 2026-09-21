@@ -30,6 +30,7 @@ import type {
 } from '@/generated/model'
 import { parseAPIErrorResponse } from '@/shared/api/apiError'
 import { useFeedback } from '@/shared/feedback/useFeedback'
+import { SemanticTag } from '@/shared/tag/SemanticTag'
 
 import styles from './DeploymentSchedulePanel.module.css'
 
@@ -114,13 +115,11 @@ export function DeploymentSchedulePanel({ environmentId }: Props) {
       extra={
         schedule ? (
           <Space>
-            <Tag color={schedule.enabled ? 'cyan' : 'default'}>
-              {t(
-                schedule.enabled
-                  ? 'plans.schedule.status.enabled'
-                  : 'plans.schedule.status.disabled',
-              )}
-            </Tag>
+            {schedule.enabled ? (
+              <Tag color="cyan">{t('plans.schedule.status.enabled')}</Tag>
+            ) : (
+              <SemanticTag>{t('plans.schedule.status.disabled')}</SemanticTag>
+            )}
             <Typography.Text type="secondary">
               {t('plans.schedule.version', { version: schedule.version })}
             </Typography.Text>

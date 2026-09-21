@@ -10,6 +10,7 @@ import { MemoryRouter } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import i18n from '@/shared/i18n/config'
+import tagStyles from '@/shared/tag/SemanticTag.module.css'
 
 import { NotificationCenter } from './NotificationCenter'
 import styles from './NotificationCenter.module.css'
@@ -126,7 +127,7 @@ describe('NotificationCenter', () => {
     })
     renderCenter()
     fireEvent.click(screen.getByRole('button', { name: '開啟通知' }))
-    expect(screen.getByText('內容已遮蔽')).toBeVisible()
+    expect(screen.getByText('內容已遮蔽')).toHaveClass(tagStyles.neutral)
     expect(screen.queryByRole('link', { name: '查看相關資源' })).toBeNull()
   })
 })

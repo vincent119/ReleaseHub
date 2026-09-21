@@ -11,7 +11,6 @@ import {
   Select,
   Space,
   Spin,
-  Tag,
   Typography,
 } from 'antd'
 import { useState } from 'react'
@@ -35,6 +34,7 @@ import type {
 import { parseAPIErrorResponse, type APIErrorView } from '@/shared/api/apiError'
 import { useFeedback } from '@/shared/feedback/useFeedback'
 import { SemanticList, SemanticListItemContent } from '@/shared/list'
+import { SemanticTag } from '@/shared/tag/SemanticTag'
 
 type ResourceAction =
   | { kind: 'organization' }
@@ -372,7 +372,7 @@ function EnvironmentList({
             key={environment.id}
             size="small"
             title={environment.name}
-            extra={<Tag>{environment.type}</Tag>}
+            extra={<SemanticTag>{environment.type}</SemanticTag>}
           >
             <SemanticList
               items={environment.applications}

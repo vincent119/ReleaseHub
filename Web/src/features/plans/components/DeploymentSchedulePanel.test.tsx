@@ -10,6 +10,7 @@ import { I18nextProvider } from 'react-i18next'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import i18n from '@/shared/i18n/config'
+import tagStyles from '@/shared/tag/SemanticTag.module.css'
 
 import { DeploymentSchedulePanel } from './DeploymentSchedulePanel'
 
@@ -132,7 +133,7 @@ describe('DeploymentSchedulePanel', () => {
     )
     renderPanel()
 
-    expect(screen.getByText('不限維護時段')).toBeInTheDocument()
+    expect(screen.getByText('不限維護時段')).toHaveClass(tagStyles.neutral)
     expect(screen.getByRole('button', { name: /新增允許時段/ })).toBeEnabled()
     expect(screen.getByRole('button', { name: /新增禁止時段/ })).toBeEnabled()
   })
