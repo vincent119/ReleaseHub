@@ -38,7 +38,7 @@ type CandidateRepository interface {
 // CandidateArgoReader exposes only fresh, read-only Argo CD operations.
 type CandidateArgoReader interface {
 	GetApplication(context.Context, argodomain.ApplicationIdentity, string) (argodomain.Application, error)
-	GetTargetManifests(context.Context, argodomain.ApplicationIdentity, string) ([]string, string, error)
+	GetTargetManifestsAtRevision(context.Context, argodomain.ApplicationIdentity, string, string) ([]string, string, error)
 	GetManagedResourceDiffs(context.Context, argodomain.ApplicationIdentity, string) ([]argodomain.ResourceDiff, error)
 }
 
@@ -179,7 +179,10 @@ func (r *CandidateReconciler) reconcileTarget(ctx context.Context, target Candid
 }
 
 func (r *CandidateReconciler) observeTarget(ctx context.Context, target CandidateTarget, application argodomain.Application, observedAt time.Time) (deploydomain.CandidateObservation, bool, error) {
-	manifests, revision, err := r.argo.GetTargetManifests(ctx, target.Argo, target.ArgoProject)
+	if application.ResolvedRevision == "" {
+		return deploydomain.CandidateObservation{}, false, errors.New("application resolved revision is empty")
+	}
+	manifests, revision, err := r.argo.GetTargetManifestsAtRevision(ctx, target.Argo, target.ArgoProject, application.ResolvedRevision)
 	if err != nil {
 		return deploydomain.CandidateObservation{}, false, fmt.Errorf("read target manifests: %w", err)
 	}

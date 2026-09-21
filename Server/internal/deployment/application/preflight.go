@@ -22,7 +22,7 @@ type PreflightTarget struct {
 // PreflightArgoReader exposes the read-only calls required before deployment.
 type PreflightArgoReader interface {
 	HardRefreshApplication(context.Context, argodomain.ApplicationIdentity, string) (argodomain.Application, error)
-	GetTargetManifests(context.Context, argodomain.ApplicationIdentity, string) ([]string, string, error)
+	GetTargetManifestsAtRevision(context.Context, argodomain.ApplicationIdentity, string, string) ([]string, string, error)
 	GetManagedResourceDiffs(context.Context, argodomain.ApplicationIdentity, string) ([]argodomain.ResourceDiff, error)
 }
 
@@ -64,7 +64,10 @@ func (s *PreflightService) Check(ctx context.Context, target PreflightTarget) (d
 }
 
 func (s *PreflightService) collectEvidence(ctx context.Context, target PreflightTarget, application argodomain.Application) (deploydomain.PreflightEvidence, error) {
-	manifests, revision, err := s.argo.GetTargetManifests(ctx, target.Identity, target.ArgoProject)
+	if application.ResolvedRevision == "" {
+		return deploydomain.PreflightEvidence{}, errors.New("preflight application resolved revision is empty")
+	}
+	manifests, revision, err := s.argo.GetTargetManifestsAtRevision(ctx, target.Identity, target.ArgoProject, application.ResolvedRevision)
 	if err != nil {
 		return deploydomain.PreflightEvidence{}, fmt.Errorf("read preflight manifests: %w", err)
 	}

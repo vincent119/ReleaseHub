@@ -235,15 +235,32 @@ func (w *ApplicationWatch) Close() { w.cancel() }
 
 // GetTargetManifests reads Argo CD rendered target manifests without changing Git, sync state, or Application configuration.
 func (c *Client) GetTargetManifests(ctx context.Context, identity argodomain.ApplicationIdentity, project string) ([]string, string, error) {
+	return c.getTargetManifests(ctx, identity, project, "")
+}
+
+// GetTargetManifestsAtRevision reads manifests pinned to one observed Application revision.
+func (c *Client) GetTargetManifestsAtRevision(ctx context.Context, identity argodomain.ApplicationIdentity, project, revision string) ([]string, string, error) {
+	revision = strings.TrimSpace(revision)
+	if revision == "" {
+		return nil, "", errors.New("target manifest revision is required")
+	}
+	manifests, resolvedRevision, err := c.getTargetManifests(ctx, identity, project, revision)
+	if err != nil {
+		return nil, "", err
+	}
+	if resolvedRevision != "" && resolvedRevision != revision {
+		return nil, "", fmt.Errorf("target manifest revision mismatch: expected %q, got %q", revision, resolvedRevision)
+	}
+	return manifests, revision, nil
+}
+
+func (c *Client) getTargetManifests(ctx context.Context, identity argodomain.ApplicationIdentity, project, revision string) ([]string, string, error) {
 	if c.manager == nil {
 		return nil, "", fmt.Errorf("argo CD management client is unavailable")
 	}
 	requestCtx, cancel := c.requestContext(ctx)
 	defer cancel()
-	noCache := true
-	query := &applicationpkg.ApplicationManifestQuery{
-		Name: &identity.Name, AppNamespace: &identity.Namespace, Project: &project, NoCache: &noCache,
-	}
+	query := targetManifestQuery(identity, project, revision)
 	var response *repositorypkg.ManifestResponse
 	err := retryRead(requestCtx, func() error {
 		var err error
@@ -254,6 +271,17 @@ func (c *Client) GetTargetManifests(ctx context.Context, identity argodomain.App
 		return nil, "", fmt.Errorf("get Argo CD target manifests: %w", err)
 	}
 	return slices.Clone(response.GetManifests()), response.GetRevision(), nil
+}
+
+func targetManifestQuery(identity argodomain.ApplicationIdentity, project, revision string) *applicationpkg.ApplicationManifestQuery {
+	noCache := true
+	query := &applicationpkg.ApplicationManifestQuery{
+		Name: &identity.Name, AppNamespace: &identity.Namespace, Project: &project, NoCache: &noCache,
+	}
+	if revision != "" {
+		query.Revision = &revision
+	}
+	return query
 }
 
 // GetManagedResourceDiffs reads normalized live and predicted target state without mutating the Application.

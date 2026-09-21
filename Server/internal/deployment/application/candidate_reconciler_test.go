@@ -16,7 +16,8 @@ import (
 func TestDeploymentRequestCreatedFromArgoCDRevision(t *testing.T) {
 	repository := newCandidateRepositoryStub(candidateTarget())
 	workflows := &candidateWorkflowStarterStub{}
-	reconciler := newCandidateReconcilerForTest(t, repository, candidateArgoStub{}, workflows)
+	requestedRevisions := []string{}
+	reconciler := newCandidateReconcilerForTest(t, repository, candidateArgoStub{requestedRevisions: &requestedRevisions}, workflows)
 	result, err := reconciler.ReconcileOnce(context.Background())
 	if err != nil {
 		t.Fatalf("reconcile candidate: %v", err)
@@ -27,6 +28,9 @@ func TestDeploymentRequestCreatedFromArgoCDRevision(t *testing.T) {
 	observation := repository.observations[0]
 	if observation.TargetRevision != "commit-b" || observation.Images[0].Digest == "" || observation.Fingerprint == "" {
 		t.Fatalf("incomplete observation: %#v", observation)
+	}
+	if len(requestedRevisions) != 1 || requestedRevisions[0] != "commit-b" {
+		t.Fatalf("target manifests were not pinned to the observed revision: %#v", requestedRevisions)
 	}
 }
 
@@ -69,6 +73,15 @@ func TestCandidateReconciliationSkipsApplicationsWithoutLiveDifference(t *testin
 	result, err := newCandidateReconcilerForTest(t, repository, argo, &candidateWorkflowStarterStub{}).ReconcileOnce(context.Background())
 	if err != nil || result.CreatedRequests != 0 || len(repository.observations) != 0 {
 		t.Fatalf("unchanged Application created request: %#v %v", result, err)
+	}
+}
+
+func TestCandidateReconciliationRejectsEmptyObservedRevision(t *testing.T) {
+	repository := newCandidateRepositoryStub(candidateTarget())
+	argo := candidateArgoStub{emptyRevision: true}
+	result, err := newCandidateReconcilerForTest(t, repository, argo, &candidateWorkflowStarterStub{}).ReconcileOnce(context.Background())
+	if err == nil || result.CreatedRequests != 0 || len(repository.observations) != 0 {
+		t.Fatalf("empty observed revision did not fail closed: result=%#v observations=%d err=%v", result, len(repository.observations), err)
 	}
 }
 
@@ -133,9 +146,11 @@ func (s *candidateWorkflowStarterStub) Start(_ context.Context, input WorkflowSt
 }
 
 type candidateArgoStub struct {
-	source   argodomain.Source
-	revision string
-	diffs    []argodomain.ResourceDiff
+	source             argodomain.Source
+	revision           string
+	diffs              []argodomain.ResourceDiff
+	requestedRevisions *[]string
+	emptyRevision      bool
 }
 
 func (s candidateArgoStub) GetApplication(context.Context, argodomain.ApplicationIdentity, string) (argodomain.Application, error) {
@@ -143,16 +158,20 @@ func (s candidateArgoStub) GetApplication(context.Context, argodomain.Applicatio
 	if source.RepositoryURL == "" {
 		source = argodomain.Source{RepositoryURL: "https://git.example/central.git", TargetRevision: "main", Path: "production/api"}
 	}
+	revision := s.revision
+	if revision == "" && !s.emptyRevision {
+		revision = "commit-b"
+	}
 	return argodomain.NewApplication(argodomain.Application{
 		Identity: argodomain.ApplicationIdentity{Namespace: "argocd", Name: "api-production"},
 		Labels:   map[string]string{argodomain.ManagedLabelKey: argodomain.ManagedLabelValue}, Sources: []argodomain.Source{source}, SyncStatus: "OutOfSync",
+		ResolvedRevision: revision,
 	})
 }
 
-func (s candidateArgoStub) GetTargetManifests(context.Context, argodomain.ApplicationIdentity, string) ([]string, string, error) {
-	revision := s.revision
-	if revision == "" {
-		revision = "commit-b"
+func (s candidateArgoStub) GetTargetManifestsAtRevision(_ context.Context, _ argodomain.ApplicationIdentity, _ string, revision string) ([]string, string, error) {
+	if s.requestedRevisions != nil {
+		*s.requestedRevisions = append(*s.requestedRevisions, revision)
 	}
 	return []string{"apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: api\nspec:\n  template:\n    spec:\n      containers:\n        - name: api\n          image: 123456789012.dkr.ecr.ap-northeast-1.amazonaws.com/platform/api:v1\n"}, revision, nil
 }
