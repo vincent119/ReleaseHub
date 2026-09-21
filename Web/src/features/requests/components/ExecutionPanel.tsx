@@ -146,10 +146,22 @@ export function ExecutionPanel({
                 <Typography.Text type="secondary">
                   {node.syncStatus} · {node.healthStatus}
                 </Typography.Text>
-                {node.errorMessage && (
-                  <Typography.Text type="danger">
-                    {node.errorMessage}
-                  </Typography.Text>
+                {node.errorCode === 'target_revision_mismatch' ? (
+                  <RevisionMismatchEvidence
+                    actualRevision={node.actualRevision}
+                    targetRevision={
+                      request.applications.find(
+                        (application) =>
+                          application.applicationId === node.applicationId,
+                      )?.targetRevision
+                    }
+                  />
+                ) : (
+                  node.errorMessage && (
+                    <Typography.Text type="danger">
+                      {node.errorMessage}
+                    </Typography.Text>
+                  )
                 )}
               </Space>
             }
@@ -206,6 +218,39 @@ export function ExecutionPanel({
         }
       />
     </Card>
+  )
+}
+
+function RevisionMismatchEvidence({
+  actualRevision,
+  targetRevision,
+}: {
+  actualRevision: string
+  targetRevision?: string
+}) {
+  const { t } = useTranslation()
+  return (
+    <Alert
+      type="warning"
+      showIcon
+      title={t('requestDetail.execution.revisionMismatch.title')}
+      description={
+        <Descriptions size="small" column={{ xs: 1, sm: 2 }}>
+          <Descriptions.Item
+            label={t('requestDetail.execution.revisionMismatch.actualRevision')}
+          >
+            {actualRevision ||
+              t('requestDetail.execution.revisionMismatch.notRecorded')}
+          </Descriptions.Item>
+          <Descriptions.Item
+            label={t('requestDetail.execution.revisionMismatch.targetRevision')}
+          >
+            {targetRevision ||
+              t('requestDetail.execution.revisionMismatch.notRecorded')}
+          </Descriptions.Item>
+        </Descriptions>
+      }
+    />
   )
 }
 

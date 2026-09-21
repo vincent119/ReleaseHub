@@ -120,6 +120,9 @@ func TestDeploymentExecutorRejectsCompletedOperationWithTargetRevisionMismatch(t
 	if len(argo.syncs) != 1 || argo.getCalls == 0 || len(repository.updates) != 2 || repository.updates[1].ErrorCode != "target_revision_mismatch" {
 		t.Fatalf("completed operation revision mismatch was not rejected: syncs=%d gets=%d updates=%#v", len(argo.syncs), argo.getCalls, repository.updates)
 	}
+	if update := repository.updates[1]; update.ActualRevision != "newer-commit" || update.SyncStatus != "Synced" || update.HealthStatus != "Healthy" {
+		t.Fatalf("revision mismatch did not preserve actual deployment evidence: %#v", update)
+	}
 	if repository.completed != deploydomain.ExecutionFailed {
 		t.Fatalf("revision mismatch execution status = %q", repository.completed)
 	}
