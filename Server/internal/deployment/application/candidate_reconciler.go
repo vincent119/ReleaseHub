@@ -134,7 +134,7 @@ func (r *CandidateReconciler) ReconcileOnce(ctx context.Context) (CandidateResul
 		return CandidateResult{}, err
 	}
 	result, reconciliationErr := r.reconcileTargets(ctx, targets, started)
-	reconciliationErr = errors.Join(reconciliationErr, r.startPendingWorkflows(ctx))
+	reconciliationErr = errors.Join(reconciliationErr, r.startPendingWorkflows(ctx), r.recoverApprovedReviews(ctx))
 	r.observeReconciliation(started, result, reconciliationErr)
 	return result, reconciliationErr
 }

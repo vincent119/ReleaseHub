@@ -54,7 +54,9 @@ func TestWorkflowRuntimePersistsReviewTransitionAndDeploymentIntent(t *testing.T
 		t.Fatalf("reload approved workflow review: %v", err)
 	}
 	assertRuntimeReviewProjection(t, ctx, db, snapshot)
-	transitionRuntimeToDeployment(t, ctx, service, snapshot, reviewerID)
+	if snapshot.Instance.CurrentStateKey != "deploying" {
+		t.Fatalf("approved review did not advance workflow: %#v", snapshot.Instance)
+	}
 
 	assertCountWhere(t, db, "deployment_review_decisions", "review_task_id = ?", snapshot.CurrentReview.ID, 1)
 	assertCountWhere(t, db, "deployment_review_reassignments", "review_task_id = ?", snapshot.CurrentReview.ID, 1)
@@ -93,7 +95,9 @@ func TestScheduledDeploymentJobUsesEarliestEligibleTime(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reload scheduled workflow: %v", err)
 	}
-	transitionRuntimeToDeployment(t, ctx, service, snapshot, reviewerID)
+	if snapshot.Instance.CurrentStateKey != "deploying" {
+		t.Fatalf("approved scheduled review did not advance workflow: %#v", snapshot.Instance)
+	}
 
 	var availableAt time.Time
 	if err := db.Table("deployment_jobs").Select("available_at").Where("aggregate_id = ?", requestVersionID).
@@ -212,19 +216,6 @@ func approveRuntimeReview(t *testing.T, ctx context.Context, service *deployapp.
 	})
 	if err != nil || task.Status != deploydomain.ReviewTaskApproved {
 		t.Fatalf("approve workflow review: %#v %v", task, err)
-	}
-}
-
-func transitionRuntimeToDeployment(t *testing.T, ctx context.Context, service *deployapp.WorkflowRuntimeService, snapshot deployapp.WorkflowRuntimeSnapshot, actorID uuid.UUID) {
-	t.Helper()
-	result, err := service.Transition(ctx, deployapp.WorkflowPrincipal{UserID: actorID}, deployapp.WorkflowTransitionInput{
-		RequestVersionID: snapshot.RequestVersionID, ExpectedLock: snapshot.Instance.LockVersion,
-		TransitionKey: "deploy", Trigger: deploydomain.WorkflowTriggerReviewSatisfied,
-		Facts:          map[deploydomain.WorkflowFact]string{deploydomain.WorkflowFactReviewStatus: "Approved"},
-		IdempotencyKey: "runtime-deploy", RequestID: "runtime-test",
-	})
-	if err != nil || !result.DeploymentIntent {
-		t.Fatalf("transition workflow to deployment: %#v %v", result, err)
 	}
 }
 

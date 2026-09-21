@@ -94,11 +94,11 @@ func finishRuntimeTransition(ctx context.Context, tx *gorm.DB, change deployapp.
 // ApplyReview atomically appends a decision and updates its task projection.
 func (r *WorkflowRuntimeRepository) ApplyReview(ctx context.Context, change deployapp.WorkflowReviewChange) error {
 	return database.WithinTransaction(ctx, r.db, func(tx *gorm.DB) error {
-		lock := runtimeLockChange{versionID: change.Task.RequestVersionID, expected: change.ExpectedLock, next: change.ExpectedLock + 1}
+		lock := runtimeLockChange{versionID: change.Task.RequestVersionID, expected: change.ExpectedLock, next: reviewNextLock(change)}
 		if err := updateRequestVersionLock(ctx, tx, lock); err != nil {
 			return err
 		}
-		if err := advanceReviewRuntimeLock(ctx, tx, change); err != nil {
+		if err := updateReviewRuntime(ctx, tx, change); err != nil {
 			return err
 		}
 		if err := updateRuntimeReview(ctx, tx, change); err != nil {
@@ -107,7 +107,10 @@ func (r *WorkflowRuntimeRepository) ApplyReview(ctx context.Context, change depl
 		if err := insertRuntimeDecision(ctx, tx, change); err != nil {
 			return err
 		}
-		return appendReviewEffects(ctx, tx, change)
+		if err := appendReviewEffects(ctx, tx, change); err != nil {
+			return err
+		}
+		return applyReviewTransition(ctx, tx, change)
 	})
 }
 

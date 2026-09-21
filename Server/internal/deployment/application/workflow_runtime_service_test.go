@@ -115,6 +115,51 @@ func TestWorkflowRuntimeRejectsCallerProvidedReviewStatus(t *testing.T) {
 	}
 }
 
+func TestWorkflowRuntimeAtomicallyAdvancesApprovedReview(t *testing.T) {
+	policy := deploydomain.ReviewPolicy{
+		Type: deploydomain.ReviewPolicyAny, RequiredApprovals: 1, UserIDs: []uuid.UUID{uuid.New()},
+	}
+	snapshot := runtimeSnapshot(t, workflowReviewThenDeploy(policy))
+	instance := startRuntimeInstance(t, snapshot)
+	snapshot.Instance = &instance
+	task := runtimeReviewTask(t, snapshot, policy)
+	snapshot.CurrentReview = &task
+	repository := &workflowRuntimeRepositoryStub{snapshot: snapshot}
+	service := mustWorkflowRuntimeService(t, repository, true)
+	approved, err := service.DecideReview(context.Background(), WorkflowPrincipal{UserID: policy.UserIDs[0]}, WorkflowReviewInput{
+		RequestVersionID: snapshot.RequestVersionID, ReviewTaskID: task.ID,
+		ExpectedLock: instance.LockVersion, Decision: deploydomain.ReviewDecisionApprove,
+		IdempotencyKey: "approved-review",
+	})
+	if err != nil || approved.Status != deploydomain.ReviewTaskApproved || repository.reviewed.Result == nil {
+		t.Fatalf("approve review = %#v, %#v, %v", approved, repository.reviewed, err)
+	}
+	if !repository.reviewed.Result.DeploymentIntent || repository.reviewed.Result.Instance.CurrentStateKey != "deploying" {
+		t.Fatalf("approved review transition = %#v", repository.reviewed.Result)
+	}
+}
+
+func TestWorkflowRuntimeRecoversApprovedReview(t *testing.T) {
+	policy := deploydomain.ReviewPolicy{
+		Type: deploydomain.ReviewPolicyAny, RequiredApprovals: 1, UserIDs: []uuid.UUID{uuid.New()},
+	}
+	snapshot := runtimeSnapshot(t, workflowReviewThenDeploy(policy))
+	instance := startRuntimeInstance(t, snapshot)
+	snapshot.Instance = &instance
+	task := runtimeReviewTask(t, snapshot, policy)
+	task.Status = deploydomain.ReviewTaskApproved
+	snapshot.CurrentReview = &task
+	repository := &workflowRuntimeRepositoryStub{
+		snapshot: snapshot, recoveries: []ApprovedReviewRecovery{{RequestVersionID: snapshot.RequestVersionID}},
+	}
+	if err := mustWorkflowRuntimeService(t, repository, true).RecoverApprovedReviews(context.Background()); err != nil {
+		t.Fatalf("recover approved review: %v", err)
+	}
+	if !repository.transitioned.Result.DeploymentIntent || repository.transitioned.Result.Instance.CurrentStateKey != "deploying" {
+		t.Fatalf("recovered review transition = %#v", repository.transitioned)
+	}
+}
+
 func TestWorkflowRuntimeReassignmentRechecksManagementPermission(t *testing.T) {
 	original, replacement := uuid.New(), uuid.New()
 	policy := deploydomain.ReviewPolicy{Type: deploydomain.ReviewPolicyAny, RequiredApprovals: 1, UserIDs: []uuid.UUID{original}}
@@ -256,6 +301,7 @@ func workflowReviewThenDeploy(policy deploydomain.ReviewPolicy) deploydomain.Wor
 
 type workflowRuntimeRepositoryStub struct {
 	snapshot     WorkflowRuntimeSnapshot
+	recoveries   []ApprovedReviewRecovery
 	started      WorkflowStartChange
 	transitioned WorkflowTransitionChange
 	reviewed     WorkflowReviewChange
@@ -284,6 +330,10 @@ func (s *workflowRuntimeRepositoryStub) ApplyReview(_ context.Context, change Wo
 func (s *workflowRuntimeRepositoryStub) ApplyReviewReassignment(_ context.Context, change WorkflowReviewReassignmentChange) error {
 	s.reassigned = change
 	return nil
+}
+
+func (s *workflowRuntimeRepositoryStub) ListApprovedReviewRecoveries(context.Context) ([]ApprovedReviewRecovery, error) {
+	return s.recoveries, nil
 }
 
 type runtimeAuthorizerStub struct{ allowed bool }

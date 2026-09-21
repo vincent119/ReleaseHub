@@ -132,6 +132,23 @@ func (e *WorkflowEngine) ApplyDeploymentResult(instance WorkflowInstance, status
 	})
 }
 
+// ApplyReviewResult advances the unique automatic edge for an approved review.
+func (e *WorkflowEngine) ApplyReviewResult(instance WorkflowInstance, status ReviewTaskStatus, now time.Time) (WorkflowResult, bool, error) {
+	if status != ReviewTaskApproved {
+		return WorkflowResult{}, false, nil
+	}
+	facts := map[WorkflowFact]string{WorkflowFactReviewStatus: string(status)}
+	transition, found, err := e.reviewSatisfiedTransition(instance.CurrentStateKey, facts)
+	if err != nil || !found {
+		return WorkflowResult{}, found, err
+	}
+	result, err := e.Transition(instance, WorkflowTransitionCommand{
+		TransitionKey: transition.Key, Trigger: WorkflowTriggerReviewSatisfied,
+		PermissionGranted: true, Facts: facts, OccurredAt: now,
+	})
+	return result, true, err
+}
+
 // ApplyPermissionAction advances the unique manual action exposed for a permission.
 func (e *WorkflowEngine) ApplyPermissionAction(instance WorkflowInstance, command WorkflowTransitionCommand) (WorkflowResult, error) {
 	transition, err := e.selectPermissionTransition(instance.CurrentStateKey, command.Permission, command.Facts)
@@ -168,6 +185,22 @@ func (e *WorkflowEngine) selectTriggeredTransition(stateKey string, trigger Work
 		return WorkflowTransition{}, errors.New("workflow result requires exactly one matching transition")
 	}
 	return matches[0], nil
+}
+
+func (e *WorkflowEngine) reviewSatisfiedTransition(stateKey string, facts map[WorkflowFact]string) (WorkflowTransition, bool, error) {
+	var matches []WorkflowTransition
+	for _, transition := range e.document.Transitions {
+		if transition.From == stateKey && transition.Trigger == WorkflowTriggerReviewSatisfied && conditionsMatch(transition.Conditions, facts) {
+			matches = append(matches, transition)
+		}
+	}
+	if len(matches) == 0 {
+		return WorkflowTransition{}, false, nil
+	}
+	if len(matches) != 1 {
+		return WorkflowTransition{}, false, errors.New("workflow review requires exactly one matching transition")
+	}
+	return matches[0], true, nil
 }
 
 func (e *WorkflowEngine) selectTransition(stateKey string, command WorkflowTransitionCommand) (WorkflowTransition, error) {

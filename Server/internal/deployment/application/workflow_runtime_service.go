@@ -114,32 +114,35 @@ func (s *WorkflowRuntimeService) DecideReview(ctx context.Context, principal Wor
 	if err := validateWorkflowReviewInput(input); err != nil {
 		return deploydomain.ReviewTask{}, err
 	}
-	task, decision, err := s.decideReview(ctx, principal, input)
+	snapshot, task, decision, err := s.decideReview(ctx, principal, input)
 	if err != nil {
 		return deploydomain.ReviewTask{}, err
 	}
 	mutation := userRuntimeMutation(principal.UserID, input.RequestID, input.IdempotencyKey, s.clock.Now())
 	change := workflowReviewChange(input, task, decision, mutation)
+	if err := s.attachApprovedReviewTransition(ctx, snapshot, &change); err != nil {
+		return deploydomain.ReviewTask{}, err
+	}
 	return task, s.repository.ApplyReview(ctx, change)
 }
 
-func (s *WorkflowRuntimeService) decideReview(ctx context.Context, principal WorkflowPrincipal, input WorkflowReviewInput) (deploydomain.ReviewTask, deploydomain.ReviewDecision, error) {
+func (s *WorkflowRuntimeService) decideReview(ctx context.Context, principal WorkflowPrincipal, input WorkflowReviewInput) (WorkflowRuntimeSnapshot, deploydomain.ReviewTask, deploydomain.ReviewDecision, error) {
 	snapshot, err := s.repository.Load(ctx, input.RequestVersionID)
 	if err != nil {
-		return deploydomain.ReviewTask{}, deploydomain.ReviewDecision{}, err
+		return WorkflowRuntimeSnapshot{}, deploydomain.ReviewTask{}, deploydomain.ReviewDecision{}, err
 	}
 	if err := validateReviewSnapshot(snapshot, input); err != nil {
-		return deploydomain.ReviewTask{}, deploydomain.ReviewDecision{}, err
+		return WorkflowRuntimeSnapshot{}, deploydomain.ReviewTask{}, deploydomain.ReviewDecision{}, err
 	}
 	if err := s.authorizeReview(ctx, principal, snapshot.Scope); err != nil {
-		return deploydomain.ReviewTask{}, deploydomain.ReviewDecision{}, err
+		return WorkflowRuntimeSnapshot{}, deploydomain.ReviewTask{}, deploydomain.ReviewDecision{}, err
 	}
 	decision := newReviewDecision(principal.UserID, input, s.clock.Now())
 	task, err := snapshot.CurrentReview.Decide(decision)
 	if err != nil {
-		return deploydomain.ReviewTask{}, deploydomain.ReviewDecision{}, workflowRuntimeInvalid(err)
+		return WorkflowRuntimeSnapshot{}, deploydomain.ReviewTask{}, deploydomain.ReviewDecision{}, workflowRuntimeInvalid(err)
 	}
-	return task, decision, nil
+	return snapshot, task, decision, nil
 }
 
 func newReviewDecision(reviewerID uuid.UUID, input WorkflowReviewInput, now time.Time) deploydomain.ReviewDecision {
