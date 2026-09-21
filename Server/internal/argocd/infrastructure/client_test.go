@@ -394,22 +394,47 @@ func TestExecutionControlReadsImagesAndTerminatesOperation(t *testing.T) {
 func verifyTargetManifestReadOnly(t *testing.T) {
 	t.Helper()
 	manager := &applicationManagerStub{manifestResponse: &repositorypkg.ManifestResponse{
-		Manifests: []string{"apiVersion: v1\nkind: Pod\n"}, Revision: "commit-a",
+		Manifests: []string{"apiVersion: v1\nkind: Pod\n"},
 	}}
 	client, err := newManagementClientForTest(io.NopCloser(nilReader{}), manager, &permissionCheckerStub{}, "token", time.Second, "argocd")
 	if err != nil {
 		t.Fatalf("create management client: %v", err)
 	}
 	identity := argodomain.ApplicationIdentity{Namespace: "argocd", Name: "payment-production"}
-	manifests, revision, err := client.GetTargetManifests(context.Background(), identity, "payment")
+	manifests, revision, err := client.GetTargetManifestsAtRevision(context.Background(), identity, "payment", "commit-a")
 	if err != nil || revision != "commit-a" || len(manifests) != 1 {
 		t.Fatalf("GetTargetManifests() = %#v, %q, %v", manifests, revision, err)
 	}
-	if manager.manifestQuery == nil || manager.manifestQuery.GetName() != identity.Name || manager.manifestQuery.GetAppNamespace() != identity.Namespace || manager.manifestQuery.GetProject() != "payment" || !manager.manifestQuery.GetNoCache() {
+	if manager.manifestQuery == nil || manager.manifestQuery.GetName() != identity.Name || manager.manifestQuery.GetAppNamespace() != identity.Namespace || manager.manifestQuery.GetProject() != "payment" || manager.manifestQuery.GetRevision() != "commit-a" || !manager.manifestQuery.GetNoCache() {
 		t.Fatalf("target manifest query mismatch: %#v", manager.manifestQuery)
 	}
 	if manager.getQuery != nil || manager.patchRequest != nil {
 		t.Fatalf("target manifest read must not perform Application Get or Patch")
+	}
+}
+
+func TestGetTargetManifestsAtRevisionRejectsRevisionMismatch(t *testing.T) {
+	manager := &applicationManagerStub{manifestResponse: &repositorypkg.ManifestResponse{
+		Manifests: []string{"apiVersion: v1\nkind: Pod\n"}, Revision: "commit-b",
+	}}
+	client, err := newManagementClientForTest(io.NopCloser(nilReader{}), manager, &permissionCheckerStub{}, "token", time.Second, "argocd")
+	if err != nil {
+		t.Fatalf("create management client: %v", err)
+	}
+	identity := argodomain.ApplicationIdentity{Namespace: "argocd", Name: "payment-production"}
+	if _, _, err := client.GetTargetManifestsAtRevision(context.Background(), identity, "payment", "commit-a"); err == nil {
+		t.Fatal("GetTargetManifestsAtRevision() accepted a mismatched revision")
+	}
+}
+
+func TestGetTargetManifestsAtRevisionRejectsEmptyRevision(t *testing.T) {
+	client, err := newManagementClientForTest(io.NopCloser(nilReader{}), &applicationManagerStub{}, &permissionCheckerStub{}, "token", time.Second, "argocd")
+	if err != nil {
+		t.Fatalf("create management client: %v", err)
+	}
+	identity := argodomain.ApplicationIdentity{Namespace: "argocd", Name: "payment-production"}
+	if _, _, err := client.GetTargetManifestsAtRevision(context.Background(), identity, "payment", ""); err == nil {
+		t.Fatal("GetTargetManifestsAtRevision() accepted an empty revision")
 	}
 }
 

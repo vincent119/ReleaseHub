@@ -22,6 +22,9 @@ func TestDeploymentSyncsPinnedRevision(t *testing.T) {
 	if len(argo.syncs) != 1 || argo.syncs[0].Revision != "approved-commit" {
 		t.Fatalf("executor did not pin the reviewed revision: %#v", argo.syncs)
 	}
+	if revision := argo.targetManifestRevision(); revision != "latest-commit" {
+		t.Fatalf("preflight manifests were not pinned to the refreshed revision: %q", revision)
+	}
 	if len(repository.updates) != 2 || repository.updates[1].Status != "Succeeded" {
 		t.Fatalf("node result was not persisted: %#v", repository.updates)
 	}
@@ -212,15 +215,29 @@ type deploymentArgoStub struct {
 	syncPending      bool
 	operationID      string
 	resolvedRevision string
+	manifestRevision string
 	getCalls         int
 	failName         string
 }
 
 func (s *deploymentArgoStub) HardRefreshApplication(context.Context, argodomain.ApplicationIdentity, string) (argodomain.Application, error) {
-	return argodomain.Application{}, nil
+	revision := s.resolvedRevision
+	if revision == "" {
+		revision = "latest-commit"
+	}
+	return argodomain.Application{ResolvedRevision: revision}, nil
 }
-func (s *deploymentArgoStub) GetTargetManifests(context.Context, argodomain.ApplicationIdentity, string) ([]string, string, error) {
-	return s.manifests, "latest-commit", nil
+func (s *deploymentArgoStub) GetTargetManifestsAtRevision(_ context.Context, _ argodomain.ApplicationIdentity, _ string, revision string) ([]string, string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.manifestRevision = revision
+	return s.manifests, revision, nil
+}
+
+func (s *deploymentArgoStub) targetManifestRevision() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.manifestRevision
 }
 func (s *deploymentArgoStub) GetManagedResourceDiffs(context.Context, argodomain.ApplicationIdentity, string) ([]argodomain.ResourceDiff, error) {
 	return nil, nil
