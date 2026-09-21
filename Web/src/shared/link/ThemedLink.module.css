@@ -1,0 +1,19 @@
+.link {
+  color: var(--rh-color-primary);
+  text-decoration: none;
+  transition: color var(--rh-duration-fast) ease;
+}
+
+.link:hover {
+  color: var(--rh-color-primary-hover);
+}
+
+.link:active {
+  color: var(--rh-color-primary-pressed);
+}
+
+.link:focus-visible {
+  border-radius: var(--rh-radius-sm);
+  outline: 2px solid var(--rh-color-focus);
+  outline-offset: 2px;
+}
