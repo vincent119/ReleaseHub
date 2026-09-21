@@ -71,12 +71,37 @@ func (e *DeploymentExecutor) nextObservation(ctx context.Context, execution node
 	target := execution.target.Preflight
 	watch, err := e.argo.WatchApplication(ctx, target.Identity, target.ArgoProject, resourceVersion)
 	if err == nil {
-		defer watch.Close()
-		if value, receiveErr := watch.Recv(); receiveErr == nil {
+		value, received, receiveErr := receiveWatchObservation(ctx, watch, e.watchTimeout)
+		watch.Close()
+		if receiveErr == nil && received {
 			return value, nil
 		}
+		err = receiveErr
 	}
 	return e.reconcileObservation(ctx, execution, err)
+}
+
+type watchObservation struct {
+	application argodomain.Application
+	err         error
+}
+
+func receiveWatchObservation(ctx context.Context, watch argodomain.ApplicationWatch, timeout time.Duration) (argodomain.Application, bool, error) {
+	result := make(chan watchObservation, 1)
+	go func() {
+		application, err := watch.Recv()
+		result <- watchObservation{application: application, err: err}
+	}()
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+	select {
+	case value := <-result:
+		return value.application, true, value.err
+	case <-ctx.Done():
+		return argodomain.Application{}, false, ctx.Err()
+	case <-timer.C:
+		return argodomain.Application{}, false, errors.New("Argo CD Application watch timed out")
+	}
 }
 
 func (e *DeploymentExecutor) reconcileObservation(ctx context.Context, execution nodeExecution, watchErr error) (argodomain.Application, error) {

@@ -75,6 +75,37 @@ func TestWatchInterruptionReconcilesWithoutBlindSync(t *testing.T) {
 	}
 }
 
+func TestDeploymentExecutorReconcilesAfterWatchTimeout(t *testing.T) {
+	executor, argo, repository := newExecutorFixture(t, "sha256:approved")
+	argo.syncPending = true
+	watch := newBlockingApplicationWatch()
+	argo.watch = watch
+	executor.watchTimeout = time.Millisecond
+	if err := executor.Execute(context.Background(), repository.snapshot.RequestVersionID); err != nil {
+		t.Fatalf("execute deployment after watch timeout: %v", err)
+	}
+	if len(argo.syncs) != 1 || argo.getCalls != 1 || !watch.closed {
+		t.Fatalf("watch timeout reconciliation = syncs %d, gets %d, closed %t", len(argo.syncs), argo.getCalls, watch.closed)
+	}
+	if len(repository.updates) != 2 || repository.updates[1].Status != "Succeeded" {
+		t.Fatalf("watch timeout did not persist success: %#v", repository.updates)
+	}
+}
+
+func TestDeploymentExecutorRejectsDifferentOperationAfterWatchTimeout(t *testing.T) {
+	executor, argo, repository := newExecutorFixture(t, "sha256:approved")
+	argo.syncPending = true
+	argo.operationID = "another-operation"
+	argo.watch = newBlockingApplicationWatch()
+	executor.watchTimeout = time.Millisecond
+	if err := executor.Execute(context.Background(), repository.snapshot.RequestVersionID); err != nil {
+		t.Fatalf("different operation should be a business failure: %v", err)
+	}
+	if len(argo.syncs) != 1 || len(repository.updates) != 2 || repository.updates[1].ErrorCode != "watch_failed" {
+		t.Fatalf("different operation was not rejected: syncs=%d updates=%#v", len(argo.syncs), repository.updates)
+	}
+}
+
 func TestWorkerRestartResumesPersistedOperationWithoutSync(t *testing.T) {
 	executor, argo, repository := newExecutorFixture(t, "sha256:approved")
 	target := &repository.snapshot.Targets[0]
@@ -128,7 +159,7 @@ func newExecutorFixture(t *testing.T, actualDigest string) (*DeploymentExecutor,
 	repository.locks = locks
 	executor, err := NewDeploymentExecutor(DeploymentExecutorOptions{
 		Repository: repository, Preflight: preflight, Argo: argo,
-		Locks: locks, MaxParallel: 2, LockTTL: time.Minute,
+		Locks: locks, MaxParallel: 2, LockTTL: time.Minute, WatchTimeout: time.Second,
 	})
 	if err != nil {
 		t.Fatalf("NewDeploymentExecutor(): %v", err)
@@ -213,6 +244,7 @@ type deploymentArgoStub struct {
 	manifests        []string
 	syncs            []argodomain.SyncRequest
 	syncPending      bool
+	watch            *blockingApplicationWatch
 	operationID      string
 	resolvedRevision string
 	manifestRevision string
@@ -273,7 +305,32 @@ func (s *deploymentArgoStub) SyncApplication(_ context.Context, value argodomain
 	}, nil
 }
 func (s *deploymentArgoStub) WatchApplication(context.Context, argodomain.ApplicationIdentity, string, string) (argodomain.ApplicationWatch, error) {
+	if s.watch != nil {
+		return s.watch, nil
+	}
 	return nil, errors.New("unexpected watch")
+}
+
+type blockingApplicationWatch struct {
+	done   chan struct{}
+	closed bool
+	once   sync.Once
+}
+
+func newBlockingApplicationWatch() *blockingApplicationWatch {
+	return &blockingApplicationWatch{done: make(chan struct{})}
+}
+
+func (w *blockingApplicationWatch) Recv() (argodomain.Application, error) {
+	<-w.done
+	return argodomain.Application{}, context.Canceled
+}
+
+func (w *blockingApplicationWatch) Close() {
+	w.once.Do(func() {
+		w.closed = true
+		close(w.done)
+	})
 }
 
 type imageLockerStub struct{ values []ecrdomain.DigestSnapshot }

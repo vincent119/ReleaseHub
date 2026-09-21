@@ -86,10 +86,11 @@ type DeploymentArgoClient interface {
 
 // DeploymentExecutorOptions groups explicit worker dependencies.
 type DeploymentExecutorOptions struct {
-	Repository  ExecutionRepository
-	Preflight   *PreflightService
-	Argo        DeploymentArgoClient
-	Locks       ApplicationLocks
-	MaxParallel int
-	LockTTL     time.Duration
+	Repository   ExecutionRepository
+	Preflight    *PreflightService
+	Argo         DeploymentArgoClient
+	Locks        ApplicationLocks
+	MaxParallel  int
+	LockTTL      time.Duration
+	WatchTimeout time.Duration
 }
