@@ -169,6 +169,7 @@ func newDeploymentExecutor(dependencies workerDependencies, preflight *deployapp
 	executor, err := deployapp.NewDeploymentExecutor(deployapp.DeploymentExecutorOptions{
 		Repository: repository, Preflight: preflight, Argo: dependencies.resources.argoClient,
 		Locks: locks, MaxParallel: cfg.MaxParallelDeployments, LockTTL: cfg.ApplicationLockDuration,
+		WatchTimeout: cfg.DeploymentPollInterval,
 	})
 	return executor, queue, err
 }

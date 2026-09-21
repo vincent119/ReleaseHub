@@ -13,25 +13,26 @@ import (
 
 // DeploymentExecutor runs immutable Plan snapshots after an all-target preflight.
 type DeploymentExecutor struct {
-	repository  ExecutionRepository
-	preflight   *PreflightService
-	argo        DeploymentArgoClient
-	locks       ApplicationLocks
-	maxParallel int
-	lockTTL     time.Duration
-	now         func() time.Time
+	repository   ExecutionRepository
+	preflight    *PreflightService
+	argo         DeploymentArgoClient
+	locks        ApplicationLocks
+	maxParallel  int
+	lockTTL      time.Duration
+	watchTimeout time.Duration
+	now          func() time.Time
 }
 
 // NewDeploymentExecutor validates the executor composition root.
 func NewDeploymentExecutor(options DeploymentExecutorOptions) (*DeploymentExecutor, error) {
 	if options.Repository == nil || options.Preflight == nil || options.Argo == nil ||
-		options.Locks == nil || options.MaxParallel < 1 || options.LockTTL <= 0 {
+		options.Locks == nil || options.MaxParallel < 1 || options.LockTTL <= 0 || options.WatchTimeout <= 0 {
 		return nil, errors.New("invalid deployment executor dependencies")
 	}
 	return &DeploymentExecutor{
 		repository: options.Repository, preflight: options.Preflight, argo: options.Argo,
 		locks: options.Locks, maxParallel: options.MaxParallel,
-		lockTTL: options.LockTTL, now: time.Now,
+		lockTTL: options.LockTTL, watchTimeout: options.WatchTimeout, now: time.Now,
 	}, nil
 }
 
