@@ -50,6 +50,28 @@ func TestDeploymentBlockedUntilWorkflowAllows(t *testing.T) {
 	}
 }
 
+func TestWorkflowEngineAppliesApprovedReviewResult(t *testing.T) {
+	engine := mustWorkflowEngine(t, twoStageReviewWorkflow())
+	instance := WorkflowInstance{ID: uuid.New(), RequestVersionID: uuid.New(), WorkflowVersionID: uuid.New(),
+		CurrentStateKey: "review-one", Status: WorkflowInstanceRunning, LockVersion: 1, StartedAt: workflowTestTime()}
+	result, found, err := engine.ApplyReviewResult(instance, ReviewTaskApproved, workflowTestTime())
+	if err != nil || !found || result.Instance.CurrentStateKey != "review-two" || result.ReviewPolicy == nil {
+		t.Fatalf("apply approved review result = %#v, %t, %v", result, found, err)
+	}
+	if _, found, err := engine.ApplyReviewResult(instance, ReviewTaskRejected, workflowTestTime()); err != nil || found {
+		t.Fatalf("rejected review result = found %t, error %v", found, err)
+	}
+}
+
+func TestWorkflowEngineLeavesApprovedReviewWithoutAutomaticEdge(t *testing.T) {
+	engine := mustWorkflowEngine(t, workflowStartingReviewWithoutTransition())
+	instance := WorkflowInstance{ID: uuid.New(), RequestVersionID: uuid.New(), WorkflowVersionID: uuid.New(),
+		CurrentStateKey: "review", Status: WorkflowInstanceRunning, LockVersion: 1, StartedAt: workflowTestTime()}
+	if _, found, err := engine.ApplyReviewResult(instance, ReviewTaskApproved, workflowTestTime()); err != nil || found {
+		t.Fatalf("review without automatic edge = found %t, error %v", found, err)
+	}
+}
+
 func TestWorkflowDocumentAllowsNonTerminatingGraph(t *testing.T) {
 	_, err := NewWorkflowDocument(WorkflowDocument{
 		InitialState: "start",
@@ -141,6 +163,13 @@ func workflowWithoutReview() WorkflowDocument {
 			Permission: "deployment_request.deploy",
 		}},
 	}
+}
+
+func workflowStartingReviewWithoutTransition() WorkflowDocument {
+	policy := ReviewPolicy{Type: ReviewPolicyAny, RequiredApprovals: 1, UserIDs: []uuid.UUID{uuid.New()}}
+	return WorkflowDocument{InitialState: "review", States: []WorkflowState{{
+		Key: "review", Name: "Review", Type: WorkflowStateReview, ReviewPolicy: &policy,
+	}}}
 }
 
 func twoStageReviewWorkflow() WorkflowDocument {

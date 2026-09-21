@@ -76,6 +76,17 @@ func TestCandidateReconciliationSkipsApplicationsWithoutLiveDifference(t *testin
 	}
 }
 
+func TestCandidateReconciliationRecoversApprovedReviews(t *testing.T) {
+	workflows := &candidateWorkflowStarterStub{}
+	reconciler := newCandidateReconcilerForTest(t, newCandidateRepositoryStub(), candidateArgoStub{}, workflows)
+	if _, err := reconciler.ReconcileOnce(context.Background()); err != nil {
+		t.Fatalf("reconcile approved reviews: %v", err)
+	}
+	if workflows.recoveries != 1 {
+		t.Fatalf("approved review recoveries = %d, want 1", workflows.recoveries)
+	}
+}
+
 func TestCandidateReconciliationRejectsEmptyObservedRevision(t *testing.T) {
 	repository := newCandidateRepositoryStub(candidateTarget())
 	argo := candidateArgoStub{emptyRevision: true}
@@ -138,11 +149,19 @@ func (s *candidateRepositoryStub) ListPendingWorkflowStarts(context.Context) ([]
 	return values, nil
 }
 
-type candidateWorkflowStarterStub struct{ started []WorkflowStartInput }
+type candidateWorkflowStarterStub struct {
+	started    []WorkflowStartInput
+	recoveries int
+}
 
 func (s *candidateWorkflowStarterStub) Start(_ context.Context, input WorkflowStartInput) (deploydomain.WorkflowResult, error) {
 	s.started = append(s.started, input)
 	return deploydomain.WorkflowResult{}, nil
+}
+
+func (s *candidateWorkflowStarterStub) RecoverApprovedReviews(context.Context) error {
+	s.recoveries++
+	return nil
 }
 
 type candidateArgoStub struct {

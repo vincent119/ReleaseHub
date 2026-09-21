@@ -61,6 +61,13 @@ type WorkflowReviewChange struct {
 	ExpectedLock uint64
 	Task         deploydomain.ReviewTask
 	Decision     deploydomain.ReviewDecision
+	Result       *deploydomain.WorkflowResult
+	NextReview   *deploydomain.ReviewTask
+}
+
+// ApprovedReviewRecovery identifies one persisted approval awaiting its automatic edge.
+type ApprovedReviewRecovery struct {
+	RequestVersionID uuid.UUID
 }
 
 // WorkflowReviewReassignmentChange persists one audited assignment replacement.
@@ -79,6 +86,7 @@ type WorkflowRuntimeRepository interface {
 	ApplyTransition(context.Context, WorkflowTransitionChange) error
 	ApplyReview(context.Context, WorkflowReviewChange) error
 	ApplyReviewReassignment(context.Context, WorkflowReviewReassignmentChange) error
+	ListApprovedReviewRecoveries(context.Context) ([]ApprovedReviewRecovery, error)
 }
 
 // ReviewAssignmentResolver captures eligible users and current role memberships.

@@ -19,6 +19,7 @@ type PendingWorkflowStart struct {
 // CandidateWorkflowStarter starts the pinned Workflow for a Request Version.
 type CandidateWorkflowStarter interface {
 	Start(context.Context, WorkflowStartInput) (deploydomain.WorkflowResult, error)
+	RecoverApprovedReviews(context.Context) error
 }
 
 func (r *CandidateReconciler) startPendingWorkflows(ctx context.Context) error {
@@ -32,6 +33,13 @@ func (r *CandidateReconciler) startPendingWorkflows(ctx context.Context) error {
 		startErr = errors.Join(startErr, err)
 	}
 	return startErr
+}
+
+func (r *CandidateReconciler) recoverApprovedReviews(ctx context.Context) error {
+	if err := r.workflows.RecoverApprovedReviews(ctx); err != nil {
+		return fmt.Errorf("recover approved Workflow reviews: %w", err)
+	}
+	return nil
 }
 
 func workflowStartInput(value PendingWorkflowStart) WorkflowStartInput {
