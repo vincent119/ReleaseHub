@@ -132,7 +132,7 @@ func buildCoreHandlerParts(dependencies apiHandlerDependencies) (apiHandlerParts
 	if err != nil {
 		return apiHandlerParts{}, err
 	}
-	catalog, err := newCatalogHandlerOptions(dependencies.resources.db, dependencies.policy, dependencies.cfg.Tenancy.DefaultOrganizationID)
+	catalog, err := newCatalogHandlerOptions(dependencies.resources.db, dependencies.policy, dependencies.cfg.Tenancy.DefaultOrganizationID, dependencies.resources.argoClient)
 	if err != nil {
 		return apiHandlerParts{}, err
 	}

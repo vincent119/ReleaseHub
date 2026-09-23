@@ -35,6 +35,7 @@ type catalogHandler struct {
 	authn        *authHandler
 	service      catalogService
 	statusReader applicationStatusReader
+	runtime      runtimeService
 }
 
 // CreateCatalogProject creates a Project under an existing Organization.

@@ -30,6 +30,7 @@ type AuthHandlerOptions struct {
 type CatalogHandlerOptions struct {
 	Service      catalogService
 	StatusReader applicationStatusReader
+	Runtime      runtimeService
 }
 
 // ArgoCDHandlerOptions supplies Argo CD onboarding application ports.
@@ -106,7 +107,7 @@ func NewAPIHandler(options APIOptions) contract.ServerInterface {
 	authn := newAuthHandler(options.Auth)
 	return &apiHandler{
 		authHandler:     authn,
-		catalogHandler:  &catalogHandler{authn: authn, service: options.Catalog.Service, statusReader: options.Catalog.StatusReader},
+		catalogHandler:  &catalogHandler{authn: authn, service: options.Catalog.Service, statusReader: options.Catalog.StatusReader, runtime: options.Catalog.Runtime},
 		argoCDHandler:   &argoCDHandler{authn: authn, onboarding: options.ArgoCD.Onboarding, candidates: options.ArgoCD.Candidates},
 		accessHandler:   &accessHandler{authn: authn, service: options.Access.Service, localUsers: options.Access.LocalUsers},
 		workflowHandler: &workflowHandler{authn: authn, definitions: options.Workflow.Definitions},

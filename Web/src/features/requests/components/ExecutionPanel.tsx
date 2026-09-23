@@ -3,10 +3,12 @@ import {
   Button,
   Card,
   Checkbox,
+  Collapse,
   Descriptions,
   Form,
   Input,
   Modal,
+  Select,
   Space,
   Tag,
   Typography,
@@ -24,6 +26,7 @@ import type {
   DeploymentExecution,
   DeploymentRequestVersion,
 } from '@/generated/model'
+import { RuntimeTopologyPanel } from '@/features/runtime'
 import { useFeedback } from '@/shared/feedback/useFeedback'
 import { SemanticList, SemanticListItemContent } from '@/shared/list'
 
@@ -54,6 +57,7 @@ export function ExecutionPanel({
   const [selected, setSelected] = useState<string[]>([])
   const [command, setCommand] = useState<Command>()
   const [submitting, setSubmitting] = useState(false)
+  const [topologyApplication, setTopologyApplication] = useState<string>()
   if (unavailable)
     return (
       <Alert
@@ -73,6 +77,11 @@ export function ExecutionPanel({
       </Card>
     )
   const failed = execution.nodes.filter((node) => node.status === 'Failed')
+  const observedApplication =
+    topologyApplication ?? execution.nodes[0]?.applicationId
+  const executionActive = ['Queued', 'Preflight', 'Running'].includes(
+    execution.status,
+  )
   const capability = (key: string) => request.capabilities.includes(key)
   const retry = async () => {
     if (!selected.length) return
@@ -168,6 +177,41 @@ export function ExecutionPanel({
           />
         )}
       />
+      {observedApplication && (
+        <Collapse
+          defaultActiveKey={executionActive ? ['runtime'] : []}
+          items={[
+            {
+              key: 'runtime',
+              label: t('runtimeTopology.executionTitle'),
+              children: (
+                <Space
+                  orientation="vertical"
+                  size="middle"
+                  style={{ width: '100%' }}
+                >
+                  {execution.nodes.length > 1 && (
+                    <Select
+                      value={observedApplication}
+                      onChange={setTopologyApplication}
+                      options={execution.nodes.map((node) => ({
+                        value: node.applicationId,
+                        label: node.nodeKey,
+                      }))}
+                      aria-label={t('runtimeTopology.application')}
+                    />
+                  )}
+                  <RuntimeTopologyPanel
+                    applicationId={observedApplication}
+                    active={executionActive}
+                    currentLiveState={!executionActive}
+                  />
+                </Space>
+              ),
+            },
+          ]}
+        />
+      )}
       <Space wrap>
         {capability('deployment_request.retry') && failed.length > 0 && (
           <Button

@@ -752,6 +752,113 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+  /api/v1/catalog/applications/{applicationId}/runtime/topology:
+    get:
+      operationId: getCatalogApplicationRuntimeTopology
+      summary: Get an authorized live Application resource topology
+      tags: [Catalog]
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/ApplicationId"
+        - name: view
+          in: query
+          required: true
+          schema: { type: string, enum: [resources, network] }
+      responses:
+        "200":
+          description: A bounded point-in-time topology projection.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RuntimeTopologyResponse"
+        "400": { description: The topology query is invalid. }
+        "401": { description: The user is unauthenticated or the session has expired. }
+        "404": { description: The Application does not exist or the caller lacks view permission. }
+        "503": { description: Runtime topology is temporarily unavailable. }
+  /api/v1/catalog/applications/{applicationId}/runtime/resources/detail:
+    get:
+      operationId: getCatalogApplicationRuntimeResource
+      summary: Get an authorized live resource summary and redacted manifest
+      tags: [Catalog]
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/ApplicationId"
+        - $ref: "#/components/parameters/RuntimeResourceGroup"
+        - $ref: "#/components/parameters/RuntimeResourceVersion"
+        - $ref: "#/components/parameters/RuntimeResourceKind"
+        - $ref: "#/components/parameters/RuntimeResourceNamespace"
+        - $ref: "#/components/parameters/RuntimeResourceName"
+      responses:
+        "200":
+          description: The authorized resource and redacted live manifest.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RuntimeResourceDetailResponse"
+        "400": { description: The resource query is invalid. }
+        "401": { description: The user is unauthenticated or the session has expired. }
+        "404": { description: The Application or resource does not exist or is not visible. }
+        "503": { description: Runtime resource detail is temporarily unavailable. }
+  /api/v1/catalog/applications/{applicationId}/runtime/resources/events:
+    get:
+      operationId: listCatalogApplicationRuntimeEvents
+      summary: List bounded Kubernetes Events for an authorized live resource
+      tags: [Catalog]
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/ApplicationId"
+        - $ref: "#/components/parameters/RuntimeResourceGroup"
+        - $ref: "#/components/parameters/RuntimeResourceVersion"
+        - $ref: "#/components/parameters/RuntimeResourceKind"
+        - $ref: "#/components/parameters/RuntimeResourceNamespace"
+        - $ref: "#/components/parameters/RuntimeResourceName"
+      responses:
+        "200":
+          description: Bounded events ordered from newest to oldest.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RuntimeEventListResponse"
+        "400": { description: The resource query is invalid. }
+        "401": { description: The user is unauthenticated or the session has expired. }
+        "404": { description: The Application or resource does not exist or is not visible. }
+        "503": { description: Runtime events are temporarily unavailable. }
+  /api/v1/catalog/applications/{applicationId}/runtime/pods/logs:
+    get:
+      operationId: getCatalogApplicationRuntimePodLogs
+      summary: Get a bounded log snapshot for an authorized Pod
+      tags: [Catalog]
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/ApplicationId"
+        - $ref: "#/components/parameters/RuntimeResourceGroup"
+        - $ref: "#/components/parameters/RuntimeResourceVersion"
+        - $ref: "#/components/parameters/RuntimeResourceKind"
+        - $ref: "#/components/parameters/RuntimeResourceNamespace"
+        - $ref: "#/components/parameters/RuntimeResourceName"
+        - name: container
+          in: query
+          required: false
+          schema: { type: string, maxLength: 253 }
+        - name: tailLines
+          in: query
+          required: false
+          schema: { type: integer, format: int64, minimum: 1, maximum: 500, default: 200 }
+      responses:
+        "200":
+          description: A bounded snapshot collected from the Argo CD PodLogs stream.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RuntimeLogListResponse"
+        "400": { description: The Pod log query is invalid. }
+        "401": { description: The user is unauthenticated or the session has expired. }
+        "404": { description: The Application or Pod does not exist or is not visible. }
+        "503": { description: Runtime logs are temporarily unavailable. }
   /api/v1/catalog/applications/{applicationId}/onboarding/dry-run:
     post:
       operationId: dryRunApplicationOnboarding
@@ -1904,6 +2011,31 @@ components:
       schema:
         type: string
         format: uuid
+    RuntimeResourceGroup:
+      name: group
+      in: query
+      required: false
+      schema: { type: string, maxLength: 253, default: "" }
+    RuntimeResourceVersion:
+      name: version
+      in: query
+      required: true
+      schema: { type: string, minLength: 1, maxLength: 63 }
+    RuntimeResourceKind:
+      name: kind
+      in: query
+      required: true
+      schema: { type: string, minLength: 1, maxLength: 63 }
+    RuntimeResourceNamespace:
+      name: namespace
+      in: query
+      required: false
+      schema: { type: string, maxLength: 253, default: "" }
+    RuntimeResourceName:
+      name: name
+      in: query
+      required: true
+      schema: { type: string, minLength: 1, maxLength: 253 }
     CandidateId:
       name: candidateId
       in: path
@@ -2706,6 +2838,126 @@ components:
       properties:
         data:
           $ref: "#/components/schemas/CatalogApplicationStatus"
+        meta:
+          $ref: "#/components/schemas/ResponseMeta"
+    RuntimeResourceInfo:
+      type: object
+      required: [name, value]
+      properties:
+        name: { type: string }
+        value: { type: string }
+    RuntimeResourceNode:
+      type: object
+      required: [id, group, version, kind, namespace, name, healthStatus, healthMessage, orphaned, images, info, ingress, externalUrls]
+      properties:
+        id: { type: string }
+        group: { type: string }
+        version: { type: string }
+        kind: { type: string }
+        namespace: { type: string }
+        name: { type: string }
+        healthStatus: { type: string }
+        healthMessage: { type: string }
+        orphaned: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        images:
+          type: array
+          items: { type: string }
+        info:
+          type: array
+          items:
+            $ref: "#/components/schemas/RuntimeResourceInfo"
+        ingress:
+          type: array
+          items: { type: string }
+        externalUrls:
+          type: array
+          items: { type: string }
+    RuntimeTopologyEdge:
+      type: object
+      required: [id, source, target, kind]
+      properties:
+        id: { type: string }
+        source: { type: string }
+        target: { type: string }
+        kind: { type: string, enum: [resource, network] }
+    RuntimeTopology:
+      type: object
+      required: [applicationId, view, observedAt, nodes, edges, warnings, partial]
+      properties:
+        applicationId: { type: string, format: uuid }
+        view: { type: string, enum: [resources, network] }
+        observedAt: { type: string, format: date-time }
+        nodes:
+          type: array
+          items:
+            $ref: "#/components/schemas/RuntimeResourceNode"
+        edges:
+          type: array
+          items:
+            $ref: "#/components/schemas/RuntimeTopologyEdge"
+        warnings:
+          type: array
+          items: { type: string }
+        partial: { type: boolean }
+    RuntimeTopologyResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          $ref: "#/components/schemas/RuntimeTopology"
+        meta:
+          $ref: "#/components/schemas/ResponseMeta"
+    RuntimeResourceDetail:
+      type: object
+      required: [resource, manifest]
+      properties:
+        resource:
+          $ref: "#/components/schemas/RuntimeResourceNode"
+        manifest: { type: string }
+    RuntimeResourceDetailResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          $ref: "#/components/schemas/RuntimeResourceDetail"
+        meta:
+          $ref: "#/components/schemas/ResponseMeta"
+    RuntimeEvent:
+      type: object
+      required: [type, reason, message, count]
+      properties:
+        type: { type: string }
+        reason: { type: string }
+        message: { type: string }
+        count: { type: integer, format: int32 }
+        firstObservedAt: { type: string, format: date-time }
+        lastObservedAt: { type: string, format: date-time }
+    RuntimeEventListResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/RuntimeEvent"
+        meta:
+          $ref: "#/components/schemas/ResponseMeta"
+    RuntimeLogEntry:
+      type: object
+      required: [content, timestamp, podName]
+      properties:
+        content: { type: string }
+        timestamp: { type: string }
+        podName: { type: string }
+    RuntimeLogListResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/RuntimeLogEntry"
         meta:
           $ref: "#/components/schemas/ResponseMeta"
     OnboardingConfirmRequest:

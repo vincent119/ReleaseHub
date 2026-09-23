@@ -22,6 +22,7 @@ import (
 	grpcinsecure "google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
+	corev1 "k8s.io/api/core/v1"
 
 	argodomain "github.com/vincent119/ReleaseHub/Server/internal/argocd/domain"
 	"github.com/vincent119/ReleaseHub/Server/internal/config"
@@ -47,6 +48,13 @@ type applicationManager interface {
 	Watch(context.Context, *applicationpkg.ApplicationQuery, ...grpc.CallOption) (applicationpkg.ApplicationService_WatchClient, error)
 }
 
+type applicationRuntimeManager interface {
+	ResourceTree(context.Context, *applicationpkg.ResourcesQuery, ...grpc.CallOption) (*argov1alpha1.ApplicationTree, error)
+	GetResource(context.Context, *applicationpkg.ApplicationResourceRequest, ...grpc.CallOption) (*applicationpkg.ApplicationResourceResponse, error)
+	ListResourceEvents(context.Context, *applicationpkg.ApplicationResourceEventsQuery, ...grpc.CallOption) (*corev1.EventList, error)
+	PodLogs(context.Context, *applicationpkg.ApplicationPodLogsQuery, ...grpc.CallOption) (applicationpkg.ApplicationService_PodLogsClient, error)
+}
+
 // ApplicationWatch owns one authenticated Argo CD watch stream.
 type ApplicationWatch struct {
 	stream applicationpkg.ApplicationService_WatchClient
@@ -62,6 +70,7 @@ type Client struct {
 	connection            io.Closer
 	applications          applicationLister
 	manager               applicationManager
+	runtime               applicationRuntimeManager
 	permissions           permissionChecker
 	token                 string
 	requestTimeout        time.Duration
@@ -83,7 +92,7 @@ func NewClient(cfg config.ArgoCDConfig) (*Client, error) {
 	}
 	applicationClient := applicationpkg.NewApplicationServiceClient(connection)
 	return &Client{
-		connection: connection, applications: applicationClient, manager: applicationClient,
+		connection: connection, applications: applicationClient, manager: applicationClient, runtime: applicationClient,
 		permissions: accountpkg.NewAccountServiceClient(connection), token: cfg.Token,
 		requestTimeout: cfg.RequestTimeout, controlPlaneNamespace: cfg.ApplicationNamespace,
 	}, nil

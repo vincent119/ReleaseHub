@@ -6,6 +6,7 @@ import {
   Space,
   Spin,
   Table,
+  Tabs,
   Typography,
 } from 'antd'
 import type { TableProps } from 'antd'
@@ -20,6 +21,7 @@ import {
   useListVisibleCatalogApplications,
 } from '@/generated/api'
 import type { CatalogApplication } from '@/generated/model'
+import { RuntimeTopologyPanel } from '@/features/runtime'
 import { useFeedback } from '@/shared/feedback/useFeedback'
 import { ThemedLink } from '@/shared/link'
 
@@ -151,123 +153,150 @@ export function ApplicationDetailPage() {
           {value.argocdNamespace}/{value.argocdApplicationName}
         </Typography.Paragraph>
       </div>
-      <Card title={t('applicationDetail.runtime.title')}>
-        <Table
-          size="small"
-          pagination={false}
-          showHeader={false}
-          rowKey="key"
-          columns={[
-            { dataIndex: 'label', key: 'label' },
-            { dataIndex: 'value', key: 'value' },
-          ]}
-          dataSource={[
-            {
-              key: 'sync',
-              label: t('applicationDetail.runtime.sync'),
-              value: runtime.syncStatus || '-',
-            },
-            {
-              key: 'health',
-              label: t('applicationDetail.runtime.health'),
-              value: runtime.healthStatus || '-',
-            },
-            {
-              key: 'operation',
-              label: t('applicationDetail.runtime.operation'),
-              value: runtime.operationPhase || '-',
-            },
-            {
-              key: 'revision',
-              label: t('applicationDetail.runtime.revision'),
-              value: runtime.resolvedRevision || '-',
-            },
-            {
-              key: 'onboarding',
-              label: t('applicationDetail.runtime.onboarding'),
-              value:
-                runtime.onboardingStatus ||
-                t('applicationDetail.runtime.notStarted'),
-            },
-            {
-              key: 'automated',
-              label: t('applicationDetail.runtime.automatedSync'),
-              value: runtime.automatedSync
-                ? t('common.enabled')
-                : t('common.disabled'),
-            },
-          ]}
-        />
-      </Card>
-      <Card title={t('applicationDetail.onboarding.title')}>
-        <Space>
-          <Button
-            type="primary"
-            loading={dryRun.isPending}
-            disabled={!csrfToken}
-            onClick={() =>
-              dryRun.mutate(
-                { applicationId },
-                {
-                  onSuccess: (response) => {
-                    if (response.status === 200) {
-                      void status.refetch()
-                      feedback.success(
-                        t('applicationDetail.onboarding.success'),
-                      )
-                    }
-                  },
-                  onError: () =>
-                    feedback.error(t('applicationDetail.onboarding.error')),
-                },
-              )
-            }
-          >
-            {t('applicationDetail.onboarding.dryRun')}
-          </Button>
-          {runtime.onboardingStatus === 'AwaitingConfirmation' &&
-            runtime.onboardingVersion > 0 && (
-              <Button
-                disabled={!csrfToken}
-                onClick={() => {
-                  void confirmApplicationOnboarding(
-                    applicationId,
-                    { expectedVersion: runtime.onboardingVersion },
-                    {
-                      headers: {
-                        'X-CSRF-Token': csrfToken ?? '',
-                        'Idempotency-Key': crypto.randomUUID(),
-                      },
-                    },
-                  )
-                    .then((response) => {
-                      void status.refetch()
-                      if (response.status === 202) {
-                        feedback.info(t('applicationDetail.onboarding.pending'))
-                        return
-                      }
-                      feedback.success(
-                        t('applicationDetail.onboarding.success'),
-                      )
-                    })
-                    .catch(() =>
-                      feedback.error(t('applicationDetail.onboarding.error')),
-                    )
-                }}
+      <Tabs
+        items={[
+          {
+            key: 'overview',
+            label: t('applicationDetail.tabs.overview'),
+            children: (
+              <Space
+                orientation="vertical"
+                size="large"
+                className={styles.pageSection}
               >
-                {t('applicationDetail.onboarding.confirm')}
-              </Button>
-            )}
-        </Space>
-      </Card>
-      {runtime.driftReasons.length > 0 && (
-        <Alert
-          type="warning"
-          showIcon
-          title={t('applicationDetail.drift.title')}
-          description={runtime.driftReasons.join(', ')}
-        />
-      )}
+                <Card title={t('applicationDetail.runtime.title')}>
+                  <Table
+                    size="small"
+                    pagination={false}
+                    showHeader={false}
+                    rowKey="key"
+                    columns={[
+                      { dataIndex: 'label', key: 'label' },
+                      { dataIndex: 'value', key: 'value' },
+                    ]}
+                    dataSource={[
+                      {
+                        key: 'sync',
+                        label: t('applicationDetail.runtime.sync'),
+                        value: runtime.syncStatus || '-',
+                      },
+                      {
+                        key: 'health',
+                        label: t('applicationDetail.runtime.health'),
+                        value: runtime.healthStatus || '-',
+                      },
+                      {
+                        key: 'operation',
+                        label: t('applicationDetail.runtime.operation'),
+                        value: runtime.operationPhase || '-',
+                      },
+                      {
+                        key: 'revision',
+                        label: t('applicationDetail.runtime.revision'),
+                        value: runtime.resolvedRevision || '-',
+                      },
+                      {
+                        key: 'onboarding',
+                        label: t('applicationDetail.runtime.onboarding'),
+                        value:
+                          runtime.onboardingStatus ||
+                          t('applicationDetail.runtime.notStarted'),
+                      },
+                      {
+                        key: 'automated',
+                        label: t('applicationDetail.runtime.automatedSync'),
+                        value: runtime.automatedSync
+                          ? t('common.enabled')
+                          : t('common.disabled'),
+                      },
+                    ]}
+                  />
+                </Card>
+                <Card title={t('applicationDetail.onboarding.title')}>
+                  <Space>
+                    <Button
+                      type="primary"
+                      loading={dryRun.isPending}
+                      disabled={!csrfToken}
+                      onClick={() =>
+                        dryRun.mutate(
+                          { applicationId },
+                          {
+                            onSuccess: (response) => {
+                              if (response.status === 200) {
+                                void status.refetch()
+                                feedback.success(
+                                  t('applicationDetail.onboarding.success'),
+                                )
+                              }
+                            },
+                            onError: () =>
+                              feedback.error(
+                                t('applicationDetail.onboarding.error'),
+                              ),
+                          },
+                        )
+                      }
+                    >
+                      {t('applicationDetail.onboarding.dryRun')}
+                    </Button>
+                    {runtime.onboardingStatus === 'AwaitingConfirmation' &&
+                      runtime.onboardingVersion > 0 && (
+                        <Button
+                          disabled={!csrfToken}
+                          onClick={() => {
+                            void confirmApplicationOnboarding(
+                              applicationId,
+                              { expectedVersion: runtime.onboardingVersion },
+                              {
+                                headers: {
+                                  'X-CSRF-Token': csrfToken ?? '',
+                                  'Idempotency-Key': crypto.randomUUID(),
+                                },
+                              },
+                            )
+                              .then((response) => {
+                                void status.refetch()
+                                if (response.status === 202) {
+                                  feedback.info(
+                                    t('applicationDetail.onboarding.pending'),
+                                  )
+                                  return
+                                }
+                                feedback.success(
+                                  t('applicationDetail.onboarding.success'),
+                                )
+                              })
+                              .catch(() =>
+                                feedback.error(
+                                  t('applicationDetail.onboarding.error'),
+                                ),
+                              )
+                          }}
+                        >
+                          {t('applicationDetail.onboarding.confirm')}
+                        </Button>
+                      )}
+                  </Space>
+                </Card>
+                {runtime.driftReasons.length > 0 && (
+                  <Alert
+                    type="warning"
+                    showIcon
+                    title={t('applicationDetail.drift.title')}
+                    description={runtime.driftReasons.join(', ')}
+                  />
+                )}
+              </Space>
+            ),
+          },
+          {
+            key: 'topology',
+            label: t('applicationDetail.tabs.topology'),
+            children: <RuntimeTopologyPanel applicationId={applicationId} />,
+          },
+        ]}
+      />
     </Space>
   )
 }

@@ -64,3 +64,13 @@ Worker starts this sequence only after an immutable Deployment Request Version p
 If the label is removed, automated sync is enabled again, the Application disappears, or its mapping changes, Worker records configuration drift and emits a notification without repairing the change automatically. While drift exists, creating a Deployment Request, deploying, and performing Forward Rollback are blocked.
 
 If Argo CD cannot complete refresh, cannot return target manifests, reports a different operation identity, or exposes drift from the approved content, Worker remains fail closed. Do not recover by enabling automated sync or blindly resending Sync.
+
+## Live Resource Topology and Node Diagnostics
+
+Users with Application `resource.view` permission can expand live topology under Deployment execution or use the Resource topology tab on Application detail. The browser calls only ReleaseHub APIs. Argo CD endpoints, tokens, and gRPC capabilities are never delegated to users.
+
+Resource hierarchy uses only Argo CD `ParentRefs`; network topology uses only `NetworkingInfo`. ReleaseHub shows a warning when relationship evidence is missing instead of inferring links from names, labels, or Kubernetes conventions. Active deployments refresh every five seconds. A terminal Request shows current live state rather than an immutable snapshot of that execution; the Request revision, digest, and result evidence remain the governance record.
+
+Selecting a node opens Summary, Events, Pod Logs, and Live Manifest. Logs are available only for Pods and are bounded to 500 lines, 15 seconds, and 1 MiB per request. Events are limited to 100 entries; topology is limited to 500 nodes and 1,000 edges. Secret manifests omit `data` and `stringData`. Manifest, Events, and Logs reads add metadata-only Audit Trail records containing the actor, Application, resource identity, and action. Returned content is not persisted in audit records.
+
+When the panel reports that runtime data is unavailable, first confirm that the user can still view the Application, then inspect the ReleaseHub-to-Argo CD gRPC connection and dedicated account permissions. A topology failure does not change Deployment execution state and should not be bypassed by exposing the Argo CD UI to general users.

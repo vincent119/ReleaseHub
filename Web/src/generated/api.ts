@@ -96,6 +96,9 @@ import type {
   DeploymentTransitionRequest,
   DeploymentUnlockRequest,
   ErrorResponse,
+  GetCatalogApplicationRuntimePodLogsParams,
+  GetCatalogApplicationRuntimeResourceParams,
+  GetCatalogApplicationRuntimeTopologyParams,
   GetDeploymentBindingParams,
   ListAccessBindingsParams,
   ListAccessDeniesParams,
@@ -106,6 +109,7 @@ import type {
   ListAccessUsersParams,
   ListAuditEventsParams,
   ListAuditFilterOptionsParams,
+  ListCatalogApplicationRuntimeEventsParams,
   ListCatalogApplicationsParams,
   ListDeploymentHistoryParams,
   ListDeploymentPlansParams,
@@ -120,6 +124,10 @@ import type {
   ReleaseWorkflowResponse,
   ReleaseWorkflowReviewOptionsResponse,
   ReleaseWorkflowVersionResponse,
+  RuntimeEventListResponse,
+  RuntimeLogListResponse,
+  RuntimeResourceDetailResponse,
+  RuntimeTopologyResponse,
   SystemStatusResponse,
   UpdateCatalogOrganizationRequest,
   UpdateDeploymentRequestVersionRequest,
@@ -5179,6 +5187,634 @@ export function useGetCatalogApplicationStatus<TData = Awaited<ReturnType<typeof
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
   const queryOptions = getGetCatalogApplicationStatusQueryOptions(applicationId,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export type getCatalogApplicationRuntimeTopologyResponse200 = {
+  data: RuntimeTopologyResponse
+  status: 200
+}
+
+export type getCatalogApplicationRuntimeTopologyResponse400 = {
+  data: void
+  status: 400
+}
+
+export type getCatalogApplicationRuntimeTopologyResponse401 = {
+  data: void
+  status: 401
+}
+
+export type getCatalogApplicationRuntimeTopologyResponse404 = {
+  data: void
+  status: 404
+}
+
+export type getCatalogApplicationRuntimeTopologyResponse503 = {
+  data: void
+  status: 503
+}
+
+export type getCatalogApplicationRuntimeTopologyResponseSuccess = (getCatalogApplicationRuntimeTopologyResponse200) & {
+  headers: Headers;
+};
+export type getCatalogApplicationRuntimeTopologyResponseError = (getCatalogApplicationRuntimeTopologyResponse400 | getCatalogApplicationRuntimeTopologyResponse401 | getCatalogApplicationRuntimeTopologyResponse404 | getCatalogApplicationRuntimeTopologyResponse503) & {
+  headers: Headers;
+};
+
+export type getCatalogApplicationRuntimeTopologyResponse = (getCatalogApplicationRuntimeTopologyResponseSuccess | getCatalogApplicationRuntimeTopologyResponseError)
+
+export const getGetCatalogApplicationRuntimeTopologyUrl = (applicationId: string,
+    params: GetCatalogApplicationRuntimeTopologyParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/v1/catalog/applications/${applicationId}/runtime/topology?${stringifiedParams}` : `/api/v1/catalog/applications/${applicationId}/runtime/topology`
+}
+
+/**
+ * @summary Get an authorized live Application resource topology
+ */
+export const getCatalogApplicationRuntimeTopology = async (applicationId: string,
+    params: GetCatalogApplicationRuntimeTopologyParams, options?: RequestInit): Promise<getCatalogApplicationRuntimeTopologyResponse> => {
+
+  const res = await fetch(getGetCatalogApplicationRuntimeTopologyUrl(applicationId,params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getCatalogApplicationRuntimeTopologyResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as getCatalogApplicationRuntimeTopologyResponse
+}
+
+
+
+
+
+export const getGetCatalogApplicationRuntimeTopologyQueryKey = (applicationId: string,
+    params?: GetCatalogApplicationRuntimeTopologyParams,) => {
+    return [
+    `/api/v1/catalog/applications/${applicationId}/runtime/topology`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetCatalogApplicationRuntimeTopologyQueryOptions = <TData = Awaited<ReturnType<typeof getCatalogApplicationRuntimeTopology>>, TError = void>(applicationId: string,
+    params: GetCatalogApplicationRuntimeTopologyParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCatalogApplicationRuntimeTopology>>, TError, TData>>, fetch?: RequestInit}
+) => {
+
+const {query: queryOptions, fetch: fetchOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetCatalogApplicationRuntimeTopologyQueryKey(applicationId,params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCatalogApplicationRuntimeTopology>>> = ({ signal }) => getCatalogApplicationRuntimeTopology(applicationId,params, { signal, ...fetchOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: applicationId !== null && applicationId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCatalogApplicationRuntimeTopology>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetCatalogApplicationRuntimeTopologyQueryResult = NonNullable<Awaited<ReturnType<typeof getCatalogApplicationRuntimeTopology>>>
+export type GetCatalogApplicationRuntimeTopologyQueryError = void
+
+
+export function useGetCatalogApplicationRuntimeTopology<TData = Awaited<ReturnType<typeof getCatalogApplicationRuntimeTopology>>, TError = void>(
+ applicationId: string,
+    params: GetCatalogApplicationRuntimeTopologyParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCatalogApplicationRuntimeTopology>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getCatalogApplicationRuntimeTopology>>,
+          TError,
+          Awaited<ReturnType<typeof getCatalogApplicationRuntimeTopology>>
+        > , 'initialData'
+      >, fetch?: RequestInit}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetCatalogApplicationRuntimeTopology<TData = Awaited<ReturnType<typeof getCatalogApplicationRuntimeTopology>>, TError = void>(
+ applicationId: string,
+    params: GetCatalogApplicationRuntimeTopologyParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCatalogApplicationRuntimeTopology>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getCatalogApplicationRuntimeTopology>>,
+          TError,
+          Awaited<ReturnType<typeof getCatalogApplicationRuntimeTopology>>
+        > , 'initialData'
+      >, fetch?: RequestInit}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetCatalogApplicationRuntimeTopology<TData = Awaited<ReturnType<typeof getCatalogApplicationRuntimeTopology>>, TError = void>(
+ applicationId: string,
+    params: GetCatalogApplicationRuntimeTopologyParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCatalogApplicationRuntimeTopology>>, TError, TData>>, fetch?: RequestInit}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Get an authorized live Application resource topology
+ */
+
+export function useGetCatalogApplicationRuntimeTopology<TData = Awaited<ReturnType<typeof getCatalogApplicationRuntimeTopology>>, TError = void>(
+ applicationId: string,
+    params: GetCatalogApplicationRuntimeTopologyParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCatalogApplicationRuntimeTopology>>, TError, TData>>, fetch?: RequestInit}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetCatalogApplicationRuntimeTopologyQueryOptions(applicationId,params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export type getCatalogApplicationRuntimeResourceResponse200 = {
+  data: RuntimeResourceDetailResponse
+  status: 200
+}
+
+export type getCatalogApplicationRuntimeResourceResponse400 = {
+  data: void
+  status: 400
+}
+
+export type getCatalogApplicationRuntimeResourceResponse401 = {
+  data: void
+  status: 401
+}
+
+export type getCatalogApplicationRuntimeResourceResponse404 = {
+  data: void
+  status: 404
+}
+
+export type getCatalogApplicationRuntimeResourceResponse503 = {
+  data: void
+  status: 503
+}
+
+export type getCatalogApplicationRuntimeResourceResponseSuccess = (getCatalogApplicationRuntimeResourceResponse200) & {
+  headers: Headers;
+};
+export type getCatalogApplicationRuntimeResourceResponseError = (getCatalogApplicationRuntimeResourceResponse400 | getCatalogApplicationRuntimeResourceResponse401 | getCatalogApplicationRuntimeResourceResponse404 | getCatalogApplicationRuntimeResourceResponse503) & {
+  headers: Headers;
+};
+
+export type getCatalogApplicationRuntimeResourceResponse = (getCatalogApplicationRuntimeResourceResponseSuccess | getCatalogApplicationRuntimeResourceResponseError)
+
+export const getGetCatalogApplicationRuntimeResourceUrl = (applicationId: string,
+    params: GetCatalogApplicationRuntimeResourceParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/v1/catalog/applications/${applicationId}/runtime/resources/detail?${stringifiedParams}` : `/api/v1/catalog/applications/${applicationId}/runtime/resources/detail`
+}
+
+/**
+ * @summary Get an authorized live resource summary and redacted manifest
+ */
+export const getCatalogApplicationRuntimeResource = async (applicationId: string,
+    params: GetCatalogApplicationRuntimeResourceParams, options?: RequestInit): Promise<getCatalogApplicationRuntimeResourceResponse> => {
+
+  const res = await fetch(getGetCatalogApplicationRuntimeResourceUrl(applicationId,params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getCatalogApplicationRuntimeResourceResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as getCatalogApplicationRuntimeResourceResponse
+}
+
+
+
+
+
+export const getGetCatalogApplicationRuntimeResourceQueryKey = (applicationId: string,
+    params?: GetCatalogApplicationRuntimeResourceParams,) => {
+    return [
+    `/api/v1/catalog/applications/${applicationId}/runtime/resources/detail`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetCatalogApplicationRuntimeResourceQueryOptions = <TData = Awaited<ReturnType<typeof getCatalogApplicationRuntimeResource>>, TError = void>(applicationId: string,
+    params: GetCatalogApplicationRuntimeResourceParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCatalogApplicationRuntimeResource>>, TError, TData>>, fetch?: RequestInit}
+) => {
+
+const {query: queryOptions, fetch: fetchOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetCatalogApplicationRuntimeResourceQueryKey(applicationId,params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCatalogApplicationRuntimeResource>>> = ({ signal }) => getCatalogApplicationRuntimeResource(applicationId,params, { signal, ...fetchOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: applicationId !== null && applicationId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCatalogApplicationRuntimeResource>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetCatalogApplicationRuntimeResourceQueryResult = NonNullable<Awaited<ReturnType<typeof getCatalogApplicationRuntimeResource>>>
+export type GetCatalogApplicationRuntimeResourceQueryError = void
+
+
+export function useGetCatalogApplicationRuntimeResource<TData = Awaited<ReturnType<typeof getCatalogApplicationRuntimeResource>>, TError = void>(
+ applicationId: string,
+    params: GetCatalogApplicationRuntimeResourceParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCatalogApplicationRuntimeResource>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getCatalogApplicationRuntimeResource>>,
+          TError,
+          Awaited<ReturnType<typeof getCatalogApplicationRuntimeResource>>
+        > , 'initialData'
+      >, fetch?: RequestInit}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetCatalogApplicationRuntimeResource<TData = Awaited<ReturnType<typeof getCatalogApplicationRuntimeResource>>, TError = void>(
+ applicationId: string,
+    params: GetCatalogApplicationRuntimeResourceParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCatalogApplicationRuntimeResource>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getCatalogApplicationRuntimeResource>>,
+          TError,
+          Awaited<ReturnType<typeof getCatalogApplicationRuntimeResource>>
+        > , 'initialData'
+      >, fetch?: RequestInit}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetCatalogApplicationRuntimeResource<TData = Awaited<ReturnType<typeof getCatalogApplicationRuntimeResource>>, TError = void>(
+ applicationId: string,
+    params: GetCatalogApplicationRuntimeResourceParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCatalogApplicationRuntimeResource>>, TError, TData>>, fetch?: RequestInit}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Get an authorized live resource summary and redacted manifest
+ */
+
+export function useGetCatalogApplicationRuntimeResource<TData = Awaited<ReturnType<typeof getCatalogApplicationRuntimeResource>>, TError = void>(
+ applicationId: string,
+    params: GetCatalogApplicationRuntimeResourceParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCatalogApplicationRuntimeResource>>, TError, TData>>, fetch?: RequestInit}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetCatalogApplicationRuntimeResourceQueryOptions(applicationId,params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export type listCatalogApplicationRuntimeEventsResponse200 = {
+  data: RuntimeEventListResponse
+  status: 200
+}
+
+export type listCatalogApplicationRuntimeEventsResponse400 = {
+  data: void
+  status: 400
+}
+
+export type listCatalogApplicationRuntimeEventsResponse401 = {
+  data: void
+  status: 401
+}
+
+export type listCatalogApplicationRuntimeEventsResponse404 = {
+  data: void
+  status: 404
+}
+
+export type listCatalogApplicationRuntimeEventsResponse503 = {
+  data: void
+  status: 503
+}
+
+export type listCatalogApplicationRuntimeEventsResponseSuccess = (listCatalogApplicationRuntimeEventsResponse200) & {
+  headers: Headers;
+};
+export type listCatalogApplicationRuntimeEventsResponseError = (listCatalogApplicationRuntimeEventsResponse400 | listCatalogApplicationRuntimeEventsResponse401 | listCatalogApplicationRuntimeEventsResponse404 | listCatalogApplicationRuntimeEventsResponse503) & {
+  headers: Headers;
+};
+
+export type listCatalogApplicationRuntimeEventsResponse = (listCatalogApplicationRuntimeEventsResponseSuccess | listCatalogApplicationRuntimeEventsResponseError)
+
+export const getListCatalogApplicationRuntimeEventsUrl = (applicationId: string,
+    params: ListCatalogApplicationRuntimeEventsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/v1/catalog/applications/${applicationId}/runtime/resources/events?${stringifiedParams}` : `/api/v1/catalog/applications/${applicationId}/runtime/resources/events`
+}
+
+/**
+ * @summary List bounded Kubernetes Events for an authorized live resource
+ */
+export const listCatalogApplicationRuntimeEvents = async (applicationId: string,
+    params: ListCatalogApplicationRuntimeEventsParams, options?: RequestInit): Promise<listCatalogApplicationRuntimeEventsResponse> => {
+
+  const res = await fetch(getListCatalogApplicationRuntimeEventsUrl(applicationId,params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listCatalogApplicationRuntimeEventsResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as listCatalogApplicationRuntimeEventsResponse
+}
+
+
+
+
+
+export const getListCatalogApplicationRuntimeEventsQueryKey = (applicationId: string,
+    params?: ListCatalogApplicationRuntimeEventsParams,) => {
+    return [
+    `/api/v1/catalog/applications/${applicationId}/runtime/resources/events`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListCatalogApplicationRuntimeEventsQueryOptions = <TData = Awaited<ReturnType<typeof listCatalogApplicationRuntimeEvents>>, TError = void>(applicationId: string,
+    params: ListCatalogApplicationRuntimeEventsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listCatalogApplicationRuntimeEvents>>, TError, TData>>, fetch?: RequestInit}
+) => {
+
+const {query: queryOptions, fetch: fetchOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListCatalogApplicationRuntimeEventsQueryKey(applicationId,params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listCatalogApplicationRuntimeEvents>>> = ({ signal }) => listCatalogApplicationRuntimeEvents(applicationId,params, { signal, ...fetchOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: applicationId !== null && applicationId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listCatalogApplicationRuntimeEvents>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListCatalogApplicationRuntimeEventsQueryResult = NonNullable<Awaited<ReturnType<typeof listCatalogApplicationRuntimeEvents>>>
+export type ListCatalogApplicationRuntimeEventsQueryError = void
+
+
+export function useListCatalogApplicationRuntimeEvents<TData = Awaited<ReturnType<typeof listCatalogApplicationRuntimeEvents>>, TError = void>(
+ applicationId: string,
+    params: ListCatalogApplicationRuntimeEventsParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listCatalogApplicationRuntimeEvents>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listCatalogApplicationRuntimeEvents>>,
+          TError,
+          Awaited<ReturnType<typeof listCatalogApplicationRuntimeEvents>>
+        > , 'initialData'
+      >, fetch?: RequestInit}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListCatalogApplicationRuntimeEvents<TData = Awaited<ReturnType<typeof listCatalogApplicationRuntimeEvents>>, TError = void>(
+ applicationId: string,
+    params: ListCatalogApplicationRuntimeEventsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listCatalogApplicationRuntimeEvents>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listCatalogApplicationRuntimeEvents>>,
+          TError,
+          Awaited<ReturnType<typeof listCatalogApplicationRuntimeEvents>>
+        > , 'initialData'
+      >, fetch?: RequestInit}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListCatalogApplicationRuntimeEvents<TData = Awaited<ReturnType<typeof listCatalogApplicationRuntimeEvents>>, TError = void>(
+ applicationId: string,
+    params: ListCatalogApplicationRuntimeEventsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listCatalogApplicationRuntimeEvents>>, TError, TData>>, fetch?: RequestInit}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary List bounded Kubernetes Events for an authorized live resource
+ */
+
+export function useListCatalogApplicationRuntimeEvents<TData = Awaited<ReturnType<typeof listCatalogApplicationRuntimeEvents>>, TError = void>(
+ applicationId: string,
+    params: ListCatalogApplicationRuntimeEventsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listCatalogApplicationRuntimeEvents>>, TError, TData>>, fetch?: RequestInit}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getListCatalogApplicationRuntimeEventsQueryOptions(applicationId,params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export type getCatalogApplicationRuntimePodLogsResponse200 = {
+  data: RuntimeLogListResponse
+  status: 200
+}
+
+export type getCatalogApplicationRuntimePodLogsResponse400 = {
+  data: void
+  status: 400
+}
+
+export type getCatalogApplicationRuntimePodLogsResponse401 = {
+  data: void
+  status: 401
+}
+
+export type getCatalogApplicationRuntimePodLogsResponse404 = {
+  data: void
+  status: 404
+}
+
+export type getCatalogApplicationRuntimePodLogsResponse503 = {
+  data: void
+  status: 503
+}
+
+export type getCatalogApplicationRuntimePodLogsResponseSuccess = (getCatalogApplicationRuntimePodLogsResponse200) & {
+  headers: Headers;
+};
+export type getCatalogApplicationRuntimePodLogsResponseError = (getCatalogApplicationRuntimePodLogsResponse400 | getCatalogApplicationRuntimePodLogsResponse401 | getCatalogApplicationRuntimePodLogsResponse404 | getCatalogApplicationRuntimePodLogsResponse503) & {
+  headers: Headers;
+};
+
+export type getCatalogApplicationRuntimePodLogsResponse = (getCatalogApplicationRuntimePodLogsResponseSuccess | getCatalogApplicationRuntimePodLogsResponseError)
+
+export const getGetCatalogApplicationRuntimePodLogsUrl = (applicationId: string,
+    params: GetCatalogApplicationRuntimePodLogsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/v1/catalog/applications/${applicationId}/runtime/pods/logs?${stringifiedParams}` : `/api/v1/catalog/applications/${applicationId}/runtime/pods/logs`
+}
+
+/**
+ * @summary Get a bounded log snapshot for an authorized Pod
+ */
+export const getCatalogApplicationRuntimePodLogs = async (applicationId: string,
+    params: GetCatalogApplicationRuntimePodLogsParams, options?: RequestInit): Promise<getCatalogApplicationRuntimePodLogsResponse> => {
+
+  const res = await fetch(getGetCatalogApplicationRuntimePodLogsUrl(applicationId,params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getCatalogApplicationRuntimePodLogsResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as getCatalogApplicationRuntimePodLogsResponse
+}
+
+
+
+
+
+export const getGetCatalogApplicationRuntimePodLogsQueryKey = (applicationId: string,
+    params?: GetCatalogApplicationRuntimePodLogsParams,) => {
+    return [
+    `/api/v1/catalog/applications/${applicationId}/runtime/pods/logs`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetCatalogApplicationRuntimePodLogsQueryOptions = <TData = Awaited<ReturnType<typeof getCatalogApplicationRuntimePodLogs>>, TError = void>(applicationId: string,
+    params: GetCatalogApplicationRuntimePodLogsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCatalogApplicationRuntimePodLogs>>, TError, TData>>, fetch?: RequestInit}
+) => {
+
+const {query: queryOptions, fetch: fetchOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetCatalogApplicationRuntimePodLogsQueryKey(applicationId,params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCatalogApplicationRuntimePodLogs>>> = ({ signal }) => getCatalogApplicationRuntimePodLogs(applicationId,params, { signal, ...fetchOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: applicationId !== null && applicationId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCatalogApplicationRuntimePodLogs>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetCatalogApplicationRuntimePodLogsQueryResult = NonNullable<Awaited<ReturnType<typeof getCatalogApplicationRuntimePodLogs>>>
+export type GetCatalogApplicationRuntimePodLogsQueryError = void
+
+
+export function useGetCatalogApplicationRuntimePodLogs<TData = Awaited<ReturnType<typeof getCatalogApplicationRuntimePodLogs>>, TError = void>(
+ applicationId: string,
+    params: GetCatalogApplicationRuntimePodLogsParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCatalogApplicationRuntimePodLogs>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getCatalogApplicationRuntimePodLogs>>,
+          TError,
+          Awaited<ReturnType<typeof getCatalogApplicationRuntimePodLogs>>
+        > , 'initialData'
+      >, fetch?: RequestInit}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetCatalogApplicationRuntimePodLogs<TData = Awaited<ReturnType<typeof getCatalogApplicationRuntimePodLogs>>, TError = void>(
+ applicationId: string,
+    params: GetCatalogApplicationRuntimePodLogsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCatalogApplicationRuntimePodLogs>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getCatalogApplicationRuntimePodLogs>>,
+          TError,
+          Awaited<ReturnType<typeof getCatalogApplicationRuntimePodLogs>>
+        > , 'initialData'
+      >, fetch?: RequestInit}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetCatalogApplicationRuntimePodLogs<TData = Awaited<ReturnType<typeof getCatalogApplicationRuntimePodLogs>>, TError = void>(
+ applicationId: string,
+    params: GetCatalogApplicationRuntimePodLogsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCatalogApplicationRuntimePodLogs>>, TError, TData>>, fetch?: RequestInit}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Get a bounded log snapshot for an authorized Pod
+ */
+
+export function useGetCatalogApplicationRuntimePodLogs<TData = Awaited<ReturnType<typeof getCatalogApplicationRuntimePodLogs>>, TError = void>(
+ applicationId: string,
+    params: GetCatalogApplicationRuntimePodLogsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCatalogApplicationRuntimePodLogs>>, TError, TData>>, fetch?: RequestInit}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetCatalogApplicationRuntimePodLogsQueryOptions(applicationId,params,options)
 
   const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
 
