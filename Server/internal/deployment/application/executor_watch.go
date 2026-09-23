@@ -67,7 +67,8 @@ func (e *DeploymentExecutor) acceptRevision(ctx context.Context, execution nodeE
 	if application.OperationID != execution.operationID || application.OperationPhase != "Succeeded" {
 		return false, nil
 	}
-	if len(execution.target.Preflight.Snapshot.TargetRevisions) > 0 {
+	_, revisions := canonicalTargetRevision(execution.target.Preflight.Snapshot)
+	if len(revisions) > 0 {
 		return false, errors.New("Argo CD completed a different multi-source revision vector")
 	}
 	return e.acceptSingleSourceRevision(ctx, execution, application, timing)
@@ -89,11 +90,11 @@ func (e *DeploymentExecutor) acceptSingleSourceRevision(ctx context.Context, exe
 }
 
 func revisionMatches(execution nodeExecution, application argodomain.Application) bool {
-	snapshot := execution.target.Preflight.Snapshot
-	if len(snapshot.TargetRevisions) > 0 {
-		return slices.Equal(snapshot.TargetRevisions, application.ResolvedRevisions)
+	revision, revisions := canonicalTargetRevision(execution.target.Preflight.Snapshot)
+	if len(revisions) > 0 {
+		return slices.Equal(revisions, application.ResolvedRevisions)
 	}
-	return snapshot.TargetRevision == application.ResolvedRevision
+	return revision == application.ResolvedRevision
 }
 
 func (e *DeploymentExecutor) nextObservation(ctx context.Context, execution nodeExecution, resourceVersion string) (argodomain.Application, error) {

@@ -3,6 +3,8 @@ package application
 import (
 	"context"
 	"errors"
+	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -31,6 +33,57 @@ func TestDeploymentRequestCreatedFromArgoCDRevision(t *testing.T) {
 	}
 	if len(requestedRevisions) != 1 || requestedRevisions[0] != "commit-b" {
 		t.Fatalf("target manifests were not pinned to the observed revision: %#v", requestedRevisions)
+	}
+}
+
+func TestCandidateObservationStoresScalarRevisionForSingleSource(t *testing.T) {
+	repository := newCandidateRepositoryStub(candidateTarget())
+	reconciler := newCandidateReconcilerForTest(t, repository, candidateArgoStub{}, &candidateWorkflowStarterStub{})
+	if _, err := reconciler.ReconcileOnce(context.Background()); err != nil {
+		t.Fatalf("reconcile candidate: %v", err)
+	}
+	observation := repository.observations[0]
+	if observation.TargetRevision != "commit-b" || observation.TargetRevisions == nil || len(observation.TargetRevisions) != 0 {
+		t.Fatalf("single-source revision representation = %q, %#v", observation.TargetRevision, observation.TargetRevisions)
+	}
+}
+
+func TestCandidateObservationRejectsIncompleteMultiSourceRevisionVector(t *testing.T) {
+	content := candidateTargetContent{
+		application: argodomain.Application{
+			Sources:           []argodomain.Source{{Name: "app"}, {Name: "values"}},
+			ResolvedRevisions: []string{"commit-a"},
+		},
+		revision: "commit-a", observedAt: time.Now(),
+	}
+	_, err := newCandidateObservation(candidateTarget(), content, candidateRevisionEvidence())
+	if err == nil || err.Error() != "candidate multi-source revision vector is incomplete" {
+		t.Fatalf("incomplete multi-source revision vector error = %v", err)
+	}
+}
+
+func TestCandidateObservationStoresCompleteMultiSourceRevisionVector(t *testing.T) {
+	content := candidateTargetContent{
+		application: argodomain.Application{
+			Sources:           []argodomain.Source{{Name: "app"}, {Name: "values"}},
+			ResolvedRevisions: []string{"commit-a", "commit-b"},
+		},
+		revision: "aggregate-commit", observedAt: time.Now(),
+	}
+	observation, err := newCandidateObservation(candidateTarget(), content, candidateRevisionEvidence())
+	if err != nil {
+		t.Fatalf("create multi-source observation: %v", err)
+	}
+	if !slices.Equal(observation.TargetRevisions, content.application.ResolvedRevisions) {
+		t.Fatalf("multi-source revisions = %#v", observation.TargetRevisions)
+	}
+}
+
+func candidateRevisionEvidence() candidateEvidence {
+	return candidateEvidence{
+		manifestHash: strings.Repeat("a", 64), diffHash: strings.Repeat("b", 64),
+		diffs:  []deploydomain.ResourceDiffEvidence{{Kind: "Deployment", Name: "api"}},
+		images: []deploydomain.ImageSnapshot{{ImageReference: "registry/api:v1", Digest: "sha256:approved"}},
 	}
 }
 
