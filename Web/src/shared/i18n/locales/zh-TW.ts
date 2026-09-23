@@ -786,7 +786,11 @@ export const zhTW = {
     applications: { title: 'Application 快照' },
     images: { title: '鎖定 Images' },
     diff: { show: '展開累積 diff' },
-    workflow: { title: 'Release Workflow 進度' },
+    workflow: {
+      title: 'Release Workflow 進度',
+      resultTitle: '部署結果',
+      resultPending: '等待部署結果',
+    },
     plan: {
       title: 'Deployment Plan 進度',
       independent: '無上游相依',
