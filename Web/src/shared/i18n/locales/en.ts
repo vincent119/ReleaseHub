@@ -833,7 +833,11 @@ export const en = {
     applications: { title: 'Application snapshots' },
     images: { title: 'Locked Images' },
     diff: { show: 'Expand cumulative diff' },
-    workflow: { title: 'Release Workflow progress' },
+    workflow: {
+      title: 'Release Workflow progress',
+      resultTitle: 'Deployment Result',
+      resultPending: 'Awaiting deployment result',
+    },
     plan: {
       title: 'Deployment Plan progress',
       independent: 'No upstream dependency',

@@ -6,12 +6,14 @@ import type {
   DeploymentPlan,
   DeploymentPlanVersion,
   DeploymentRequestVersion,
+  DeploymentRequestStatus,
   ReleaseWorkflow,
   ReleaseWorkflowVersion,
 } from '@/generated/model'
 import { SemanticList, SemanticListItemContent } from '@/shared/list'
 
 import { nodeStatusColor } from '../model/presentation'
+import { buildWorkflowProgress } from '../model/workflowProgress'
 
 interface Props {
   request: DeploymentRequestVersion
@@ -34,6 +36,7 @@ export function WorkflowPlanProgress({
         <WorkflowProgress
           version={workflow}
           current={request.workflowStateKey}
+          requestStatus={request.status}
         />
       </Col>
       <Col xs={24} xl={14}>
@@ -43,12 +46,14 @@ export function WorkflowPlanProgress({
   )
 }
 
-function WorkflowProgress({
+export function WorkflowProgress({
   version,
   current,
+  requestStatus,
 }: {
   version?: ReleaseWorkflowVersion
   current?: string
+  requestStatus: DeploymentRequestStatus
 }) {
   const { t } = useTranslation()
   if (!version)
@@ -57,10 +62,13 @@ function WorkflowProgress({
         <Empty />
       </Card>
     )
-  const states = version.document.states
-  const currentIndex = Math.max(
-    0,
-    states.findIndex((state) => state.key === current),
+  const { stages, currentIndex } = buildWorkflowProgress(
+    version.document,
+    current,
+    {
+      resultTitle: t('requestDetail.workflow.resultTitle'),
+      resultPending: t('requestDetail.workflow.resultPending'),
+    },
   )
   return (
     <Card title={t('requestDetail.workflow.title')}>
@@ -68,13 +76,20 @@ function WorkflowProgress({
         orientation="vertical"
         size="small"
         current={currentIndex}
-        items={states.map((state) => ({
-          title: state.name,
-          content: state.type,
+        status={workflowStepStatus(requestStatus)}
+        items={stages.map((stage) => ({
+          title: stage.title,
+          content: stage.content,
         }))}
       />
     </Card>
   )
+}
+
+function workflowStepStatus(status: DeploymentRequestStatus) {
+  if (status === 'Failed') return 'error'
+  if (status === 'Succeeded') return 'finish'
+  return 'process'
 }
 
 function PlanProgress({
