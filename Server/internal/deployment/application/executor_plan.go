@@ -79,9 +79,10 @@ func (e *DeploymentExecutor) executeNode(ctx context.Context, executionID uuid.U
 
 func pinnedSyncRequest(execution nodeExecution) argodomain.SyncRequest {
 	target := execution.target.Preflight
+	revision, revisions := canonicalTargetRevision(target.Snapshot)
 	return argodomain.SyncRequest{
 		Identity: target.Identity, Project: target.ArgoProject,
-		Revision: target.Snapshot.TargetRevision, Revisions: target.Snapshot.TargetRevisions,
+		Revision: revision, Revisions: revisions,
 		OperationID: execution.operationID,
 	}
 }

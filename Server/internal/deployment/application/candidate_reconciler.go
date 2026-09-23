@@ -238,11 +238,15 @@ func (r *CandidateReconciler) collectTargetDiff(ctx context.Context, target Cand
 }
 
 func newCandidateObservation(target CandidateTarget, content candidateTargetContent, evidence candidateEvidence) (deploydomain.CandidateObservation, error) {
+	targetRevisions, err := candidateTargetRevisions(content)
+	if err != nil {
+		return deploydomain.CandidateObservation{}, err
+	}
 	return deploydomain.NewCandidateObservation(deploydomain.CandidateObservation{
 		ApplicationID: target.ApplicationID, OrganizationID: target.OrganizationID, ProjectID: target.ProjectID,
 		EnvironmentID: target.EnvironmentID, ApplicationKey: target.ApplicationKey,
 		WorkflowVersionID: target.WorkflowVersionID, PlanVersionID: target.PlanVersionID,
-		TargetRevision: content.revision, TargetRevisions: []string{content.revision},
+		TargetRevision: content.revision, TargetRevisions: targetRevisions,
 		ManifestHash: evidence.manifestHash, DiffHash: evidence.diffHash, Diffs: evidence.diffs,
 		Sources: sourceEvidence(content.application.Sources), Images: evidence.images, ObservedAt: content.observedAt,
 	})

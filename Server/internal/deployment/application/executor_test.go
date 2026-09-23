@@ -130,6 +130,54 @@ func TestDeploymentExecutorAcceptsEquivalentManifestsAtAdvancedRevision(t *testi
 	}
 }
 
+func TestDeploymentExecutorCanonicalizesLegacySingleSourceRevisionVector(t *testing.T) {
+	executor, argo, repository := newExecutorFixture(t, "sha256:approved")
+	repository.snapshot.Targets[0].Preflight.Snapshot.TargetRevisions = []string{"approved-commit"}
+	if err := executor.Execute(context.Background(), repository.snapshot.RequestVersionID); err != nil {
+		t.Fatalf("execute legacy single-source snapshot: %v", err)
+	}
+	request := argo.syncs[0]
+	if request.Revision != "approved-commit" || len(request.Revisions) != 0 {
+		t.Fatalf("legacy single-source Sync request = %q, %#v", request.Revision, request.Revisions)
+	}
+	if repository.completed != deploydomain.ExecutionSucceeded {
+		t.Fatalf("legacy single-source execution status = %q", repository.completed)
+	}
+}
+
+func TestDeploymentExecutorAcceptsEquivalentManifestsForLegacySingleSourceVector(t *testing.T) {
+	executor, argo, repository := newExecutorFixture(t, "sha256:approved")
+	repository.snapshot.Targets[0].Preflight.Snapshot.TargetRevisions = []string{"approved-commit"}
+	argo.syncPending = true
+	argo.resolvedRevision = "newer-commit"
+	argo.watch = newBlockingApplicationWatch()
+	executor.watchTimeout = time.Millisecond
+	if err := executor.Execute(context.Background(), repository.snapshot.RequestVersionID); err != nil {
+		t.Fatalf("execute legacy snapshot with equivalent manifests: %v", err)
+	}
+	if repository.completed != deploydomain.ExecutionSucceeded || repository.updates[1].ActualRevision != "newer-commit" {
+		t.Fatalf("legacy equivalent result = %q, %#v", repository.completed, repository.updates)
+	}
+}
+
+func TestDeploymentExecutorUsesCompleteMultiSourceRevisionVector(t *testing.T) {
+	executor, argo, repository := newExecutorFixture(t, "sha256:approved")
+	target := &repository.snapshot.Targets[0].Preflight.Snapshot
+	target.TargetRevision = ""
+	target.TargetRevisions = []string{"approved-a", "approved-b"}
+	argo.syncPending = true
+	argo.resolvedRevisions = []string{"approved-a", "approved-b"}
+	argo.watch = newBlockingApplicationWatch()
+	executor.watchTimeout = time.Millisecond
+	if err := executor.Execute(context.Background(), repository.snapshot.RequestVersionID); err != nil {
+		t.Fatalf("execute multi-source snapshot: %v", err)
+	}
+	request := argo.syncs[0]
+	if request.Revision != "" || !slices.Equal(request.Revisions, target.TargetRevisions) {
+		t.Fatalf("multi-source Sync request = %q, %#v", request.Revision, request.Revisions)
+	}
+}
+
 func TestDeploymentExecutorRejectsChangedManifestsAtAdvancedRevision(t *testing.T) {
 	testDeploymentExecutorRejectsChangedManifestsAtAdvancedRevision(t)
 }
