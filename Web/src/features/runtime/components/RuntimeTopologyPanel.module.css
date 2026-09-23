@@ -1,0 +1,77 @@
+.panel {
+  width: 100%;
+}
+.canvas {
+  height: min(64vh, 620px);
+  min-height: 420px;
+  overflow: hidden;
+  border: 1px solid var(--rh-color-border);
+  border-radius: var(--rh-radius-lg);
+  background: var(--rh-color-page);
+}
+.center {
+  min-height: 320px;
+  display: grid;
+  place-items: center;
+}
+.node {
+  width: 236px;
+  height: 78px;
+  padding: 10px 14px;
+  text-align: left;
+  border-color: var(--rh-color-border);
+  background: var(--rh-color-surface);
+  box-shadow: var(--rh-shadow-card);
+}
+.node:hover,
+.node:focus-visible {
+  border-color: var(--rh-color-primary);
+}
+.nodeBody {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 8px;
+}
+.nodeIcon {
+  display: grid;
+  flex: 0 0 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: var(--rh-radius-md);
+  color: var(--rh-color-primary);
+  background: var(--rh-color-primary-soft);
+  font-size: 18px;
+}
+.nodeMeta {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+}
+.nodeActive {
+  animation: runtimePulse 1.6s ease-in-out infinite;
+}
+.code {
+  max-height: 58vh;
+  margin: 0;
+  overflow: auto;
+  padding: 16px;
+  border-radius: var(--rh-radius-md);
+  background: var(--rh-color-page);
+  color: var(--rh-color-text-primary);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+@keyframes runtimePulse {
+  50% {
+    box-shadow: 0 0 0 4px
+      color-mix(in srgb, var(--rh-color-primary) 22%, transparent);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .nodeActive {
+    animation: none;
+  }
+}
