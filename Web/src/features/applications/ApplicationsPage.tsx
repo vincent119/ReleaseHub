@@ -293,7 +293,12 @@ export function ApplicationDetailPage() {
           {
             key: 'topology',
             label: t('applicationDetail.tabs.topology'),
-            children: <RuntimeTopologyPanel applicationId={applicationId} />,
+            children: (
+              <RuntimeTopologyPanel
+                applicationId={applicationId}
+                applicationName={value.name}
+              />
+            ),
           },
         ]}
       />

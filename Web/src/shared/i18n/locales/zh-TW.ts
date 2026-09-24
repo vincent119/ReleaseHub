@@ -6,6 +6,13 @@ export const zhTW = {
       collapse: '收合側邊欄',
       expand: '展開側邊欄',
     },
+    routeError: {
+      updated: 'ReleaseHub 已更新',
+      updatedDescription: '目前頁面的檔案已失效，請重新載入以取得最新版本。',
+      title: '無法顯示此頁面',
+      description: '頁面載入時發生錯誤，請重新載入後再試。',
+      reload: '重新載入',
+    },
   },
   feedback: {
     successTitle: '操作成功',
@@ -397,6 +404,12 @@ export const zhTW = {
     title: 'Application 即時資源拓撲',
     executionTitle: 'Application 即時部署狀態',
     application: '選擇 Application',
+    applicationRoot: 'Application（畫面聚合）',
+    legend: {
+      title: '拓撲連線圖例',
+      presentation: '畫面聚合，非 Kubernetes 關係',
+      evidence: 'Argo CD 回傳的資源關係',
+    },
     views: { resources: '資源階層', network: '網路拓撲' },
     refresh: '重新整理',
     live: '部署進行中，每 5 秒更新',
@@ -409,6 +422,7 @@ export const zhTW = {
       node_limit: '資源超過 500 個節點，畫面僅顯示有界結果。',
       edge_limit: '關係超過 1,000 條，畫面僅顯示有界結果。',
       network_evidence_unavailable: 'Argo CD 未回傳可用的網路關係證據。',
+      network_evidence_unresolved: '部分 Argo CD 網路關係證據無法安全解析。',
     },
     tabs: {
       summary: '摘要',

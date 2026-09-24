@@ -7,13 +7,13 @@ import {
   DeploymentUnitOutlined,
   SafetyCertificateOutlined,
 } from '@ant-design/icons'
-import { Button, Tag, Typography } from 'antd'
+import { Button, Typography } from 'antd'
 import type { ReactNode } from 'react'
 
-import type { RuntimeFlowNode } from '../model/runtimeGraph'
+import type { RuntimeResourceFlowNode } from '../model/runtimeGraph'
 import styles from './RuntimeTopologyPanel.module.css'
 
-export function RuntimeNode({ data }: NodeProps<RuntimeFlowNode>) {
+export function RuntimeNode({ data }: NodeProps<RuntimeResourceFlowNode>) {
   return (
     <Button
       data-runtime-node-id={data.resource.id}
@@ -35,7 +35,7 @@ export function RuntimeNode({ data }: NodeProps<RuntimeFlowNode>) {
           {data.resource.name}
         </Typography.Text>
         <span className={styles.nodeMeta}>
-          <Tag bordered={false}>{data.resource.kind}</Tag>
+          <span className={styles.kindChip}>{data.resource.kind}</span>
           <Typography.Text type="secondary" ellipsis>
             {data.resource.healthStatus || '—'}
           </Typography.Text>

@@ -69,8 +69,10 @@ Argo CD 無法完成 refresh、無法回傳 target manifests、operation identit
 
 具備 Application `resource.view` 權限的使用者可在 Deployment Request 的「Deployment 執行狀態」展開即時拓撲，也可從 Application 詳細頁的「資源拓撲」頁籤查看。瀏覽器只呼叫 ReleaseHub API；Argo CD endpoint、token 與 gRPC capability 不會交給使用者。
 
-「資源階層」只呈現 Argo CD `ParentRefs`，「網路拓撲」只呈現 `NetworkingInfo`。缺少關係證據時，ReleaseHub 會顯示警告，不會從名稱、label 或 Kubernetes 慣例推測連線。部署進行中每 5 秒更新；終態 Request 顯示的是目前即時狀態，不是該次 execution 的不可變快照，Request 原有 revision、digest 與結果證據仍是治理依據。
+「資源階層」只呈現 Argo CD `ParentRefs`，「網路拓撲」只呈現 `NetworkingInfo`。ReleaseHub 會解析明確的 target reference，以及 Argo CD 回傳的 selector／resource labels；reference 省略 group 或 version 時，只有唯一符合其餘 identity 欄位的資源才會建立連線。完全沒有關係證據時顯示 unavailable；已有證據但部分 reference 或 selector 無法安全解析時，保留可證明的子圖並顯示 unresolved 警告，不會從名稱或 Kubernetes 慣例猜測連線。部署進行中每 5 秒更新；終態 Request 顯示的是目前即時狀態，不是該次 execution 的不可變快照，Request 原有 revision、digest 與結果證據仍是治理依據。
 
 選取節點後可查看摘要、Events、Pod Logs 與 Live Manifest。Logs 只開放 Pod，單次最多 500 行並受 15 秒與 1 MiB 限制；Events 最多 100 筆；拓撲最多 500 個節點與 1,000 條關係。Secret Manifest 會移除 `data` 與 `stringData`。Manifest、Events 與 Logs 的讀取會留下只含 actor、Application、resource identity 與 action 的 Audit Trail，不保存回傳內容。
 
 若面板顯示 unavailable，先確認使用者仍可查看該 Application，再檢查 ReleaseHub 到 Argo CD 的 gRPC 連線與專用 account 權限。拓撲失敗不會改變 Deployment execution 狀態，也不應以直接開放 Argo CD UI 作為一般使用者的替代處理。
+
+若 Web 更新後開啟尚未載入的頁面時顯示「ReleaseHub 已更新」，代表舊頁面要求的程式檔案已失效。系統會針對同一版本自動重新載入最多一次；若仍無法載入，側邊欄與「重新載入」按鈕會保留。先確認 Web 服務是否可正常提供新版 `index.html` 與 hashed assets，再使用按鈕重試；不需要將清除瀏覽器快取當作唯一處置。這種頁面資源錯誤不代表 Deployment execution 失敗。

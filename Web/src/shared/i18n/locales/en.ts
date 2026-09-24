@@ -6,6 +6,15 @@ export const en = {
       collapse: 'Collapse sidebar',
       expand: 'Expand sidebar',
     },
+    routeError: {
+      updated: 'ReleaseHub has been updated',
+      updatedDescription:
+        'This page needs the latest version. Reload to continue.',
+      title: 'This page could not be displayed',
+      description:
+        'An error occurred while loading this page. Reload and try again.',
+      reload: 'Reload',
+    },
   },
   feedback: {
     successTitle: 'Success',
@@ -420,6 +429,12 @@ export const en = {
     title: 'Live Application resource topology',
     executionTitle: 'Live Application deployment status',
     application: 'Select Application',
+    applicationRoot: 'Application (presentation)',
+    legend: {
+      title: 'Topology relationship legend',
+      presentation: 'Presentation grouping, not a Kubernetes relationship',
+      evidence: 'Resource relationship reported by Argo CD',
+    },
     views: { resources: 'Resource hierarchy', network: 'Network topology' },
     refresh: 'Refresh',
     live: 'Deployment in progress; refreshes every 5 seconds',
@@ -433,6 +448,8 @@ export const en = {
       edge_limit: 'The view is limited to 1,000 relationships.',
       network_evidence_unavailable:
         'Argo CD did not report usable network relationship evidence.',
+      network_evidence_unresolved:
+        'Some Argo CD network relationship evidence could not be resolved safely.',
     },
     tabs: {
       summary: 'Summary',

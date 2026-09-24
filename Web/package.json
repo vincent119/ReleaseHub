@@ -13,6 +13,7 @@
     "typecheck": "tsc -b --pretty false",
     "test": "vitest run --passWithNoTests && node --test scripts/check-bundle-budget.test.mjs",
     "test:bundle-budget": "node --test scripts/check-bundle-budget.test.mjs",
+    "test:delivery": "node --test scripts/nginx-cache-contract.test.mjs",
     "test:e2e": "playwright test",
     "generate:api": "orval --config orval.config.ts",
     "lint:api": "redocly lint ../API/openapi.yaml",

@@ -1,4 +1,10 @@
-import { Background, Controls, MiniMap, ReactFlow } from '@xyflow/react'
+import {
+  Background,
+  Controls,
+  MiniMap,
+  ReactFlow,
+  type Viewport,
+} from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import {
   Alert,
@@ -15,35 +21,48 @@ import { useTranslation } from 'react-i18next'
 
 import { useGetCatalogApplicationRuntimeTopology } from '@/generated/api'
 import type { RuntimeTopologyView } from '@/generated/model'
+import { useThemePreference } from '@/shared/theme/useThemePreference'
 
-import { runtimeTopologyToGraph } from '../model/runtimeGraph'
+import {
+  runtimeFitViewOptions,
+  runtimeTopologyToGraph,
+} from '../model/runtimeGraph'
+import { ApplicationRootNode } from './ApplicationRootNode'
 import { RuntimeNode } from './RuntimeNode'
 import { RuntimeResourceDrawer } from './RuntimeResourceDrawer'
 import styles from './RuntimeTopologyPanel.module.css'
 
-const nodeTypes = { runtime: RuntimeNode }
+const nodeTypes = { runtime: RuntimeNode, application: ApplicationRootNode }
 
 interface Props {
   applicationId: string
+  applicationName?: string
   active?: boolean
+  visible?: boolean
   currentLiveState?: boolean
 }
 
 export function RuntimeTopologyPanel({
   applicationId,
+  applicationName,
   active = false,
+  visible = true,
   currentLiveState = false,
 }: Props) {
   const { t } = useTranslation()
+  const { resolvedTheme } = useThemePreference()
   const [view, setView] = useState<RuntimeTopologyView>('resources')
   const [selected, setSelected] = useState<string>()
+  const [viewports, setViewports] = useState<Record<string, Viewport>>({})
+  const viewportKey = `${applicationId}:${view}`
+  const savedViewport = viewports[viewportKey]
   const topology = useGetCatalogApplicationRuntimeTopology(
     applicationId,
     { view },
     {
       query: {
-        enabled: Boolean(applicationId),
-        refetchInterval: active ? 5000 : false,
+        enabled: Boolean(applicationId) && visible,
+        refetchInterval: active && visible ? 5000 : false,
         refetchIntervalInBackground: false,
       },
     },
@@ -52,8 +71,10 @@ export function RuntimeTopologyPanel({
     topology.data?.status === 200 ? topology.data.data.data : undefined
   const graph = useMemo(
     () =>
-      value ? runtimeTopologyToGraph(value, active) : { nodes: [], edges: [] },
-    [active, value],
+      value
+        ? runtimeTopologyToGraph(value, active, applicationName)
+        : { nodes: [], edges: [] },
+    [active, applicationName, value],
   )
   const resource = value?.nodes.find((node) => node.id === selected)
   const closeDrawer = () => {
@@ -121,8 +142,6 @@ export function RuntimeTopologyPanel({
         <div className={styles.center}>
           <Spin />
         </div>
-      ) : graph.nodes.length === 0 ? (
-        <Empty description={t('runtimeTopology.empty')} />
       ) : (
         <>
           {value?.warnings.map((warning) => (
@@ -133,24 +152,60 @@ export function RuntimeTopologyPanel({
               title={t(`runtimeTopology.warnings.${warning}`)}
             />
           ))}
-          <div
-            className={styles.canvas}
-            aria-label={t('runtimeTopology.title')}
-          >
-            <ReactFlow
-              nodes={graph.nodes}
-              edges={graph.edges}
-              nodeTypes={nodeTypes}
-              fitView
-              nodesDraggable={false}
-              nodesConnectable={false}
-              elementsSelectable
-            >
-              <Background />
-              <MiniMap pannable zoomable />
-              <Controls />
-            </ReactFlow>
-          </div>
+          {graph.nodes.length === 0 ? (
+            <Empty description={t('runtimeTopology.empty')} />
+          ) : (
+            <>
+              <div
+                className={styles.legend}
+                aria-label={t('runtimeTopology.legend.title')}
+              >
+                {view === 'resources' && (
+                  <span>
+                    <span
+                      className={styles.presentationLine}
+                      aria-hidden="true"
+                    />
+                    {t('runtimeTopology.legend.presentation')}
+                  </span>
+                )}
+                <span>
+                  <span className={styles.evidenceLine} aria-hidden="true" />
+                  {t('runtimeTopology.legend.evidence')}
+                </span>
+              </div>
+              <div
+                className={styles.canvas}
+                aria-label={t('runtimeTopology.title')}
+              >
+                <ReactFlow
+                  key={viewportKey}
+                  nodes={graph.nodes}
+                  edges={graph.edges}
+                  nodeTypes={nodeTypes}
+                  colorMode={resolvedTheme}
+                  fitView={!savedViewport}
+                  fitViewOptions={runtimeFitViewOptions}
+                  defaultViewport={savedViewport}
+                  onMoveEnd={(_, viewport) =>
+                    setViewports((current) => ({
+                      ...current,
+                      [viewportKey]: viewport,
+                    }))
+                  }
+                  minZoom={runtimeFitViewOptions.minZoom}
+                  maxZoom={1.6}
+                  nodesDraggable={false}
+                  nodesConnectable={false}
+                  elementsSelectable
+                >
+                  <Background />
+                  <MiniMap pannable zoomable />
+                  <Controls showInteractive={false} />
+                </ReactFlow>
+              </div>
+            </>
+          )}
         </>
       )}
       <RuntimeResourceDrawer

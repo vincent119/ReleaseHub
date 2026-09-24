@@ -9,23 +9,132 @@
   border-radius: var(--rh-radius-lg);
   background: var(--rh-color-page);
 }
+.canvas :global(.react-flow) {
+  --xy-background-color: var(--rh-color-page);
+  --xy-background-pattern-dots-color: var(--rh-color-border-strong);
+  --xy-edge-stroke: var(--rh-color-border-strong);
+  --xy-edge-stroke-selected: var(--rh-color-primary);
+  --xy-handle-background-color: var(--rh-color-primary);
+  --xy-handle-border-color: var(--rh-color-surface);
+  --xy-controls-button-background-color: var(--rh-color-surface);
+  --xy-controls-button-background-color-hover: var(--rh-color-surface-soft);
+  --xy-controls-button-color: var(--rh-color-text-primary);
+  --xy-controls-button-color-hover: var(--rh-color-primary);
+  --xy-controls-button-border-color: var(--rh-color-border);
+  --xy-minimap-background-color: var(--rh-color-surface);
+  --xy-minimap-mask-background-color: var(--rh-color-overlay);
+  --xy-minimap-node-background-color: var(--rh-color-primary-soft);
+  --xy-minimap-node-stroke-color: var(--rh-color-primary);
+  color: var(--rh-color-text-primary);
+}
+.canvas :global(.react-flow__background) {
+  background-color: var(--rh-color-page);
+}
+.canvas :global(.react-flow__controls),
+.canvas :global(.react-flow__minimap) {
+  border: 1px solid var(--rh-color-border);
+  border-radius: var(--rh-radius-md);
+  box-shadow: var(--rh-shadow-card);
+}
+.canvas :global(.react-flow__controls-button) {
+  color: var(--rh-color-text-primary);
+  background: var(--rh-color-surface);
+  border-color: var(--rh-color-border);
+}
+.canvas :global(.react-flow__controls-button:hover) {
+  color: var(--rh-color-primary);
+  background: var(--rh-color-surface-soft);
+}
+.canvas :global(.react-flow__controls-button:focus-visible),
+.canvas :global(.react-flow__minimap:focus-visible) {
+  outline: 2px solid var(--rh-color-focus);
+  outline-offset: 2px;
+}
+.canvas :global(.react-flow__edge.runtime-presentation-edge path) {
+  stroke: var(--rh-color-text-secondary);
+  stroke-dasharray: 5 5;
+}
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  color: var(--rh-color-text-secondary);
+  font-size: 12px;
+}
+.legend > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.presentationLine,
+.evidenceLine {
+  display: inline-block;
+  width: 24px;
+  border-top: 2px solid var(--rh-color-border-strong);
+}
+.presentationLine {
+  border-top-style: dashed;
+}
 .center {
   min-height: 320px;
   display: grid;
   place-items: center;
 }
 .node {
+  animation: runtimeAppear 240ms ease-out both;
   width: 236px;
   height: 78px;
   padding: 10px 14px;
   text-align: left;
   border-color: var(--rh-color-border);
+  color: var(--rh-color-text-primary);
   background: var(--rh-color-surface);
   box-shadow: var(--rh-shadow-card);
 }
 .node:hover,
 .node:focus-visible {
   border-color: var(--rh-color-primary);
+}
+.node:focus-visible {
+  outline: 2px solid var(--rh-color-focus);
+  outline-offset: 2px;
+}
+.applicationNode {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 236px;
+  height: 78px;
+  padding: 10px 14px;
+  border: 1px dashed var(--rh-color-primary);
+  border-radius: var(--rh-radius-md);
+  color: var(--rh-color-text-primary);
+  background: var(--rh-color-primary-soft);
+  box-shadow: var(--rh-shadow-card);
+}
+.applicationNodeType {
+  color: var(--rh-color-text-secondary);
+  font-size: 12px;
+}
+.applicationNodeName {
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.kindChip {
+  display: inline-flex;
+  align-items: center;
+  max-width: 116px;
+  overflow: hidden;
+  padding: 1px 6px;
+  border: 1px solid var(--rh-color-border);
+  border-radius: var(--rh-radius-sm);
+  color: var(--rh-color-text-secondary);
+  background: var(--rh-color-surface-soft);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .nodeBody {
   display: flex;
@@ -70,8 +179,22 @@
       color-mix(in srgb, var(--rh-color-primary) 22%, transparent);
   }
 }
+@keyframes runtimeAppear {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
 @media (prefers-reduced-motion: reduce) {
+  .node,
   .nodeActive {
+    animation: none;
+  }
+  .canvas :global(.react-flow__edge.animated path) {
     animation: none;
   }
 }

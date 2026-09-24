@@ -34,6 +34,7 @@ import releaseHubMark from '@/assets/releasehub-mark.svg'
 
 import styles from './App.module.css'
 import { navigationItems } from './navigationItems'
+import { RouteErrorBoundary } from './RouteErrorBoundary'
 import { useSidebarPreference } from './useSidebarPreference'
 
 const AccessPage = lazy(() =>
@@ -217,31 +218,33 @@ function ApplicationShell() {
           </Flex>
         </Layout.Header>
         <Layout.Content className={styles.content}>
-          <Suspense fallback={<RouteLoadingPage />}>
-            <Routes>
-              <Route index element={<OverviewPage />} />
-              <Route path="resources" element={<ResourcesPage />} />
-              <Route path="candidates" element={<CandidatesPage />} />
-              <Route path="applications" element={<ApplicationsPage />} />
-              <Route
-                path="applications/:applicationId"
-                element={<ApplicationDetailPage />}
-              />
-              <Route path="access" element={<AccessPage />} />
-              <Route
-                path="audit"
-                element={<AuditPage principalID={userId} />}
-              />
-              <Route path="workflows" element={<WorkflowsPage />} />
-              <Route path="plans" element={<PlansPage />} />
-              <Route path="requests" element={<RequestsPage />} />
-              <Route
-                path="requests/:requestId"
-                element={<RequestDetailPage />}
-              />
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
-          </Suspense>
+          <RouteErrorBoundary key={location.pathname}>
+            <Suspense fallback={<RouteLoadingPage />}>
+              <Routes>
+                <Route index element={<OverviewPage />} />
+                <Route path="resources" element={<ResourcesPage />} />
+                <Route path="candidates" element={<CandidatesPage />} />
+                <Route path="applications" element={<ApplicationsPage />} />
+                <Route
+                  path="applications/:applicationId"
+                  element={<ApplicationDetailPage />}
+                />
+                <Route path="access" element={<AccessPage />} />
+                <Route
+                  path="audit"
+                  element={<AuditPage principalID={userId} />}
+                />
+                <Route path="workflows" element={<WorkflowsPage />} />
+                <Route path="plans" element={<PlansPage />} />
+                <Route path="requests" element={<RequestsPage />} />
+                <Route
+                  path="requests/:requestId"
+                  element={<RequestDetailPage />}
+                />
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Routes>
+            </Suspense>
+          </RouteErrorBoundary>
         </Layout.Content>
       </Layout>
     </Layout>

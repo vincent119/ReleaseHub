@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"slices"
 	"strings"
 	"time"
@@ -158,18 +159,26 @@ func mapRuntimeNode(node argov1alpha1.ResourceNode, orphaned bool) argodomain.Ru
 		createdAt := node.CreatedAt.Time.UTC()
 		value.CreatedAt = &createdAt
 	}
-	if node.NetworkingInfo != nil {
-		value.Networking.TargetRefs = mapRuntimeRefs(node.NetworkingInfo.TargetRefs)
-		value.Networking.ExternalURLs = slices.Clone(node.NetworkingInfo.ExternalURLs)
-		for _, ingress := range node.NetworkingInfo.Ingress {
-			if ingress.Hostname != "" {
-				value.Networking.Ingress = append(value.Networking.Ingress, ingress.Hostname)
-			} else if ingress.IP != "" {
-				value.Networking.Ingress = append(value.Networking.Ingress, ingress.IP)
-			}
+	value.Networking = mapRuntimeNetworking(node.NetworkingInfo)
+	return value
+}
+
+func mapRuntimeNetworking(value *argov1alpha1.ResourceNetworkingInfo) argodomain.RuntimeNetworking {
+	if value == nil {
+		return argodomain.RuntimeNetworking{}
+	}
+	networking := argodomain.RuntimeNetworking{
+		TargetRefs: mapRuntimeRefs(value.TargetRefs), TargetLabels: maps.Clone(value.TargetLabels),
+		Labels: maps.Clone(value.Labels), ExternalURLs: slices.Clone(value.ExternalURLs),
+	}
+	for _, ingress := range value.Ingress {
+		if ingress.Hostname != "" {
+			networking.Ingress = append(networking.Ingress, ingress.Hostname)
+		} else if ingress.IP != "" {
+			networking.Ingress = append(networking.Ingress, ingress.IP)
 		}
 	}
-	return value
+	return networking
 }
 
 func mapRuntimeRef(value argov1alpha1.ResourceRef) argodomain.RuntimeResourceRef {
