@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -43,6 +44,73 @@ func TestRuntimeTopologyUsesOnlyReportedRelationships(t *testing.T) {
 	if err != nil || len(value.Edges) != 1 || value.Edges[0].Source != parent.Key() || value.Edges[0].Target != child.Key() {
 		t.Fatalf("topology = %#v, error = %v", value, err)
 	}
+}
+
+func TestRuntimeTopologyResolvesPartialRefsAndLabelSelectors(t *testing.T) {
+	application := runtimeApplication()
+	ingress := runtimeRef("networking.k8s.io", "v1", "Ingress", "payments", "api")
+	service := runtimeRef("", "v1", "Service", "payments", "api")
+	podOne := runtimeRef("", "v1", "Pod", "payments", "api-1")
+	podTwo := runtimeRef("", "v1", "Pod", "payments", "api-2")
+	deployment := runtimeRef("apps", "v1", "Deployment", "payments", "api")
+	resources := []argodomain.RuntimeResource{
+		{Ref: ingress, Networking: argodomain.RuntimeNetworking{TargetRefs: []argodomain.RuntimeResourceRef{{Kind: "Service", Namespace: "payments", Name: "api"}}}},
+		{Ref: service, Networking: argodomain.RuntimeNetworking{TargetRefs: []argodomain.RuntimeResourceRef{{Kind: "Pod"}}, TargetLabels: map[string]string{"app": "api"}}},
+		{Ref: podOne, Networking: argodomain.RuntimeNetworking{Labels: map[string]string{"app": "api"}}},
+		{Ref: podTwo, Networking: argodomain.RuntimeNetworking{Labels: map[string]string{"app": "api"}}},
+		{Ref: deployment, Networking: argodomain.RuntimeNetworking{Labels: map[string]string{"app": "api"}}},
+	}
+	serviceUnderTest := newRuntimeServiceForTest(t, &runtimeCatalogStub{application: application}, &runtimeReaderStub{tree: argodomain.RuntimeTree{Resources: resources}}, &runtimeAuditorStub{})
+
+	value, err := serviceUnderTest.Topology(context.Background(), RuntimePrincipal{UserID: uuid.New()}, application.ID, "network")
+
+	if err != nil || len(value.Edges) != 3 || value.Partial || len(value.Warnings) != 0 {
+		t.Fatalf("topology = %#v, error = %v", value, err)
+	}
+	if !hasRuntimeEdge(value.Edges, ingress.Key(), service.Key()) ||
+		!hasRuntimeEdge(value.Edges, service.Key(), podOne.Key()) ||
+		!hasRuntimeEdge(value.Edges, service.Key(), podTwo.Key()) {
+		t.Fatalf("network edges = %#v", value.Edges)
+	}
+}
+
+func TestRuntimeTopologyReportsUnresolvedPartialReference(t *testing.T) {
+	application := runtimeApplication()
+	ingress := runtimeRef("networking.k8s.io", "v1", "Ingress", "payments", "api")
+	partialService := argodomain.RuntimeResourceRef{Kind: "Service", Namespace: "payments", Name: "api"}
+	resources := []argodomain.RuntimeResource{
+		{Ref: ingress, Networking: argodomain.RuntimeNetworking{TargetRefs: []argodomain.RuntimeResourceRef{partialService}}},
+		{Ref: runtimeRef("", "v1", "Service", "payments", "api")},
+		{Ref: runtimeRef("", "v1beta1", "Service", "payments", "api")},
+	}
+	serviceUnderTest := newRuntimeServiceForTest(t, &runtimeCatalogStub{application: application}, &runtimeReaderStub{tree: argodomain.RuntimeTree{Resources: resources}}, &runtimeAuditorStub{})
+
+	value, err := serviceUnderTest.Topology(context.Background(), RuntimePrincipal{UserID: uuid.New()}, application.ID, "network")
+
+	if err != nil || len(value.Edges) != 0 || !value.Partial || !slices.Contains(value.Warnings, "network_evidence_unresolved") {
+		t.Fatalf("topology = %#v, error = %v", value, err)
+	}
+	if slices.Contains(value.Warnings, "network_evidence_unavailable") {
+		t.Fatalf("unexpected unavailable warning: %#v", value.Warnings)
+	}
+}
+
+func TestRuntimeTopologyReportsUnavailableOnlyWithoutEvidence(t *testing.T) {
+	application := runtimeApplication()
+	reader := &runtimeReaderStub{tree: argodomain.RuntimeTree{Resources: []argodomain.RuntimeResource{{Ref: runtimeRef("", "v1", "Pod", "payments", "api")}}}}
+	service := newRuntimeServiceForTest(t, &runtimeCatalogStub{application: application}, reader, &runtimeAuditorStub{})
+
+	value, err := service.Topology(context.Background(), RuntimePrincipal{UserID: uuid.New()}, application.ID, "network")
+
+	if err != nil || !slices.Contains(value.Warnings, "network_evidence_unavailable") || value.Partial {
+		t.Fatalf("topology = %#v, error = %v", value, err)
+	}
+}
+
+func hasRuntimeEdge(edges []RuntimeTopologyEdge, source, target string) bool {
+	return slices.ContainsFunc(edges, func(edge RuntimeTopologyEdge) bool {
+		return edge.Source == source && edge.Target == target
+	})
 }
 
 func TestRuntimeSecretManifestIsRedactedAndAudited(t *testing.T) {

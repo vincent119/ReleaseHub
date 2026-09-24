@@ -38,6 +38,30 @@ func TestRuntimePodLogsUsesBoundedCanceledContext(t *testing.T) {
 	}
 }
 
+func TestMapRuntimeNodePreservesNetworkSelectorEvidence(t *testing.T) {
+	targetLabels := map[string]string{"app": "api"}
+	labels := map[string]string{"app": "api", "revision": "v2"}
+	node := argov1alpha1.ResourceNode{
+		ResourceRef: argov1alpha1.ResourceRef{Version: "v1", Kind: "Service", Namespace: "payments", Name: "api"},
+		NetworkingInfo: &argov1alpha1.ResourceNetworkingInfo{
+			TargetLabels: targetLabels,
+			Labels:       labels,
+			TargetRefs:   []argov1alpha1.ResourceRef{{Kind: "Pod"}},
+		},
+	}
+
+	value := mapRuntimeNode(node, false)
+	targetLabels["app"] = "changed"
+	labels["revision"] = "changed"
+
+	if value.Networking.TargetLabels["app"] != "api" || value.Networking.Labels["revision"] != "v2" {
+		t.Fatalf("networking evidence = %#v", value.Networking)
+	}
+	if len(value.Networking.TargetRefs) != 1 || value.Networking.TargetRefs[0].Kind != "Pod" {
+		t.Fatalf("target refs = %#v", value.Networking.TargetRefs)
+	}
+}
+
 type runtimeManagerStub struct{ context context.Context }
 
 func (*runtimeManagerStub) ResourceTree(context.Context, *applicationpkg.ResourcesQuery, ...grpc.CallOption) (*argov1alpha1.ApplicationTree, error) {

@@ -58,6 +58,7 @@ export function ExecutionPanel({
   const [command, setCommand] = useState<Command>()
   const [submitting, setSubmitting] = useState(false)
   const [topologyApplication, setTopologyApplication] = useState<string>()
+  const [topologyOpen, setTopologyOpen] = useState<boolean>()
   if (unavailable)
     return (
       <Alert
@@ -82,6 +83,7 @@ export function ExecutionPanel({
   const executionActive = ['Queued', 'Preflight', 'Running'].includes(
     execution.status,
   )
+  const topologyVisible = topologyOpen ?? executionActive
   const capability = (key: string) => request.capabilities.includes(key)
   const retry = async () => {
     if (!selected.length) return
@@ -179,7 +181,8 @@ export function ExecutionPanel({
       />
       {observedApplication && (
         <Collapse
-          defaultActiveKey={executionActive ? ['runtime'] : []}
+          activeKey={topologyVisible ? ['runtime'] : []}
+          onChange={(keys) => setTopologyOpen(keys.includes('runtime'))}
           items={[
             {
               key: 'runtime',
@@ -203,7 +206,13 @@ export function ExecutionPanel({
                   )}
                   <RuntimeTopologyPanel
                     applicationId={observedApplication}
-                    active={executionActive}
+                    applicationName={
+                      execution.nodes.find(
+                        (node) => node.applicationId === observedApplication,
+                      )?.nodeKey
+                    }
+                    active={executionActive && topologyVisible}
+                    visible={topologyVisible}
                     currentLiveState={!executionActive}
                   />
                 </Space>

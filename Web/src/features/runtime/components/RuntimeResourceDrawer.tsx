@@ -1,4 +1,4 @@
-import { Descriptions, Drawer, Empty, Spin, Table, Tabs, Tooltip } from 'antd'
+import { Alert, Descriptions, Drawer, Spin, Table, Tabs, Tooltip } from 'antd'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -48,7 +48,10 @@ export function RuntimeResourceDrawer({
       open={Boolean(resource)}
       title={resource?.name}
       size="large"
-      onClose={onClose}
+      onClose={() => {
+        setTab('summary')
+        onClose()
+      }}
       destroyOnHidden
     >
       {resource && (
@@ -94,7 +97,11 @@ export function RuntimeResourceDrawer({
                   ]}
                 />
               ) : (
-                <Empty description={t('runtimeTopology.unavailable')} />
+                <Alert
+                  type="error"
+                  showIcon
+                  title={t('runtimeTopology.unavailable')}
+                />
               ),
             },
             {
@@ -117,7 +124,11 @@ export function RuntimeResourceDrawer({
                     .join('\n')}
                 </pre>
               ) : (
-                <Empty description={t('runtimeTopology.unavailable')} />
+                <Alert
+                  type="error"
+                  showIcon
+                  title={t('runtimeTopology.unavailable')}
+                />
               ),
             },
             {
@@ -130,7 +141,11 @@ export function RuntimeResourceDrawer({
                   {detail.data.data.data.manifest}
                 </pre>
               ) : (
-                <Empty description={t('runtimeTopology.unavailable')} />
+                <Alert
+                  type="error"
+                  showIcon
+                  title={t('runtimeTopology.unavailable')}
+                />
               ),
             },
           ]}

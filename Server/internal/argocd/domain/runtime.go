@@ -38,6 +38,8 @@ type RuntimeInfo struct {
 // RuntimeNetworking contains only relationships explicitly reported by Argo CD.
 type RuntimeNetworking struct {
 	TargetRefs   []RuntimeResourceRef
+	TargetLabels map[string]string
+	Labels       map[string]string
 	Ingress      []string
 	ExternalURLs []string
 }

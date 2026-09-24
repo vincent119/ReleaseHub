@@ -91,6 +91,129 @@ test('Forward Rollback 仍顯示正常審核，Superseded 版本不可操作', a
   await expect(page.getByRole('button', { name: 'deploy' })).toHaveCount(0)
 })
 
+test('多 Application 切換後各自保留拓樸視角', async ({ page }) => {
+  const state = {
+    request: deployedRequest(requestFixture()),
+    retryBody: undefined as unknown,
+  }
+  await mockApplication(page, state)
+  await page.route(
+    '**/api/v1/catalog/applications/*/runtime/topology?**',
+    (route) => {
+      const applicationId = new URL(route.request().url()).pathname.split(
+        '/',
+      )[5]
+      return route.fulfill(
+        json({ data: topologyFixture(applicationId), meta: meta() }),
+      )
+    },
+  )
+
+  await page.goto(`/requests/${ids.request}`)
+  await expect(page.getByLabel('Application 即時資源拓撲')).toHaveCount(0)
+  await page.getByText('Application 即時部署狀態').click()
+  const canvas = page.getByLabel('Application 即時資源拓撲')
+  await expect(canvas.getByText('app-a-pod')).toBeVisible()
+  await canvas.locator('.react-flow__controls-zoomin').click()
+  const viewport = canvas.locator('.react-flow__viewport')
+  const first = await viewport.getAttribute('style')
+
+  await page.getByLabel('選擇 Application').click()
+  await page.getByText('app-b', { exact: true }).last().click()
+  await expect(canvas.getByText('app-b-pod')).toBeVisible()
+  await canvas.locator('.react-flow__controls-zoomout').click()
+  const second = await viewport.getAttribute('style')
+  expect(second).not.toBe(first)
+
+  await page.getByLabel('選擇 Application').click()
+  await page.getByText('app-a', { exact: true }).last().click()
+  await expect(canvas.getByText('app-a-pod')).toBeVisible()
+  await expect(viewport).toHaveAttribute('style', first ?? '')
+
+  await page.getByLabel('選擇 Application').click()
+  await page.getByText('app-b', { exact: true }).last().click()
+  await expect(canvas.getByText('app-b-pod')).toBeVisible()
+  await expect(viewport).toHaveAttribute('style', second ?? '')
+})
+
+test('單一 Application 拓樸失敗不遮蔽 Request 與其他 Application', async ({
+  page,
+}) => {
+  const state = {
+    request: deployedRequest(requestFixture()),
+    retryBody: undefined as unknown,
+  }
+  await mockApplication(page, state)
+  await page.route(
+    '**/api/v1/catalog/applications/*/runtime/topology?**',
+    (route) => {
+      const applicationId = new URL(route.request().url()).pathname.split(
+        '/',
+      )[5]
+      if (applicationId === ids.appA)
+        return route.fulfill({
+          status: 503,
+          ...json({ error: { code: 'argocd_unavailable' } }),
+        })
+      return route.fulfill(
+        json({ data: topologyFixture(applicationId), meta: meta() }),
+      )
+    },
+  )
+
+  await page.goto(`/requests/${ids.request}`)
+  await page.getByText('Application 即時部署狀態').click()
+  await expect(page.getByText('無法取得 Application 即時資源。')).toBeVisible()
+  await expect(
+    page.getByRole('heading', { name: 'Automatic payment deployment' }),
+  ).toBeVisible()
+  await expect(page.getByText('Partial Failed').first()).toBeVisible()
+
+  await page.getByLabel('選擇 Application').click()
+  await page.getByText('app-b', { exact: true }).last().click()
+  await expect(
+    page.getByLabel('Application 即時資源拓撲').getByText('app-b-pod'),
+  ).toBeVisible()
+})
+
+test('active 拓樸收合後停止定期查詢', async ({ page }) => {
+  const request = deployedRequest(requestFixture())
+  request.status = 'Deploying'
+  request.executionStatus = 'Running'
+  const state = { request, retryBody: undefined as unknown }
+  await mockApplication(page, state)
+  await page.route(
+    `**/api/v1/deployment-executions/${ids.execution}`,
+    (route) =>
+      route.fulfill(
+        json({
+          data: { ...executionFixture(), status: 'Running' },
+          meta: meta(),
+        }),
+      ),
+  )
+  let topologyRequests = 0
+  await page.route(
+    `**/api/v1/catalog/applications/${ids.appA}/runtime/topology?**`,
+    (route) => {
+      topologyRequests += 1
+      return route.fulfill(
+        json({ data: topologyFixture(ids.appA), meta: meta() }),
+      )
+    },
+  )
+  await page.clock.install()
+  await page.goto(`/requests/${ids.request}`)
+  await expect(page.getByLabel('Application 即時資源拓撲')).toBeVisible()
+  expect(topologyRequests).toBeGreaterThan(0)
+
+  await page.getByText('Application 即時部署狀態').click()
+  await expect(page.getByLabel('Application 即時資源拓撲')).not.toBeVisible()
+  const requestsAfterClose = topologyRequests
+  await page.clock.runFor(6000)
+  expect(topologyRequests).toBe(requestsAfterClose)
+})
+
 test('scope-limited 與 explicit-denied actor 的 UI 與直接 API 拒絕一致', async ({
   page,
 }) => {
@@ -449,6 +572,34 @@ function resourceTree() {
       ],
     },
   ]
+}
+
+function topologyFixture(applicationId: string) {
+  return {
+    applicationId,
+    view: 'resources',
+    observedAt: new Date().toISOString(),
+    nodes: [
+      {
+        id: `pod-${applicationId}`,
+        group: '',
+        version: 'v1',
+        kind: 'Pod',
+        namespace: 'payment',
+        name: applicationId === ids.appA ? 'app-a-pod' : 'app-b-pod',
+        healthStatus: 'Healthy',
+        healthMessage: '',
+        orphaned: false,
+        images: [],
+        info: [],
+        ingress: [],
+        externalUrls: [],
+      },
+    ],
+    edges: [],
+    warnings: [],
+    partial: false,
+  }
 }
 
 function json(body: unknown) {

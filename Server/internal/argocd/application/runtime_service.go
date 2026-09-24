@@ -5,8 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"slices"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -234,62 +232,17 @@ func argoIdentity(application catalogdomain.Application) argodomain.ApplicationI
 }
 
 func buildRuntimeTopology(applicationID uuid.UUID, view string, tree argodomain.RuntimeTree) RuntimeTopology {
-	resources := slices.Clone(tree.Resources)
-	partial := len(resources) > maxTopologyNodes
-	warnings := make([]string, 0, 2)
-	if partial {
-		resources = resources[:maxTopologyNodes]
-		warnings = append(warnings, "node_limit")
-	}
-	nodes := make([]RuntimeTopologyNode, 0, len(resources))
-	visible := make(map[string]struct{}, len(resources))
-	for _, resource := range resources {
-		nodes = append(nodes, RuntimeTopologyNode{Resource: resource})
-		visible[resource.Ref.Key()] = struct{}{}
-	}
-	edges := topologyEdges(view, resources, visible)
-	if len(edges) > maxTopologyEdges {
-		edges = edges[:maxTopologyEdges]
-		partial = true
-		warnings = append(warnings, "edge_limit")
-	}
-	if view == "network" && len(edges) == 0 {
-		warnings = append(warnings, "network_evidence_unavailable")
-	}
+	resources, partial, warnings := boundedTopologyResources(tree.Resources)
+	nodes, visible := topologyNodes(resources)
+	projection := topologyEdges(view, resources, visible)
+	edges, edgePartial, edgeWarnings := boundedTopologyEdges(projection.edges)
+	partial = partial || edgePartial
+	warnings = append(warnings, edgeWarnings...)
+	partial, warnings = applyNetworkProjectionWarnings(view, projection, partial, warnings)
 	return RuntimeTopology{
 		ApplicationID: applicationID, View: view, ObservedAt: tree.ObservedAt.UTC(),
 		Nodes: nodes, Edges: edges, Warnings: warnings, Partial: partial,
 	}
-}
-
-func topologyEdges(view string, resources []argodomain.RuntimeResource, visible map[string]struct{}) []RuntimeTopologyEdge {
-	edges := make([]RuntimeTopologyEdge, 0)
-	seen := make(map[string]struct{})
-	for _, resource := range resources {
-		refs := resource.ParentRefs
-		kind := "resource"
-		if view == "network" {
-			refs = resource.Networking.TargetRefs
-			kind = "network"
-		}
-		for _, ref := range refs {
-			if _, ok := visible[ref.Key()]; !ok {
-				continue
-			}
-			source, target := ref.Key(), resource.Ref.Key()
-			if view == "network" {
-				source, target = resource.Ref.Key(), ref.Key()
-			}
-			id := kind + ":" + source + ":" + target
-			if _, ok := seen[id]; ok {
-				continue
-			}
-			seen[id] = struct{}{}
-			edges = append(edges, RuntimeTopologyEdge{ID: id, Source: source, Target: target, Kind: kind})
-		}
-	}
-	slices.SortFunc(edges, func(left, right RuntimeTopologyEdge) int { return strings.Compare(left.ID, right.ID) })
-	return edges
 }
 
 func redactRuntimeManifest(resource argodomain.RuntimeResourceRef, manifest string) string {
