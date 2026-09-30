@@ -171,6 +171,19 @@ describe('RuntimeTopologyPanel', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 
+  it.each(['nodes', 'edges', 'warnings'])(
+    'keeps the Request topology available when a previous Server returns null %s',
+    (field) => {
+      const result = api.topology()
+      result.data.data.data[field] = null
+
+      render(<RuntimeTopologyPanel applicationId="application-1" />)
+
+      expect(screen.getByText('runtimeTopology.empty')).toBeInTheDocument()
+      expect(screen.queryByText('runtimeTopology.unavailable')).toBeNull()
+    },
+  )
+
   it('keeps API failures distinct from an empty topology', () => {
     api.topology.mockReturnValue({
       data: undefined,
