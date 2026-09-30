@@ -14,6 +14,7 @@ import type {
 
 import styles from './RuntimeTopologyPanel.module.css'
 import dialogStyles from './RuntimeResourceDialog.module.css'
+import { RuntimeManifestViewer } from './RuntimeManifestViewer'
 
 interface Props {
   applicationId: string
@@ -185,9 +186,10 @@ export function RuntimeResourceDialog({
               children: detail.isPending ? (
                 <Spin />
               ) : detail.data?.status === 200 ? (
-                <pre className={styles.code}>
-                  {detail.data.data.data.manifest}
-                </pre>
+                <RuntimeManifestViewer
+                  key={resource.id}
+                  manifest={detail.data.data.data.manifest}
+                />
               ) : (
                 <Alert
                   type="error"

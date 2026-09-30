@@ -335,6 +335,141 @@ for (const theme of ['light', 'dark'] as const) {
   }
 }
 
+test('Manifest formats JSON without changing large integers or exposing hidden metadata by default', async ({
+  page,
+}) => {
+  await preparePage(page, 'dark')
+  const source =
+    '{"kind":"Pod","metadata":{"managedFields":[{"manager":"synthetic-controller"}],"annotations":{"example":"keep"}},"spec":{"generation":90071992547409931234}}'
+  let detailCalls = 0
+  await page.route(/\/runtime\/resources\/detail(?:\?|$)/, (route) => {
+    detailCalls += 1
+    return route.fulfill(
+      json({ data: { manifest: source, resource: {} }, meta: meta() }),
+    )
+  })
+  await page.goto(`/applications/${applicationID}`)
+  await page.getByRole('tab', { name: '資源拓撲' }).click()
+  const node = page
+    .getByLabel('Application 即時資源拓撲')
+    .getByRole('button', { name: /pod/ })
+    .first()
+  await node.click()
+  const dialog = page.getByRole('dialog')
+  await dialog.getByRole('tab', { name: '即時 Manifest' }).click()
+  const content = dialog.locator('pre')
+  await expect(content).toContainText('\n  "kind": "Pod",\n')
+  await expect(content).not.toContainText('synthetic-controller')
+  await expect(content).toContainText('90071992547409931234')
+  await dialog.getByRole('checkbox', { name: '顯示 managedFields' }).check()
+  await expect(content).toContainText('synthetic-controller')
+  await dialog.getByText('完整原文', { exact: true }).click()
+  await expect(dialog.getByRole('radio', { name: '完整原文' })).toBeChecked()
+  await expect(content).toHaveText(source)
+  expect(detailCalls).toBe(1)
+  await page.keyboard.press('Escape')
+  await expect(node).toBeFocused()
+})
+
+for (const theme of ['light', 'dark'] as const) {
+  for (const width of [900, 1440]) {
+    test(`${theme} Manifest supports horizontal scrolling and keyboard wrapping at ${width}px`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width, height: 900 })
+      await preparePage(page, theme)
+      const source = JSON.stringify({
+        apiVersion: 'v1',
+        kind: 'Pod',
+        metadata: {
+          name: 'synthetic-pod',
+          managedFields: [{ manager: 'synthetic-controller' }],
+        },
+        spec: {
+          containers: [
+            { name: 'api', image: `example.invalid/api:${'v'.repeat(300)}` },
+          ],
+        },
+        status: { phase: 'Running' },
+      })
+      let calls = 0
+      await page.route(/\/runtime\/resources\/detail(?:\?|$)/, (route) => {
+        calls += 1
+        return route.fulfill(
+          json({ data: { manifest: source, resource: {} }, meta: meta() }),
+        )
+      })
+      await page.goto(`/applications/${applicationID}`)
+      await page.getByRole('tab', { name: '資源拓撲' }).click()
+      const node = page.locator('[data-runtime-node-id="pod"]')
+      await node.click()
+      const dialog = page.getByRole('dialog')
+      await dialog.getByRole('tab', { name: '即時 Manifest' }).click()
+      const code = dialog.getByLabel('Manifest 內容', { exact: true })
+      await expect(code).toContainText('"phase": "Running"')
+      await expect(code).toHaveCSS('white-space', 'pre')
+      await expect(code).toHaveCSS(
+        'background-color',
+        theme === 'dark' ? 'rgb(9, 11, 18)' : 'rgb(246, 248, 251)',
+      )
+      await expect(code).toHaveCSS(
+        'color',
+        theme === 'dark' ? 'rgb(248, 250, 252)' : 'rgb(23, 32, 51)',
+      )
+      await code.focus()
+      await page.keyboard.press('Shift+Tab')
+      await page.keyboard.press('Tab')
+      await expect(code).toBeFocused()
+      await expect(code).toHaveCSS('outline-style', 'solid')
+      await code.press('ArrowRight')
+      await expect
+        .poll(() => code.evaluate((element) => element.scrollLeft))
+        .toBeGreaterThan(0)
+      expect(
+        await dialog.evaluate(
+          (element) => element.scrollWidth <= element.clientWidth,
+        ),
+      ).toBe(true)
+      const wrap = dialog.getByRole('checkbox', { name: '自動換行' })
+      await wrap.focus()
+      await page.keyboard.press('Space')
+      await expect(wrap).toBeChecked()
+      await expect(code).toHaveCSS('white-space', 'pre-wrap')
+      expect(
+        await code.evaluate(
+          (element) => element.scrollWidth <= element.clientWidth,
+        ),
+      ).toBe(true)
+      expect(calls).toBe(1)
+      await page.screenshot({
+        path: `/tmp/releasehub-manifest-${theme}-${width}.png`,
+      })
+      await page.keyboard.press('Escape')
+      await expect(node).toBeFocused()
+    })
+  }
+}
+
+test('Manifest API failure stays local and the summary remains available', async ({
+  page,
+}) => {
+  await preparePage(page, 'dark')
+  await page.route(/\/runtime\/resources\/detail(?:\?|$)/, (route) =>
+    route.fulfill({ ...json({ error: {} }), status: 503 }),
+  )
+  await page.goto(`/applications/${applicationID}`)
+  await page.getByRole('tab', { name: '資源拓撲' }).click()
+  await page.locator('[data-runtime-node-id="pod"]').click()
+  const dialog = page.getByRole('dialog')
+  await dialog.getByRole('tab', { name: '即時 Manifest' }).click()
+  await expect(dialog.getByRole('alert')).toContainText(
+    '無法取得 Application 即時資源。',
+  )
+  await expect(dialog.getByText('目前沒有 Manifest 內容。')).toHaveCount(0)
+  await dialog.getByRole('tab', { name: '摘要' }).click()
+  await expect(dialog.getByText('Healthy')).toBeVisible()
+})
+
 test('resource dialog tab failure stays local and non-Pod nodes never request logs', async ({
   page,
 }) => {

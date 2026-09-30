@@ -418,6 +418,18 @@ export const zhTW = {
     empty: '目前沒有可顯示的資源。',
     unavailable: '無法取得 Application 即時資源。',
     logsPodOnly: '只有 Pod 節點可以查看 Logs。',
+    manifestViewer: {
+      mode: 'Manifest 顯示模式',
+      formatted: '格式化',
+      raw: '完整原文',
+      showManagedFields: '顯示 managedFields',
+      wrap: '自動換行',
+      content: 'Manifest 內容',
+      hidden: '已隱藏 metadata.managedFields；可勾選顯示或切換完整原文。',
+      empty: '目前沒有 Manifest 內容。',
+      invalid: '內容不是有效 JSON，以下保留完整原文。',
+      limited: '內容超過格式化處理上限，以下保留完整原文。',
+    },
     warnings: {
       node_limit: '資源超過 500 個節點，畫面僅顯示有界結果。',
       edge_limit: '關係超過 1,000 條，畫面僅顯示有界結果。',
