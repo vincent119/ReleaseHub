@@ -257,6 +257,216 @@ test('drawer tab failure stays local and non-Pod nodes never request logs', asyn
   expect(requests.logs).toBe(0)
 })
 
+test('runtime theme switches in place with readable status and observation', async ({
+  page,
+}) => {
+  await preparePage(page, 'light')
+  await page.goto(`/applications/${applicationID}`)
+  await page.getByRole('tab', { name: '資源拓撲' }).click()
+  const canvas = page.getByLabel('Application 即時資源拓撲')
+  const node = canvas.locator('[data-runtime-node-id="deployment"]')
+  const observation = page
+    .locator('[aria-live="polite"]')
+    .filter({ hasText: '觀測時間' })
+  await expect(observation).toHaveCSS('color', 'rgb(82, 96, 116)')
+  await expect(node.getByText('Healthy')).toHaveCSS('color', 'rgb(82, 96, 116)')
+  await expect(canvas.locator('.react-flow__minimap-node')).toHaveCount(5)
+  await canvas.locator('.react-flow__controls-zoomin').click()
+  const viewport = canvas.locator('.react-flow__viewport')
+  const before = await viewport.getAttribute('style')
+  const documentHandle = await page.evaluateHandle(() => document)
+  for (const mode of ['dark', 'light', 'system'] as const) {
+    await page.getByRole('button', { name: '開啟 vincent 的帳號選單' }).click()
+    await page.getByRole('menuitem', { name: '主題設定' }).click()
+    await page.getByRole('combobox', { name: '主題', exact: true }).click()
+    await page
+      .getByText({ dark: '深色', light: '淺色', system: '系統' }[mode], {
+        exact: true,
+      })
+      .last()
+      .click()
+    await page.keyboard.press('Escape')
+    await page.mouse.click(350, 100)
+    const themes = mode === 'system' ? (['dark', 'light'] as const) : [mode]
+    for (const theme of themes) {
+      if (mode === 'system') await page.emulateMedia({ colorScheme: theme })
+      const dark = theme === 'dark'
+      const secondary = dark ? 'rgb(203, 213, 225)' : 'rgb(82, 96, 116)'
+      const border = dark ? 'rgb(100, 116, 139)' : 'rgb(123, 141, 165)'
+      await expect(page.locator('html')).toHaveAttribute('data-theme', theme)
+      await expect(observation).toHaveCSS('color', secondary)
+      const observationContrast = await observation.evaluate((element) => {
+        const probe = document.createElement('span')
+        probe.style.color = 'var(--rh-color-page)'
+        element.appendChild(probe)
+        const luminance = (color: string) => {
+          const [r, g, b] = (color.match(/[\d.]+/g) ?? [])
+            .slice(0, 3)
+            .map(Number)
+            .map((value) => {
+              const c = value / 255
+              return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4
+            })
+          return r * 0.2126 + g * 0.7152 + b * 0.0722
+        }
+        const foreground = luminance(getComputedStyle(element).color)
+        const background = luminance(getComputedStyle(probe).color)
+        probe.remove()
+        return (
+          (Math.max(foreground, background) + 0.05) /
+          (Math.min(foreground, background) + 0.05)
+        )
+      })
+      expect(observationContrast).toBeGreaterThanOrEqual(4.5)
+      await expect(node.getByText('Healthy')).toHaveCSS('color', secondary)
+      await expect(node).toHaveCSS(
+        'background-color',
+        dark ? 'rgb(18, 59, 49)' : 'rgb(226, 246, 236)',
+      )
+      await expect(node).toHaveCSS(
+        'border-top-color',
+        dark ? 'rgb(52, 211, 153)' : 'rgb(20, 132, 94)',
+      )
+      await expect(canvas.locator('.react-flow__edge-path').last()).toHaveCSS(
+        'stroke',
+        border,
+      )
+      await expect(
+        canvas.locator('.react-flow__arrowhead polyline').first(),
+      ).toHaveCSS('fill', border)
+      await expect(
+        canvas.locator('.react-flow__minimap-node').first(),
+      ).toHaveCSS('stroke', dark ? 'rgb(129, 140, 248)' : 'rgb(79, 70, 229)')
+      await expect(
+        canvas.locator('.react-flow__minimap-node').first(),
+      ).toHaveCSS(
+        'fill',
+        dark ? 'rgba(99, 102, 241, 0.18)' : 'rgb(238, 242, 255)',
+      )
+      await expect(canvas.locator('.react-flow__minimap-mask')).toHaveCSS(
+        'fill',
+        dark ? 'rgba(0, 0, 0, 0.68)' : 'rgba(15, 23, 42, 0.48)',
+      )
+      await expect(canvas.locator('.react-flow__background')).toHaveCSS(
+        'background-color',
+        dark ? 'rgb(9, 11, 18)' : 'rgb(246, 248, 251)',
+      )
+      await expect(
+        canvas.locator('.react-flow__controls-button').first(),
+      ).toHaveCSS('color', dark ? 'rgb(248, 250, 252)' : 'rgb(23, 32, 51)')
+      await expect(viewport).toHaveAttribute('style', before ?? '')
+      expect(
+        await page.evaluate(
+          (original) => original === document,
+          documentHandle,
+        ),
+      ).toBe(true)
+    }
+  }
+})
+
+for (const theme of ['light', 'dark'] as const) {
+  test(`${theme} runtime health palette follows workflow visual hierarchy`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 1100 })
+    await preparePage(page, theme)
+    const statuses = [
+      'Healthy',
+      'Progressing',
+      'Missing',
+      'Suspended',
+      'Degraded',
+      'Unknown',
+      '',
+    ]
+    const tones = [
+      'success',
+      'info',
+      'warning',
+      'warning',
+      'error',
+      'neutral',
+      'neutral',
+    ]
+    await page.route(
+      `**/api/v1/catalog/applications/${applicationID}/runtime/topology?**`,
+      (route) => {
+        const data = topology()
+        data.nodes = statuses.map((healthStatus, index) => ({
+          ...data.nodes[0],
+          id: `node-${index}`,
+          name: `node-${index}`,
+          healthStatus,
+        }))
+        data.edges = []
+        return route.fulfill(json({ data, meta: meta() }))
+      },
+    )
+    await page.goto(`/applications/${applicationID}`)
+    await page.getByRole('tab', { name: '資源拓撲' }).click()
+    const canvas = page.getByLabel('Application 即時資源拓撲')
+    for (const [index, tone] of tones.entries()) {
+      const node = canvas.locator(`[data-runtime-node-id="node-${index}"]`)
+      await expect(node).toHaveAttribute(
+        'data-health',
+        statuses[index] || 'Unknown',
+      )
+      const measurements = await node.evaluate((element, tone) => {
+        const style = getComputedStyle(element)
+        const probe = document.createElement('span')
+        element.appendChild(probe)
+        const resolve = (token: string) => {
+          probe.style.color = `var(${token})`
+          return getComputedStyle(probe).color
+        }
+        const expectedSurface = resolve(
+          tone === 'neutral'
+            ? '--rh-color-surface'
+            : `--rh-feedback-${tone}-bg`,
+        )
+        const expectedAccent = resolve(
+          tone === 'neutral'
+            ? '--rh-color-text-secondary'
+            : `--rh-color-${tone}`,
+        )
+        const luminance = (color: string) => {
+          const [r, g, b] = (color.match(/[\d.]+/g) ?? [])
+            .slice(0, 3)
+            .map(Number)
+            .map((value) => {
+              const c = value / 255
+              return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4
+            })
+          return r * 0.2126 + g * 0.7152 + b * 0.0722
+        }
+        const status = element.querySelector('.ant-typography-secondary')!
+        const foreground = luminance(getComputedStyle(status).color)
+        const background = luminance(style.backgroundColor)
+        probe.remove()
+        return {
+          background: style.backgroundColor,
+          accent: style.borderTopColor,
+          borderWidth: style.borderTopWidth,
+          expectedSurface,
+          expectedAccent,
+          contrast:
+            (Math.max(foreground, background) + 0.05) /
+            (Math.min(foreground, background) + 0.05),
+        }
+      }, tone)
+      expect(measurements.background).toBe(measurements.expectedSurface)
+      expect(measurements.accent).toBe(measurements.expectedAccent)
+      expect(measurements.borderWidth).toBe('3px')
+      expect(measurements.contrast).toBeGreaterThanOrEqual(4.5)
+    }
+    await page.screenshot({
+      path: `/tmp/releasehub-runtime-${theme}.png`,
+      fullPage: true,
+    })
+  })
+}
+
 async function preparePage(page: Page, theme: 'light' | 'dark') {
   await page.addInitScript((resolvedTheme) => {
     localStorage.setItem('releasehub.language', 'zh-TW')

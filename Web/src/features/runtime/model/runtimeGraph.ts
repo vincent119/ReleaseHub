@@ -96,6 +96,8 @@ export function runtimeTopologyToGraph(
             {
               id: rootId,
               type: 'application' as const,
+              width: nodeWidth,
+              height: nodeHeight,
               position: placed(rootId),
               sourcePosition: Position.Right,
               selectable: false,
@@ -108,6 +110,8 @@ export function runtimeTopologyToGraph(
       ...topology.nodes.map((resource): RuntimeResourceFlowNode => ({
         id: resource.id,
         type: 'runtime',
+        width: nodeWidth,
+        height: nodeHeight,
         position: placed(resource.id),
         sourcePosition: Position.Right,
         targetPosition: Position.Left,

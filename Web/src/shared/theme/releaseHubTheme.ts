@@ -111,6 +111,10 @@ export function createReleaseHubTheme(mode: ResolvedTheme): ThemeConfig {
       motionDurationSlow: '0.3s',
     },
     components: {
+      Typography: {
+        // secondary 文字實際使用此 alias，而非 colorTextSecondary。
+        colorTextDescription: semantic.textSecondary,
+      },
       Button: {
         dangerShadow: 'none',
         defaultBg: semantic.elevated,

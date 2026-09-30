@@ -203,6 +203,7 @@ export function RuntimeTopologyPanel({
                   edges={graph.edges}
                   nodeTypes={nodeTypes}
                   colorMode={resolvedTheme}
+                  defaultMarkerColor="var(--rh-color-border-strong)"
                   fitView={!savedViewport}
                   fitViewOptions={runtimeFitViewOptions}
                   defaultViewport={savedViewport}
