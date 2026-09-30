@@ -12,9 +12,9 @@ import type {
   RuntimeResourceNode,
 } from '@/generated/model'
 
-import styles from './RuntimeTopologyPanel.module.css'
 import dialogStyles from './RuntimeResourceDialog.module.css'
 import { RuntimeManifestViewer } from './RuntimeManifestViewer'
+import { RuntimeLogsViewer } from './RuntimeLogsViewer'
 
 interface Props {
   applicationId: string
@@ -167,11 +167,10 @@ export function RuntimeResourceDialog({
               children: logs.isPending ? (
                 <Spin />
               ) : logs.data?.status === 200 ? (
-                <pre className={styles.code}>
-                  {logs.data.data.data
-                    .map((entry) => `${entry.timestamp} ${entry.content}`)
-                    .join('\n')}
-                </pre>
+                <RuntimeLogsViewer
+                  key={resource.id}
+                  entries={logs.data.data.data}
+                />
               ) : (
                 <Alert
                   type="error"

@@ -470,6 +470,176 @@ test('Manifest API failure stays local and the summary remains available', async
   await expect(dialog.getByText('Healthy')).toBeVisible()
 })
 
+test('Logs separates API timestamps and preserves entry boundaries while cleaning ANSI', async ({
+  page,
+}) => {
+  await preparePage(page, 'dark')
+  const entries = [
+    {
+      timestamp: '2026-01-02T03:04:05Z',
+      content:
+        '\u001b[34mINFO\u001b[0m 2026-01-02T11:04:05+08:00 {"value":1}\n\tat example.go:10',
+      podName: 'pod',
+    },
+    { timestamp: '2026-01-01T03:04:05Z', content: '', podName: 'pod' },
+  ]
+  let calls = 0
+  await page.route(/\/runtime\/pods\/logs(?:\?|$)/, (route) => {
+    calls += 1
+    return route.fulfill(json({ data: entries, meta: meta() }))
+  })
+  await page.goto(`/applications/${applicationID}`)
+  await page.getByRole('tab', { name: '資源拓撲' }).click()
+  const node = page.locator('[data-runtime-node-id="pod"]')
+  await node.click()
+  const dialog = page.getByRole('dialog')
+  await dialog.getByRole('tab', { name: '日誌' }).click()
+  await expect(dialog.locator('pre').first()).not.toContainText('\u001b[34m')
+  const rows = dialog
+    .getByRole('table', { name: '日誌記錄' })
+    .locator('tbody tr')
+  await expect(rows).toHaveCount(2)
+  await expect(rows.nth(0).getByRole('cell').nth(0)).toHaveText(
+    entries[0].timestamp,
+  )
+  await expect(rows.nth(0).locator('pre')).toHaveText(
+    'INFO 2026-01-02T11:04:05+08:00 {"value":1}\n\tat example.go:10',
+  )
+  await expect(rows.nth(1).locator('pre')).toHaveText('')
+  await dialog.getByText('原文（跳脫）', { exact: true }).click()
+  await expect(rows.nth(0).locator('pre')).toHaveText(
+    JSON.stringify(entries[0].content),
+  )
+  expect(calls).toBe(1)
+  await page.keyboard.press('Escape')
+  await expect(node).toBeFocused()
+})
+
+for (const theme of ['light', 'dark'] as const) {
+  for (const width of [900, 1440]) {
+    test(`${theme} Logs supports keyboard wrapping and time visibility at ${width}px`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width, height: 900 })
+      await preparePage(page, theme)
+      const entries = [
+        {
+          timestamp: '2026-01-02T03:04:05.123456Z',
+          content: `\u001b[34mINFO\u001b[0m 2026-01-02T11:04:05+08:00 synthetic request ${'value'.repeat(80)}`,
+          podName: 'pod',
+        },
+        {
+          timestamp: '2026-01-02T03:04:06Z',
+          content: 'example error\n\tat example.go:10\n\tat worker.go:20',
+          podName: 'pod',
+        },
+        {
+          timestamp: '2026-01-02T03:04:07Z',
+          content:
+            '\u001b]8;;https://example.invalid\u0007safe label\u001b]8;;\u0007 <b>plain text</b>',
+          podName: 'pod',
+        },
+      ]
+      let calls = 0
+      await page.route(/\/runtime\/pods\/logs(?:\?|$)/, (route) => {
+        calls += 1
+        return route.fulfill(json({ data: entries, meta: meta() }))
+      })
+      await page.goto(`/applications/${applicationID}`)
+      await page.getByRole('tab', { name: '資源拓撲' }).click()
+      const node = page.locator('[data-runtime-node-id="pod"]')
+      await node.click()
+      const dialog = page.getByRole('dialog')
+      await dialog.getByRole('tab', { name: '日誌' }).click()
+      const content = dialog.getByRole('region', {
+        name: '日誌內容',
+        exact: true,
+      })
+      await expect(content.locator('tbody tr')).toHaveCount(3)
+      await expect(content.locator('pre').first()).toHaveCSS(
+        'white-space',
+        'pre',
+      )
+      await expect(content).toHaveCSS(
+        'background-color',
+        theme === 'dark' ? 'rgb(9, 11, 18)' : 'rgb(246, 248, 251)',
+      )
+      await expect(content).toHaveCSS(
+        'color',
+        theme === 'dark' ? 'rgb(248, 250, 252)' : 'rgb(23, 32, 51)',
+      )
+      await content.focus()
+      await page.keyboard.press('Shift+Tab')
+      await page.keyboard.press('Tab')
+      await expect(content).toBeFocused()
+      await expect(content).toHaveCSS('outline-style', 'solid')
+      await content.press('ArrowRight')
+      await expect
+        .poll(() => content.evaluate((element) => element.scrollLeft))
+        .toBeGreaterThan(0)
+      expect(
+        await dialog.evaluate(
+          (element) => element.scrollWidth <= element.clientWidth,
+        ),
+      ).toBe(true)
+      const wrap = dialog.getByRole('checkbox', { name: '自動換行' })
+      await wrap.focus()
+      await page.keyboard.press('Space')
+      await expect(content.locator('pre').first()).toHaveCSS(
+        'white-space',
+        'pre-wrap',
+      )
+      expect(
+        await content.evaluate(
+          (element) => element.scrollWidth <= element.clientWidth,
+        ),
+      ).toBe(true)
+      await page.screenshot({
+        path: `/tmp/releasehub-logs-${theme}-${width}.png`,
+      })
+      await dialog.getByRole('checkbox', { name: '顯示 API 時間' }).uncheck()
+      await expect(
+        content.getByRole('columnheader', { name: 'API 時間', exact: true }),
+      ).toHaveCount(0)
+      await expect(content.locator('pre').first()).toContainText(
+        '2026-01-02T11:04:05+08:00',
+      )
+      await expect(content.locator('a, b')).toHaveCount(0)
+      await dialog.getByText('原文（跳脫）', { exact: true }).click()
+      await expect(content.locator('pre').first()).toHaveText(
+        JSON.stringify(entries[0].content),
+      )
+      await dialog.getByRole('checkbox', { name: '顯示 API 時間' }).check()
+      await expect(
+        content.locator('tbody tr').first().getByRole('cell').first(),
+      ).toHaveText(JSON.stringify(entries[0].timestamp))
+      expect(calls).toBe(1)
+      await page.keyboard.press('Escape')
+      await expect(node).toBeFocused()
+    })
+  }
+}
+
+test('Logs API failure stays local instead of appearing as empty logs', async ({
+  page,
+}) => {
+  await preparePage(page, 'dark')
+  await page.route(/\/runtime\/pods\/logs(?:\?|$)/, (route) =>
+    route.fulfill({ ...json({ error: {} }), status: 503 }),
+  )
+  await page.goto(`/applications/${applicationID}`)
+  await page.getByRole('tab', { name: '資源拓撲' }).click()
+  await page.locator('[data-runtime-node-id="pod"]').click()
+  const dialog = page.getByRole('dialog')
+  await dialog.getByRole('tab', { name: '日誌' }).click()
+  await expect(dialog.getByRole('alert')).toContainText(
+    '無法取得 Application 即時資源。',
+  )
+  await expect(dialog.getByText('目前沒有日誌記錄。')).toHaveCount(0)
+  await dialog.getByRole('tab', { name: '摘要' }).click()
+  await expect(dialog.getByText('Healthy')).toBeVisible()
+})
+
 test('resource dialog tab failure stays local and non-Pod nodes never request logs', async ({
   page,
 }) => {
@@ -512,9 +682,9 @@ test('resource dialog tab failure stays local and non-Pod nodes never request lo
 
   await drawer.getByRole('tab', { name: '日誌' }).click()
   await expect.poll(() => requests.logs).toBe(1)
-  await expect(
-    drawer.getByRole('tabpanel', { name: '日誌' }).locator('pre'),
-  ).toHaveText('')
+  await expect(drawer.getByRole('tabpanel', { name: '日誌' })).toContainText(
+    '目前沒有日誌記錄。',
+  )
 
   await page.keyboard.press('Escape')
   await canvas
