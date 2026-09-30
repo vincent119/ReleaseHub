@@ -457,6 +457,20 @@ export const en = {
       logs: 'Logs',
       manifest: 'Live Manifest',
     },
+    logsViewer: {
+      mode: 'Log display mode',
+      readable: 'Readable',
+      raw: 'Original (escaped)',
+      showTime: 'Show API time',
+      wrap: 'Wrap lines',
+      content: 'Log content',
+      records: 'Log records',
+      timestamp: 'API time',
+      message: 'Message',
+      empty: 'No log entries are available.',
+      rawHint:
+        'Each field shows the original as a JSON string (including quotes), with control characters and backslashes escaped.',
+    },
     manifestViewer: {
       mode: 'Manifest display mode',
       formatted: 'Formatted',

@@ -418,6 +418,20 @@ export const zhTW = {
     empty: '目前沒有可顯示的資源。',
     unavailable: '無法取得 Application 即時資源。',
     logsPodOnly: '只有 Pod 節點可以查看 Logs。',
+    logsViewer: {
+      mode: '日誌顯示模式',
+      readable: '可讀模式',
+      raw: '原文（跳脫）',
+      showTime: '顯示 API 時間',
+      wrap: '自動換行',
+      content: '日誌內容',
+      records: '日誌記錄',
+      timestamp: 'API 時間',
+      message: '訊息',
+      empty: '目前沒有日誌記錄。',
+      rawHint:
+        '每個欄位以 JSON 字串表示原文（含引號）；控制字元與反斜線以跳脫方式呈現。',
+    },
     manifestViewer: {
       mode: 'Manifest 顯示模式',
       formatted: '格式化',
