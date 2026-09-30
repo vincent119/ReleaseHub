@@ -1,0 +1,91 @@
+.dialog:global(.ant-modal) {
+  --runtime-dialog-width: 90vw;
+  top: 0;
+  max-width: 100vw;
+  padding-bottom: 0;
+}
+
+.container {
+  display: flex;
+  flex-direction: column;
+  height: 90dvh;
+  overflow: hidden;
+}
+
+.header {
+  flex: none;
+}
+
+.title {
+  overflow: hidden;
+  padding-inline-end: var(--rh-space-8);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.body,
+.tabs,
+.tabs :global(.ant-tabs-body-holder) {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.tabs :global(.ant-tabs-nav) {
+  flex: none;
+}
+
+.tabs :global(.ant-tabs-body) {
+  height: 100%;
+  min-height: 0;
+}
+
+.tabs :global(.ant-tabs-content) {
+  height: 100%;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.tabs :global(.ant-descriptions-item-content) {
+  overflow-wrap: anywhere;
+}
+
+.tabs pre {
+  /* 高度由分頁內容區管理，避免文字區與視窗產生兩層垂直捲軸。 */
+  max-height: none;
+}
+
+.dialog :global(button:focus-visible),
+.tabs :global(.ant-tabs-tab-btn:focus-visible) {
+  outline: 2px solid var(--rh-color-focus);
+  outline-offset: 2px;
+}
+
+@media (max-width: 768px) {
+  .dialog:global(.ant-modal) {
+    --runtime-dialog-width: 100vw;
+    margin: 0;
+  }
+
+  .dialog .container {
+    height: 100dvh;
+    padding: max(var(--rh-space-4), env(safe-area-inset-top))
+      max(var(--rh-space-4), env(safe-area-inset-right))
+      max(var(--rh-space-4), env(safe-area-inset-bottom))
+      max(var(--rh-space-4), env(safe-area-inset-left));
+    border-radius: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dialog,
+  .dialog * {
+    /* 保留結束事件讓元件庫清理視窗，同時移除可感知的動畫。 */
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

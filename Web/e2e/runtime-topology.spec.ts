@@ -177,7 +177,7 @@ test('refresh preserves the user zoom level', async ({ page }) => {
   expect(after).toBeCloseTo(before, 2)
 })
 
-test('resource drawer opens by keyboard and restores node focus and viewport on Escape', async ({
+test('resource dialog opens by keyboard and restores node focus and viewport on Escape', async ({
   page,
 }) => {
   await preparePage(page, 'dark')
@@ -192,6 +192,18 @@ test('resource drawer opens by keyboard and restores node focus and viewport on 
   await page.keyboard.press('Enter')
   await expect(page.getByRole('dialog')).toBeVisible()
   await expect(page.getByRole('tab', { name: '摘要' })).toBeVisible()
+  const dialog = page.getByRole('dialog')
+  await dialog.getByRole('button', { name: '關閉', exact: true }).focus()
+  for (const key of ['Tab', 'Shift+Tab']) {
+    for (let index = 0; index < 12; index += 1) {
+      await page.keyboard.press(key)
+      expect(
+        await dialog.evaluate((element) =>
+          element.contains(document.activeElement),
+        ),
+      ).toBe(true)
+    }
+  }
   await page.keyboard.press('Escape')
   await expect(page.getByRole('dialog')).toHaveCount(0)
   await expect(node).toBeFocused()
@@ -201,7 +213,129 @@ test('resource drawer opens by keyboard and restores node focus and viewport on 
   await expect(page.getByRole('dialog')).toBeVisible()
 })
 
-test('drawer tab failure stays local and non-Pod nodes never request logs', async ({
+test('resource dialog restores safe focus when the selected resource disappears', async ({
+  page,
+}) => {
+  await preparePage(page, 'dark')
+  let releaseRefresh: (() => void) | undefined
+  const refreshed = new Promise<void>((resolve) => {
+    releaseRefresh = resolve
+  })
+  let calls = 0
+  let blockRefresh = false
+  await page.route(
+    `**/api/v1/catalog/applications/${applicationID}/runtime/topology?**`,
+    async (route) => {
+      const data = topology()
+      calls += 1
+      if (blockRefresh) {
+        await refreshed
+        data.nodes = data.nodes.filter((node) => node.id !== 'pod')
+        data.edges = data.edges.filter((edge) => edge.target !== 'pod')
+      }
+      await route.fulfill(json({ data, meta: meta() }))
+    },
+  )
+  await page.goto(`/applications/${applicationID}`)
+  await page.getByRole('tab', { name: '資源拓撲' }).click()
+  const refresh = page.locator('[data-runtime-refresh]')
+  const node = page.locator('[data-runtime-node-id="pod"]')
+  await expect(node).toBeVisible()
+  const initialCalls = calls
+  blockRefresh = true
+  await refresh.click()
+  await expect.poll(() => calls).toBe(initialCalls + 1)
+  try {
+    await node.click()
+    await expect(page.getByRole('dialog')).toBeVisible()
+  } finally {
+    releaseRefresh?.()
+  }
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+  await expect(refresh).toBeFocused()
+  await expect(page.locator('body')).not.toHaveCSS('overflow-y', 'hidden')
+})
+
+for (const theme of ['light', 'dark'] as const) {
+  for (const viewport of [
+    { width: 1440, height: 900 },
+    { width: 900, height: 600 },
+    { width: 390, height: 700 },
+    { width: 740, height: 360 },
+  ]) {
+    test(`${theme} resource dialog uses the available space at ${viewport.width}x${viewport.height}`, async ({
+      page,
+    }) => {
+      await page.setViewportSize(viewport)
+      await page.emulateMedia({ reducedMotion: 'reduce' })
+      await preparePage(page, theme)
+      await page.route(/\/runtime\/resources\/detail(?:\?|$)/, (route) =>
+        route.fulfill(
+          json({
+            data: {
+              manifest: Array.from(
+                { length: 100 },
+                (_, i) => `field${i}: ${'value'.repeat(100)}`,
+              ).join('\n'),
+              resource: {},
+            },
+            meta: meta(),
+          }),
+        ),
+      )
+      await page.goto(`/applications/${applicationID}`)
+      await page.getByRole('tab', { name: '資源拓撲' }).click()
+      const canvas = page.getByLabel('Application 即時資源拓撲')
+      const node = canvas.getByRole('button', { name: /pod/ }).first()
+      await node.focus()
+      await page.keyboard.press('Enter')
+      const dialog = page.getByRole('dialog', { name: 'pod', exact: true })
+      await expect(dialog).toBeVisible()
+      const full = viewport.width <= 768
+      await expect
+        .poll(async () => Math.round((await dialog.boundingBox())?.width ?? 0))
+        .toBe(Math.round(viewport.width * (full ? 1 : 0.9)))
+      await expect
+        .poll(async () => Math.round((await dialog.boundingBox())?.height ?? 0))
+        .toBe(Math.round(viewport.height * (full ? 1 : 0.9)))
+      const bounds = (await dialog.boundingBox())!
+      expect(bounds.x).toBeCloseTo(full ? 0 : viewport.width * 0.05, 0)
+      expect(bounds.y).toBeCloseTo(full ? 0 : viewport.height * 0.05, 0)
+      await expect(page.locator('body')).toHaveCSS('overflow-y', 'hidden')
+      await dialog.getByRole('tab', { name: '即時 Manifest' }).click()
+      const pane = dialog.getByRole('tabpanel')
+      await expect(pane).toContainText('field99:')
+      const tabsBefore = await dialog.getByRole('tablist').boundingBox()
+      await pane.evaluate((element) => {
+        element.scrollTop = element.scrollHeight
+      })
+      expect(
+        await pane.evaluate((element) => element.scrollTop),
+      ).toBeGreaterThan(0)
+      expect(await dialog.getByRole('tablist').boundingBox()).toEqual(
+        tabsBefore,
+      )
+      expect(
+        await dialog.evaluate(
+          (element) => element.scrollWidth <= element.clientWidth,
+        ),
+      ).toBe(true)
+      await expect(dialog.locator('.ant-modal-container')).toHaveCSS(
+        'background-color',
+        theme === 'dark' ? 'rgb(17, 24, 39)' : 'rgb(255, 255, 255)',
+      )
+      await page.screenshot({
+        path: `/tmp/releasehub-dialog-${theme}-${viewport.width}.png`,
+      })
+      await dialog.getByRole('button', { name: '關閉', exact: true }).click()
+      await expect(dialog).toHaveCount(0)
+      await expect(node).toBeFocused()
+      await expect(page.locator('body')).not.toHaveCSS('overflow-y', 'hidden')
+    })
+  }
+}
+
+test('resource dialog tab failure stays local and non-Pod nodes never request logs', async ({
   page,
 }) => {
   const requests = { events: 0, logs: 0, detail: 0 }
@@ -241,6 +375,12 @@ test('drawer tab failure stays local and non-Pod nodes never request logs', asyn
   expect(requests.detail).toBe(1)
   expect(requests.logs).toBe(0)
 
+  await drawer.getByRole('tab', { name: '日誌' }).click()
+  await expect.poll(() => requests.logs).toBe(1)
+  await expect(
+    drawer.getByRole('tabpanel', { name: '日誌' }).locator('pre'),
+  ).toHaveText('')
+
   await page.keyboard.press('Escape')
   await canvas
     .getByRole('button', { name: /service/ })
@@ -254,7 +394,7 @@ test('drawer tab failure stays local and non-Pod nodes never request logs', asyn
     'aria-disabled',
     'true',
   )
-  expect(requests.logs).toBe(0)
+  expect(requests.logs).toBe(1)
 })
 
 test('runtime theme switches in place with readable status and observation', async ({

@@ -1,4 +1,4 @@
-import { Alert, Descriptions, Drawer, Spin, Table, Tabs, Tooltip } from 'antd'
+import { Alert, Descriptions, Modal, Spin, Table, Tabs, Tooltip } from 'antd'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -13,17 +13,20 @@ import type {
 } from '@/generated/model'
 
 import styles from './RuntimeTopologyPanel.module.css'
+import dialogStyles from './RuntimeResourceDialog.module.css'
 
 interface Props {
   applicationId: string
   resource?: RuntimeResourceNode
   onClose: () => void
+  onAfterClose: () => void
 }
 
-export function RuntimeResourceDrawer({
+export function RuntimeResourceDialog({
   applicationId,
   resource,
   onClose,
+  onAfterClose,
 }: Props) {
   const { t } = useTranslation()
   const [tab, setTab] = useState('summary')
@@ -44,18 +47,63 @@ export function RuntimeResourceDrawer({
     { query: { enabled: resource?.kind === 'Pod' && tab === 'logs' } },
   )
   return (
-    <Drawer
+    <Modal
       open={Boolean(resource)}
       title={resource?.name}
-      size="large"
-      onClose={() => {
+      centered
+      width="var(--runtime-dialog-width)"
+      className={dialogStyles.dialog}
+      classNames={{
+        container: dialogStyles.container,
+        header: dialogStyles.header,
+        title: dialogStyles.title,
+        body: dialogStyles.body,
+      }}
+      footer={null}
+      focusable={{ trap: true, focusTriggerAfterClose: false }}
+      modalRender={(content) => (
+        <div
+          onKeyDown={(event) => {
+            if (event.key !== 'Tab') return
+            // 元件庫依賴 focusin 回收焦點；到瀏覽器工具列時不會觸發，需封住首尾邊界。
+            const controls = Array.from(
+              event.currentTarget.querySelectorAll<HTMLElement>(
+                'button, a[href], input, select, textarea, [tabindex]',
+              ),
+            ).filter(
+              (element) =>
+                element.tabIndex >= 0 &&
+                !element.matches(':disabled') &&
+                element.getClientRects().length > 0 &&
+                getComputedStyle(element).visibility !== 'hidden',
+            )
+            const first = controls[0]
+            const last = controls.at(-1)
+            if (event.shiftKey && document.activeElement === first) {
+              event.preventDefault()
+              last?.focus()
+            } else if (!event.shiftKey && document.activeElement === last) {
+              event.preventDefault()
+              first?.focus()
+            }
+          }}
+        >
+          {content}
+        </div>
+      )}
+      onCancel={() => {
         setTab('summary')
         onClose()
+      }}
+      afterClose={() => {
+        setTab('summary')
+        onAfterClose()
       }}
       destroyOnHidden
     >
       {resource && (
         <Tabs
+          className={dialogStyles.tabs}
           activeKey={tab}
           onChange={setTab}
           items={[
@@ -151,7 +199,7 @@ export function RuntimeResourceDrawer({
           ]}
         />
       )}
-    </Drawer>
+    </Modal>
   )
 }
 
