@@ -67,8 +67,27 @@ export function RuntimeTopologyPanel({
       },
     },
   )
-  const value =
-    topology.data?.status === 200 ? topology.data.data.data : undefined
+  const value = useMemo(() => {
+    if (topology.data?.status !== 200) return undefined
+    const response = topology.data.data.data
+    // 發布切換期間舊版回應可能仍含 null；呈現層不得因此中斷 Request 頁面。
+    return {
+      ...response,
+      nodes: Array.isArray(response.nodes)
+        ? response.nodes.map((node) => ({
+            ...node,
+            images: Array.isArray(node.images) ? node.images : [],
+            info: Array.isArray(node.info) ? node.info : [],
+            ingress: Array.isArray(node.ingress) ? node.ingress : [],
+            externalUrls: Array.isArray(node.externalUrls)
+              ? node.externalUrls
+              : [],
+          }))
+        : [],
+      edges: Array.isArray(response.edges) ? response.edges : [],
+      warnings: Array.isArray(response.warnings) ? response.warnings : [],
+    }
+  }, [topology.data])
   const graph = useMemo(
     () =>
       value

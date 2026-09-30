@@ -176,6 +176,53 @@ test('單一 Application 拓樸失敗不遮蔽 Request 與其他 Application', a
   ).toBeVisible()
 })
 
+test('舊版拓樸回傳 null 陣列時 Request 詳細頁仍可顯示', async ({ page }) => {
+  const state = {
+    request: deployedRequest(requestFixture()),
+    retryBody: undefined as unknown,
+  }
+  await mockApplication(page, state)
+  await page.route(
+    `**/api/v1/catalog/applications/${ids.appA}/runtime/topology?**`,
+    (route) =>
+      route.fulfill(
+        json({
+          data: {
+            ...topologyFixture(ids.appA),
+            nodes: topologyFixture(ids.appA).nodes.map((node) => ({
+              ...node,
+              images: null,
+              info: null,
+              ingress: null,
+              externalUrls: null,
+            })),
+            edges: null,
+            warnings: null,
+          },
+          meta: meta(),
+        }),
+      ),
+  )
+
+  await page.goto(`/requests/${ids.request}`)
+  await page.getByText('Application 即時部署狀態').click()
+
+  await expect(
+    page.getByRole('heading', { name: 'Automatic payment deployment' }),
+  ).toBeVisible()
+  await expect(
+    page.getByLabel('Application 即時資源拓撲').getByText('app-a-pod'),
+  ).toBeVisible()
+  await expect(page.getByText('無法顯示此頁面')).toHaveCount(0)
+  await page
+    .getByLabel('Application 即時資源拓撲')
+    .getByRole('button', { name: /app-a-pod/ })
+    .click()
+  await expect(page.getByRole('dialog')).toBeVisible()
+  await expect(page.getByRole('dialog').getByText('Images')).toBeVisible()
+  await expect(page.getByText('無法顯示此頁面')).toHaveCount(0)
+})
+
 test('active 拓樸收合後停止定期查詢', async ({ page }) => {
   const request = deployedRequest(requestFixture())
   request.status = 'Deploying'

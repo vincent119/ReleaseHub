@@ -155,7 +155,7 @@ func runtimeTopologyResponse(value argoapp.RuntimeTopology) contract.RuntimeTopo
 	for _, edge := range value.Edges {
 		edges = append(edges, contract.RuntimeTopologyEdge{Id: edge.ID, Source: edge.Source, Target: edge.Target, Kind: contract.RuntimeTopologyEdgeKind(edge.Kind)})
 	}
-	return contract.RuntimeTopology{ApplicationId: value.ApplicationID, View: contract.RuntimeTopologyView(value.View), ObservedAt: value.ObservedAt, Nodes: nodes, Edges: edges, Warnings: value.Warnings, Partial: value.Partial}
+	return contract.RuntimeTopology{ApplicationId: value.ApplicationID, View: contract.RuntimeTopologyView(value.View), ObservedAt: value.ObservedAt, Nodes: nodes, Edges: edges, Warnings: append([]string{}, value.Warnings...), Partial: value.Partial}
 }
 
 func runtimeResourceResponse(value argodomain.RuntimeResource) contract.RuntimeResourceNode {
@@ -166,7 +166,7 @@ func runtimeResourceResponse(value argodomain.RuntimeResource) contract.RuntimeR
 	return contract.RuntimeResourceNode{
 		Id: value.Ref.Key(), Group: value.Ref.Group, Version: value.Ref.Version, Kind: value.Ref.Kind,
 		Namespace: value.Ref.Namespace, Name: value.Ref.Name, HealthStatus: value.HealthStatus,
-		HealthMessage: value.HealthMessage, CreatedAt: value.CreatedAt, Images: value.Images, Info: info,
-		Ingress: value.Networking.Ingress, ExternalUrls: value.Networking.ExternalURLs, Orphaned: value.Orphaned,
+		HealthMessage: value.HealthMessage, CreatedAt: value.CreatedAt, Images: append([]string{}, value.Images...), Info: info,
+		Ingress: append([]string{}, value.Networking.Ingress...), ExternalUrls: append([]string{}, value.Networking.ExternalURLs...), Orphaned: value.Orphaned,
 	}
 }
