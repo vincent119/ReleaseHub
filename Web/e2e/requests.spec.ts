@@ -177,6 +177,7 @@ test('單一 Application 拓樸失敗不遮蔽 Request 與其他 Application', a
 })
 
 test('舊版拓樸回傳 null 陣列時 Request 詳細頁仍可顯示', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
   const state = {
     request: deployedRequest(requestFixture()),
     retryBody: undefined as unknown,
@@ -220,6 +221,11 @@ test('舊版拓樸回傳 null 陣列時 Request 詳細頁仍可顯示', async ({
     .click()
   await expect(page.getByRole('dialog')).toBeVisible()
   await expect(page.getByRole('dialog').getByText('Images')).toBeVisible()
+  await expect
+    .poll(async () =>
+      Math.round((await page.getByRole('dialog').boundingBox())?.width ?? 0),
+    )
+    .toBe(1296)
   await expect(page.getByText('無法顯示此頁面')).toHaveCount(0)
 })
 

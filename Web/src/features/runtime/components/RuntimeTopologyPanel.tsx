@@ -16,7 +16,7 @@ import {
   Spin,
   Typography,
 } from 'antd'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { useGetCatalogApplicationRuntimeTopology } from '@/generated/api'
@@ -29,7 +29,7 @@ import {
 } from '../model/runtimeGraph'
 import { ApplicationRootNode } from './ApplicationRootNode'
 import { RuntimeNode } from './RuntimeNode'
-import { RuntimeResourceDrawer } from './RuntimeResourceDrawer'
+import { RuntimeResourceDialog } from './RuntimeResourceDialog'
 import styles from './RuntimeTopologyPanel.module.css'
 
 const nodeTypes = { runtime: RuntimeNode, application: ApplicationRootNode }
@@ -53,6 +53,8 @@ export function RuntimeTopologyPanel({
   const { resolvedTheme } = useThemePreference()
   const [view, setView] = useState<RuntimeTopologyView>('resources')
   const [selected, setSelected] = useState<string>()
+  const panelRef = useRef<HTMLDivElement>(null)
+  const selectedNodeRef = useRef<string | undefined>(undefined)
   const [viewports, setViewports] = useState<Record<string, Viewport>>({})
   const viewportKey = `${applicationId}:${view}`
   const savedViewport = viewports[viewportKey]
@@ -96,26 +98,38 @@ export function RuntimeTopologyPanel({
     [active, applicationName, value],
   )
   const resource = value?.nodes.find((node) => node.id === selected)
-  const closeDrawer = () => {
-    const selectedID = selected
+  const restoreNodeFocus = () => {
     setSelected(undefined)
     window.requestAnimationFrame(() => {
-      document
-        .querySelectorAll<HTMLElement>('[data-runtime-node-id]')
-        .forEach((node) => {
-          if (node.dataset.runtimeNodeId === selectedID) node.focus()
-        })
+      const panel = panelRef.current
+      const node = Array.from(
+        panel?.querySelectorAll<HTMLElement>('[data-runtime-node-id]') ?? [],
+      ).find(
+        (element) => element.dataset.runtimeNodeId === selectedNodeRef.current,
+      )
+      // 等視窗解除焦點限制後再恢復；資源消失時仍有可操作的返回位置。
+      const target =
+        node ?? panel?.querySelector<HTMLElement>('[data-runtime-refresh]')
+      target?.focus({ preventScroll: true })
     })
   }
   useEffect(() => {
-    const select = (event: Event) =>
-      setSelected((event as CustomEvent<string>).detail)
+    const select = (event: Event) => {
+      const id = (event as CustomEvent<string>).detail
+      selectedNodeRef.current = id
+      setSelected(id)
+    }
     window.addEventListener('releasehub:runtime-node', select)
     return () => window.removeEventListener('releasehub:runtime-node', select)
   }, [])
 
   return (
-    <Space orientation="vertical" size="middle" className={styles.panel}>
+    <Space
+      ref={panelRef}
+      orientation="vertical"
+      size="middle"
+      className={styles.panel}
+    >
       <Flex justify="space-between" align="center" gap="middle" wrap>
         <Space>
           <Segmented
@@ -149,6 +163,7 @@ export function RuntimeTopologyPanel({
           )}
         </Space>
         <Button
+          data-runtime-refresh
           loading={topology.isFetching}
           onClick={() => void topology.refetch()}
         >
@@ -228,10 +243,11 @@ export function RuntimeTopologyPanel({
           )}
         </>
       )}
-      <RuntimeResourceDrawer
+      <RuntimeResourceDialog
         applicationId={applicationId}
         resource={resource}
-        onClose={closeDrawer}
+        onClose={() => setSelected(undefined)}
+        onAfterClose={restoreNodeFocus}
       />
     </Space>
   )
