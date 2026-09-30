@@ -457,6 +457,21 @@ export const en = {
       logs: 'Logs',
       manifest: 'Live Manifest',
     },
+    manifestViewer: {
+      mode: 'Manifest display mode',
+      formatted: 'Formatted',
+      raw: 'Full original',
+      showManagedFields: 'Show managedFields',
+      wrap: 'Wrap lines',
+      content: 'Manifest content',
+      hidden:
+        'metadata.managedFields is hidden. Show it or switch to the full original.',
+      empty: 'No Manifest content is available.',
+      invalid:
+        'The content is not valid JSON. The full original is shown below.',
+      limited:
+        'The content exceeds formatting limits. The full original is shown below.',
+    },
     fields: {
       type: 'Type',
       reason: 'Reason',
