@@ -11,7 +11,7 @@
 }
 .canvas :global(.react-flow) {
   --xy-background-color: var(--rh-color-page);
-  --xy-background-pattern-dots-color: var(--rh-color-border-strong);
+  --xy-background-pattern-dots-color: var(--rh-color-border);
   --xy-edge-stroke: var(--rh-color-border-strong);
   --xy-edge-stroke-selected: var(--rh-color-primary);
   --xy-handle-background-color: var(--rh-color-primary);
@@ -81,19 +81,48 @@
   place-items: center;
 }
 .node {
+  --runtime-node-accent: var(--rh-color-text-secondary);
+  --runtime-node-surface: var(--rh-color-surface);
   animation: runtimeAppear 240ms ease-out both;
   width: 236px;
   height: 78px;
   padding: 10px 14px;
   text-align: left;
-  border-color: var(--rh-color-border);
+  border: 1px solid var(--rh-color-border-strong);
+  border-top: 3px solid var(--runtime-node-accent);
+  border-radius: var(--rh-radius-lg);
   color: var(--rh-color-text-primary);
-  background: var(--rh-color-surface);
+  background: var(--runtime-node-surface);
   box-shadow: var(--rh-shadow-card);
 }
-.node:hover,
-.node:focus-visible {
+.node.node:hover,
+.node.node:focus-visible {
   border-color: var(--rh-color-primary);
+  background: var(--runtime-node-surface);
+}
+.node[data-health='Healthy'] {
+  --runtime-node-accent: var(--rh-color-success);
+  --runtime-node-surface: var(--rh-feedback-success-bg);
+}
+.node[data-health='Progressing'] {
+  --runtime-node-accent: var(--rh-color-info);
+  --runtime-node-surface: var(--rh-feedback-info-bg);
+}
+.node[data-health='Missing'],
+.node[data-health='Suspended'] {
+  --runtime-node-accent: var(--rh-color-warning);
+  --runtime-node-surface: var(--rh-feedback-warning-bg);
+}
+.node[data-health='Degraded'] {
+  --runtime-node-accent: var(--rh-color-error);
+  --runtime-node-surface: var(--rh-feedback-error-bg);
+}
+.node .nodeIcon {
+  color: var(--runtime-node-accent);
+  background: var(--rh-color-surface);
+}
+.node :global(.react-flow__handle) {
+  background: var(--runtime-node-accent);
 }
 .node:focus-visible {
   outline: 2px solid var(--rh-color-focus);

@@ -17,6 +17,7 @@ export function RuntimeNode({ data }: NodeProps<RuntimeResourceFlowNode>) {
   return (
     <Button
       data-runtime-node-id={data.resource.id}
+      data-health={data.resource.healthStatus || 'Unknown'}
       className={`${styles.node} ${data.active ? styles.nodeActive : ''}`}
       onClick={() =>
         window.dispatchEvent(

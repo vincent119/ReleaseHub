@@ -37,6 +37,10 @@ describe('runtimeTopologyToGraph', () => {
     const graph = runtimeTopologyToGraph(topology, false, 'payments')
 
     expect(graph.nodes).toHaveLength(5)
+    // 受控節點必須提供尺寸，MiniMap 才能繪製節點。
+    for (const node of graph.nodes) {
+      expect(node).toMatchObject({ width: 236, height: 78 })
+    }
     expect(graph.nodes[0]).toMatchObject({
       type: 'application',
       selectable: false,

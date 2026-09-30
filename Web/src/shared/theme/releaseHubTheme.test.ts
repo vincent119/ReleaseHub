@@ -23,6 +23,9 @@ describe.each(['light', 'dark'] as const)('%s ReleaseHub theme', (mode) => {
       controlOutline: 'var(--rh-color-focus-soft)',
     })
     expect(config.components).toMatchObject({
+      Typography: {
+        colorTextDescription: 'var(--rh-color-text-secondary)',
+      },
       Button: {
         defaultBg: 'var(--rh-color-surface-elevated)',
         defaultHoverBg: 'var(--rh-color-surface-soft)',
