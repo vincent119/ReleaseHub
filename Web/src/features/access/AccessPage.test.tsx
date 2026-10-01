@@ -1,9 +1,9 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { App } from 'antd'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { I18nextProvider } from 'react-i18next'
 import { MemoryRouter } from 'react-router'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { CatalogOrganizationNode } from '@/generated/model'
 import i18n from '@/shared/i18n/config'
@@ -67,10 +67,13 @@ function query(data: unknown) {
   }
 }
 
+const queryClients = new Set<QueryClient>()
+
 function renderPage(initialEntry = '/') {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   })
+  queryClients.add(queryClient)
   return render(
     <MemoryRouter initialEntries={[initialEntry]}>
       <I18nextProvider i18n={i18n}>
@@ -85,6 +88,15 @@ function renderPage(initialEntry = '/') {
 }
 
 describe('AccessPage', () => {
+  afterEach(async () => {
+    // Vitest 未啟用全域 hooks，需在 jsdom 銷毀前卸載所有 roots 並完成 React 排程。
+    await act(async () => {
+      cleanup()
+      queryClients.forEach((client) => client.clear())
+      queryClients.clear()
+    })
+  })
+
   beforeEach(async () => {
     await i18n.changeLanguage('zh-TW')
     Object.defineProperty(window, 'matchMedia', {
@@ -224,7 +236,7 @@ describe('AccessPage', () => {
     expect(screen.getByText('resource.view')).toHaveClass(tagStyles.neutral)
   })
 
-  it('uses a multiple Role selector when creating bindings', async () => {
+  it('uses a multiple Role selector when creating bindings', () => {
     api.capabilities.mockReturnValue(
       query({
         collections: [
@@ -238,12 +250,10 @@ describe('AccessPage', () => {
       query({ groups: [], roles: [], permissions: [] }),
     )
 
-    const rendered = renderPage('/access?tab=bindings')
+    renderPage('/access?tab=bindings')
     fireEvent.click(screen.getByRole('button', { name: '建立角色綁定' }))
 
     expect(document.querySelector('.ant-select-multiple')).not.toBeNull()
-    rendered.unmount()
-    await new Promise((resolve) => setTimeout(resolve, 0))
   })
 
   it('offers Group member management from the Group row', () => {
@@ -344,5 +354,9 @@ describe('AccessPage', () => {
       environmentId: '019c1230-0000-7000-8000-000000000012',
       applicationId: '019c1230-0000-7000-8000-000000000013',
     })
+  })
+
+  it('每個案例結束後移除頁面與 Portal', () => {
+    expect(document.body.childElementCount).toBe(0)
   })
 })
