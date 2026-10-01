@@ -62,7 +62,10 @@ func TestMapRuntimeNodePreservesNetworkSelectorEvidence(t *testing.T) {
 	}
 }
 
-type runtimeManagerStub struct{ context context.Context }
+type runtimeManagerStub struct {
+	context  context.Context
+	openLogs func(context.Context, *applicationpkg.ApplicationPodLogsQuery) (applicationpkg.ApplicationService_PodLogsClient, error)
+}
 
 func (*runtimeManagerStub) ResourceTree(context.Context, *applicationpkg.ResourcesQuery, ...grpc.CallOption) (*argov1alpha1.ApplicationTree, error) {
 	return &argov1alpha1.ApplicationTree{}, nil
@@ -76,8 +79,11 @@ func (*runtimeManagerStub) ListResourceEvents(context.Context, *applicationpkg.A
 	return &corev1.EventList{}, nil
 }
 
-func (s *runtimeManagerStub) PodLogs(ctx context.Context, _ *applicationpkg.ApplicationPodLogsQuery, _ ...grpc.CallOption) (applicationpkg.ApplicationService_PodLogsClient, error) {
+func (s *runtimeManagerStub) PodLogs(ctx context.Context, query *applicationpkg.ApplicationPodLogsQuery, _ ...grpc.CallOption) (applicationpkg.ApplicationService_PodLogsClient, error) {
 	s.context = ctx
+	if s.openLogs != nil {
+		return s.openLogs(ctx, query)
+	}
 	return &runtimePodLogsStream{context: ctx}, nil
 }
 

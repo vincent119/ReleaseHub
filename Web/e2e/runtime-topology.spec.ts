@@ -2,6 +2,80 @@ import { expect, test, type Page } from '@playwright/test'
 
 const applicationID = '019c1230-0000-7000-8000-000000000010'
 
+for (const warning of [
+  { code: 'node_limit', text: '資源超過 500 個節點，畫面僅顯示有界結果。' },
+  { code: 'edge_limit', text: '關係超過 1,000 條，畫面僅顯示有界結果。' },
+  {
+    code: 'network_evidence_unresolved',
+    text: '部分 Argo CD 網路關係證據無法安全解析。',
+  },
+]) {
+  test(`Application 保留非空 ${warning.code} 子圖並可重新整理恢復`, async ({
+    page,
+  }) => {
+    await preparePage(page, 'dark')
+    let recovered = false
+    await page.route(
+      `**/api/v1/catalog/applications/${applicationID}/runtime/topology?**`,
+      (route) => {
+        const value = topology()
+        return route.fulfill(
+          json({
+            data: {
+              ...value,
+              nodes: recovered ? value.nodes : value.nodes.slice(0, 3),
+              observedAt: recovered
+                ? '2026-01-01T01:00:00Z'
+                : '2026-01-01T00:00:00Z',
+              view:
+                warning.code === 'network_evidence_unresolved'
+                  ? 'network'
+                  : 'resources',
+              edges: value.edges.map((edge) => ({
+                ...edge,
+                kind:
+                  warning.code === 'network_evidence_unresolved'
+                    ? 'network'
+                    : 'resource',
+              })),
+              warnings: recovered ? [] : [warning.code],
+              partial: !recovered,
+            },
+            meta: meta(),
+          }),
+        )
+      },
+    )
+    await page.goto(`/applications/${applicationID}`)
+    await page.getByRole('tab', { name: '資源拓撲' }).click()
+    if (warning.code === 'network_evidence_unresolved')
+      await page.getByText('網路拓撲', { exact: true }).click()
+    await expect(page.getByRole('alert')).toContainText(warning.text)
+    const canvas = page.getByLabel('Application 即時資源拓撲')
+    await expect(canvas.locator('.react-flow__node-runtime')).toHaveCount(3)
+    await expect(
+      canvas.locator('.react-flow__edge:not(.runtime-presentation-edge)'),
+    ).toHaveCount(2)
+    await expect(
+      page.getByRole('heading', { name: 'payment-api', exact: true }),
+    ).toBeVisible()
+    const summary = page
+      .locator('[aria-live="polite"]')
+      .filter({ hasText: '觀測時間' })
+    await expect(summary).toContainText('共 3 個資源')
+    const before = await summary.textContent()
+    recovered = true
+    await page.getByRole('button', { name: '重新整理', exact: true }).click()
+    await expect(page.getByRole('alert')).toHaveCount(0)
+    await expect(canvas.locator('.react-flow__node-runtime')).toHaveCount(4)
+    await expect(summary).toContainText('共 4 個資源')
+    await expect(summary).not.toHaveText(before ?? '')
+    await page.getByRole('tab', { name: '狀態總覽', exact: true }).click()
+    await expect(page.getByText('Synced', { exact: true })).toBeVisible()
+    await expect(page.getByText('Succeeded', { exact: true })).toBeVisible()
+  })
+}
+
 for (const theme of ['light', 'dark'] as const) {
   for (const width of [1440, 900]) {
     test(`${theme} theme renders readable runtime topology at ${width}px`, async ({
