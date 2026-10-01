@@ -769,7 +769,11 @@ function AccessModal({
       <Form
         form={form}
         layout="vertical"
-        onFinish={(fields) => void submit(fields)}
+        disabled={action === 'binding' && submitting}
+        onFinish={(fields) => {
+          if (action === 'binding' && submitting) return
+          void submit(fields)
+        }}
       >
         {action === 'user' && (
           <>
