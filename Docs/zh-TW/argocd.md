@@ -69,9 +69,27 @@ Argo CD 無法完成 refresh、無法回傳 target manifests、operation identit
 
 具備 Application `resource.view` 權限的使用者可在 Deployment Request 的「Deployment 執行狀態」展開即時拓撲，也可從 Application 詳細頁的「資源拓撲」頁籤查看。瀏覽器只呼叫 ReleaseHub API；Argo CD endpoint、token 與 gRPC capability 不會交給使用者。
 
-「資源階層」只呈現 Argo CD `ParentRefs`，「網路拓撲」只呈現 `NetworkingInfo`。ReleaseHub 會解析明確的 target reference，以及 Argo CD 回傳的 selector／resource labels；reference 省略 group 或 version 時，只有唯一符合其餘 identity 欄位的資源才會建立連線。完全沒有關係證據時顯示 unavailable；已有證據但部分 reference 或 selector 無法安全解析時，保留可證明的子圖並顯示 unresolved 警告，不會從名稱或 Kubernetes 慣例猜測連線。部署進行中每 5 秒更新；終態 Request 顯示的是目前即時狀態，不是該次 execution 的不可變快照，Request 原有 revision、digest 與結果證據仍是治理依據。
+「資源階層」的實際資源關係只來自 Argo CD `ParentRefs`；Application 根節點與虛線僅代表畫面聚合，不是 Kubernetes owner 關係。「網路拓撲」只使用 `NetworkingInfo`。ReleaseHub 會解析明確的 target reference，以及 Argo CD 回傳的 selector／resource labels；reference 省略 group 或 version 時，只有唯一符合其餘 identity 欄位的資源才會建立連線。完全沒有關係證據時顯示 unavailable；已有證據但部分 reference 或 selector 無法安全解析時，保留可證明的子圖並顯示 unresolved 警告，不會從名稱或 Kubernetes 慣例猜測連線。部署進行中，展開且可見的拓撲每 5 秒更新；終態 Request 顯示的是目前即時狀態，不是該次 execution 的不可變快照，Request 原有 revision、digest 與結果證據仍是治理依據。
 
-選取節點後可查看摘要、Events、Pod Logs 與 Live Manifest。Logs 只開放 Pod，單次最多 500 行並受 15 秒與 1 MiB 限制；Events 最多 100 筆；拓撲最多 500 個節點與 1,000 條關係。Secret Manifest 會移除 `data` 與 `stringData`。Manifest、Events 與 Logs 的讀取會留下只含 actor、Application、resource identity 與 action 的 Audit Trail，不保存回傳內容。
+選取實際資源節點後，可在同頁大型置中唯讀視窗查看摘要、Events、Pod Logs 與 Live Manifest；不提供 Sync、刪除或編輯資源。切換至對應分頁才查詢 Events、Logs 或 Manifest。按 Escape 或關閉按鈕返回拓撲，保留視角並恢復可用的焦點位置。Logs 只開放 Pod，請求最新 500 行，回應最多 500 筆記錄（每筆可含多行），訊息內容累計最多 1 MiB，且受最長 15 秒與較短的請求期限限制；Events 最多 100 筆；拓撲最多 500 個節點與 1,000 條關係。Secret Manifest 會移除 `data` 與 `stringData`。Manifest、Events 與 Logs 的讀取會留下只含 actor、Application、resource identity 與 action 的 Audit Trail，不保存回傳內容。
+
+### 閱讀即時 Manifest
+
+有效 JSON 預設以兩格縮排顯示，保留欄位順序與數字原值。`metadata.managedFields` 預設隱藏並顯示提示；需要檢查時，勾選顯示選項或切換「完整原文」。這是閱讀控制，不會修改 Kubernetes 資源或 API 快取。「完整原文」仍是 Server 已遮罩的回應，無法還原 Secret 內容。
+
+長行預設以內容區水平捲動閱讀，也可勾選「自動換行」。非 JSON、格式錯誤或超過前端格式化處理上限時，介面會提示並保留完整的 API 回應原文，而不是讓整個視窗失效。空內容另顯示空狀態；API 讀取失敗則顯示錯誤，不會當成空內容。
+
+### 閱讀 Pod 日誌
+
+API 時間與訊息各占一欄；「顯示 API 時間」只控制左側時間欄，不刪除訊息內的應用程式時間或 JSON 欄位。每筆記錄維持回傳順序與多行堆疊，不因相同時間合併，也不重新排序。長行預設水平捲動，可選擇「自動換行」。閱讀控制可用鍵盤操作，內容區可取得焦點並捲動。
+
+「可讀模式」移除完整 ANSI 控制序列；未完整序列、退格、覆寫行與其他控制字元以可見跳脫呈現，不執行終端指令、HTML 或連結。「原文（跳脫）」以含引號的 JSON 字串顯示每個欄位，保留換行、反斜線及控制字元的差異；看到 `\n` 或 `\u001b` 是原文字元的表示法，不是新增的日誌內容。
+
+日誌是有限快照，不是持續追蹤串流。達到記錄或內容預算即停止收集；無法容納的整筆訊息不會切碎加入，因此畫面不代表完整歷史。串流讀取失敗會顯示錯誤，不將已收到的部分記錄當成成功結果；沒有記錄才顯示空日誌提示。Manifest／Logs 分頁錯誤不影響摘要或原本的部署結果。
+
+### 判讀不完整資料與重新整理
+
+節點或關係超過上限時，拓撲會同時保留可顯示子圖與警告；即使畫面上仍有 Healthy 節點，也不能把這張圖當成完整清單。可用「重新整理」重新查詢；警告是否消失取決於新的回應，重新整理本身不會部署、重試 execution 或改變核准結果。網路關係證據不足也不等於部署失敗。
 
 若面板顯示 unavailable，先確認使用者仍可查看該 Application，再檢查 ReleaseHub 到 Argo CD 的 gRPC 連線與專用 account 權限。拓撲失敗不會改變 Deployment execution 狀態，也不應以直接開放 Argo CD UI 作為一般使用者的替代處理。
 

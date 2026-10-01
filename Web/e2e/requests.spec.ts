@@ -176,6 +176,72 @@ test('單一 Application 拓樸失敗不遮蔽 Request 與其他 Application', a
   ).toBeVisible()
 })
 
+for (const warning of [
+  { code: 'node_limit', text: '資源超過 500 個節點，畫面僅顯示有界結果。' },
+  { code: 'edge_limit', text: '關係超過 1,000 條，畫面僅顯示有界結果。' },
+  {
+    code: 'network_evidence_unresolved',
+    text: '部分 Argo CD 網路關係證據無法安全解析。',
+  },
+]) {
+  test(`Request 的非空 ${warning.code} 不改變部署結果或其他 Application`, async ({
+    page,
+  }) => {
+    const state = {
+      request: deployedRequest(requestFixture()),
+      retryBody: undefined as unknown,
+    }
+    await mockApplication(page, state)
+    let recovered = false
+    await page.route(
+      '**/api/v1/catalog/applications/*/runtime/topology?**',
+      (route) => {
+        const url = new URL(route.request().url())
+        const applicationId = url.pathname.split('/')[5]
+        const limited = applicationId === ids.appA && !recovered
+        return route.fulfill(
+          json({
+            data: {
+              ...topologyFixture(applicationId),
+              view: url.searchParams.get('view'),
+              warnings: limited ? [warning.code] : [],
+              partial: limited,
+            },
+            meta: meta(),
+          }),
+        )
+      },
+    )
+    await page.goto(`/requests/${ids.request}`)
+    await page.getByText('Application 即時部署狀態').click()
+    if (warning.code === 'network_evidence_unresolved')
+      await page.getByText('網路拓撲', { exact: true }).click()
+    await expect(page.getByRole('alert')).toContainText(warning.text)
+    const canvas = page.getByLabel('Application 即時資源拓撲')
+    await expect(canvas.getByText('app-a-pod')).toBeVisible()
+    await expect(
+      page.getByRole('heading', { name: 'Automatic payment deployment' }),
+    ).toBeVisible()
+    await expect(page.getByText('Partial Failed').first()).toBeVisible()
+    await expect(page.getByText('sync failed')).toBeVisible()
+    await page.getByLabel('選擇 Application').click()
+    await page.getByText('app-b', { exact: true }).last().click()
+    await expect(canvas.getByText('app-b-pod')).toBeVisible()
+    await expect(page.getByText(warning.text)).toHaveCount(0)
+    await page.getByLabel('選擇 Application').click()
+    await page.getByText('app-a', { exact: true }).last().click()
+    await expect(page.getByRole('alert')).toContainText(warning.text)
+    const refresh = page.getByRole('button', { name: /重新整理/ })
+    await expect(refresh).not.toHaveClass(/ant-btn-loading/)
+    recovered = true
+    await refresh.click()
+    await expect(page.getByText(warning.text)).toHaveCount(0)
+    await expect(canvas.getByText('app-a-pod')).toBeVisible()
+    await expect(page.getByText('Partial Failed').first()).toBeVisible()
+    expect(state.retryBody).toBeUndefined()
+  })
+}
+
 test('舊版拓樸回傳 null 陣列時 Request 詳細頁仍可顯示', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 })
   const state = {
