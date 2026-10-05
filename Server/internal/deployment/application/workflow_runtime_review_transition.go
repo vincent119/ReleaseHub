@@ -33,6 +33,10 @@ func (s *WorkflowRuntimeService) approvedReviewTransition(ctx context.Context, s
 	if !found {
 		return deploydomain.WorkflowResult{}, nil, false, nil
 	}
+	return s.reviewTransitionResult(ctx, snapshot, result)
+}
+
+func (s *WorkflowRuntimeService) reviewTransitionResult(ctx context.Context, snapshot WorkflowRuntimeSnapshot, result deploydomain.WorkflowResult) (deploydomain.WorkflowResult, *deploydomain.ReviewTask, bool, error) {
 	review, err := s.reviewForResult(ctx, snapshot, result)
 	if err != nil {
 		return deploydomain.WorkflowResult{}, nil, false, err
@@ -48,7 +52,9 @@ func (s *WorkflowRuntimeService) RecoverApprovedReviews(ctx context.Context) err
 	}
 	var recoveryErr error
 	for _, value := range values {
-		recoveryErr = errors.Join(recoveryErr, s.recoverApprovedReview(ctx, value))
+		if err := s.recoverApprovedReview(ctx, value); err != nil {
+			recoveryErr = errors.Join(recoveryErr, fmt.Errorf("recover approved review for request version %s: %w", value.RequestVersionID, err))
+		}
 	}
 	return recoveryErr
 }
@@ -58,22 +64,36 @@ func (s *WorkflowRuntimeService) recoverApprovedReview(ctx context.Context, valu
 	if err != nil {
 		return err
 	}
-	if snapshot.CurrentReview == nil || snapshot.Instance == nil {
+	if !approvedReviewRecoveryAvailable(snapshot) {
 		return nil
 	}
 	result, review, found, err := s.approvedReviewTransition(ctx, snapshot, *snapshot.CurrentReview)
-	if err != nil || !found {
+	if err != nil {
 		return err
 	}
+	if !found {
+		return workflowRuntimeInvalid(errors.New("approved review has no matching automatic transition"))
+	}
+	return s.persistApprovedReviewRecovery(ctx, snapshot, result, review)
+}
+
+func approvedReviewRecoveryAvailable(snapshot WorkflowRuntimeSnapshot) bool {
+	return snapshot.Instance != nil && snapshot.CurrentReview != nil &&
+		snapshot.Instance.Status == deploydomain.WorkflowInstanceRunning &&
+		snapshot.CurrentReview.Status == deploydomain.ReviewTaskApproved &&
+		snapshot.CurrentReview.StateKey == snapshot.Instance.CurrentStateKey
+}
+
+func (s *WorkflowRuntimeService) persistApprovedReviewRecovery(ctx context.Context, snapshot WorkflowRuntimeSnapshot, result deploydomain.WorkflowResult, review *deploydomain.ReviewTask) error {
 	change := WorkflowTransitionChange{
 		Mutation: systemRuntimeMutation(WorkflowStartInput{
-			RequestVersionID: value.RequestVersionID,
+			RequestVersionID: snapshot.RequestVersionID,
 			IdempotencyKey:   "workflow-review-satisfied:" + snapshot.CurrentReview.ID.String(),
 			RequestID:        "worker-workflow-review-recovery",
 		}, s.clock.Now()),
 		ExpectedLock: snapshot.Instance.LockVersion, Result: result, Review: review,
 	}
-	err = s.repository.ApplyTransition(ctx, change)
+	err := s.repository.ApplyTransition(ctx, change)
 	if errors.Is(err, ErrWorkflowRuntimeConflict) {
 		return nil
 	}

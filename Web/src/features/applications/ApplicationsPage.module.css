@@ -10,3 +10,20 @@
   display: block;
   max-width: 70rem;
 }
+
+.filters {
+  display: grid;
+  gap: var(--rh-space-3);
+  min-width: 0;
+}
+
+.filterActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--rh-space-3);
+}
+
+.filterAction {
+  min-height: 44px;
+}

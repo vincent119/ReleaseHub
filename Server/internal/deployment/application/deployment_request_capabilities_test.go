@@ -86,7 +86,7 @@ func (s *requestScheduleReader) Get(context.Context, uuid.UUID) (*deploydomain.D
 	return s.policy, s.err
 }
 
-func (s *capabilityRequestRepository) List(context.Context, authz.Scope) ([]deploydomain.DeploymentRequestSummary, error) {
+func (s *capabilityRequestRepository) List(context.Context, authz.Scope, DeploymentRequestListFilter) ([]deploydomain.DeploymentRequestSummary, error) {
 	return []deploydomain.DeploymentRequestSummary{s.detail.Summary}, nil
 }
 

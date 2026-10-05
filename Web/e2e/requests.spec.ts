@@ -2,6 +2,12 @@ import { expect, test, type Page } from '@playwright/test'
 
 import type { DeploymentRequestVersion } from '../src/generated/model'
 
+declare global {
+  interface Window {
+    requestListRuntimeErrors: string[]
+  }
+}
+
 const ids = {
   organization: '019c1230-0000-7000-8000-000000000201',
   project: '019c1230-0000-7000-8000-000000000202',
@@ -38,6 +44,219 @@ test.beforeEach(async ({ context, page }) => {
   })
 })
 
+for (const theme of ['light', 'dark']) {
+  for (const width of [320, 768, 1440]) {
+    test(`緊湊列表 ${theme} ${width}px：50 筆、完整 ID、排程唯讀與鍵盤`, async ({
+      page,
+      context,
+    }, testInfo) => {
+      await page.setViewportSize({ width, height: 900 })
+      await context.grantPermissions(['clipboard-read', 'clipboard-write'])
+      await page.addInitScript((theme) => {
+        localStorage.setItem('releasehub.theme', theme)
+        window.requestListRuntimeErrors = []
+        window.addEventListener('error', (event) =>
+          window.requestListRuntimeErrors.push(event.message),
+        )
+      }, theme)
+      const state = {
+        request: requestFixture(),
+        retryBody: undefined as unknown,
+      }
+      await mockApplication(page, state)
+      const title = '重名長部署申請與跨服務發布'.repeat(16)
+      const statuses = [
+        'Succeeded',
+        'Failed',
+        'PartialFailed',
+        'Superseded',
+        'Terminated',
+        'Approved',
+        'Deploying',
+        'Blocked',
+        'PendingReview',
+        'Candidate',
+      ] as const
+      const rows = Array.from({ length: 50 }, (_, index) => ({
+        ...requestSummary(state.request),
+        id: `11111111-1111-4111-8111-${String(index).padStart(12, '0')}`,
+        title,
+        status: statuses[index % statuses.length],
+        classification: index % 2 ? 'Standard' : 'ForwardRollback',
+        scheduleState: 'Ready',
+        scheduleReason: 'Ready',
+        scheduledFor: undefined,
+      }))
+      const queryParams: string[] = []
+      const mutations: string[] = []
+      page.on('request', (request) => {
+        if (
+          request.url().includes('/api/v1/deployment-requests') &&
+          request.method() !== 'GET'
+        )
+          mutations.push(request.method())
+      })
+      await page.route('**/api/v1/deployment-requests?**', (route) => {
+        const url = new URL(route.request().url())
+        queryParams.push(url.search)
+        const limit = Number(url.searchParams.get('limit'))
+        return route.fulfill(
+          json({
+            data: rows.slice(0, limit),
+            meta: {
+              ...meta(),
+              hasMore: rows.length > limit,
+              ...(rows.length > limit ? { nextCursor: 'list-next' } : {}),
+            },
+          }),
+        )
+      })
+      await page.goto('/requests')
+      await page.getByRole('combobox', { name: 'Project', exact: true }).click()
+      await page.getByRole('option', { name: 'Project A', exact: true }).click()
+      await page
+        .getByRole('combobox', { name: '環境（必填）', exact: true })
+        .click()
+      await page
+        .getByRole('option', { name: 'production', exact: true })
+        .click()
+      const table = page.locator('.ant-table')
+      const bodyRows = table.locator('tbody tr[data-row-key]')
+      await expect(bodyRows).toHaveCount(20)
+      await page
+        .getByRole('combobox', { name: '每頁筆數', exact: true })
+        .click()
+      await page.getByRole('option', { name: '50 筆', exact: true }).click()
+      await expect(bodyRows).toHaveCount(50)
+      await expect(page.locator('html')).toHaveAttribute('data-theme', theme)
+      const heights = await bodyRows.evaluateAll((rows) =>
+        rows.map((row) => row.getBoundingClientRect().height),
+      )
+      expect(Math.min(...heights)).toBeGreaterThanOrEqual(56)
+      expect(Math.max(...heights)).toBeLessThanOrEqual(72)
+      const neutralContrast = await table
+        .getByText('Superseded', { exact: true })
+        .first()
+        .evaluate((node) => {
+          const style = getComputedStyle(node)
+          const luminance = (color: string) => {
+            const rgb = color.match(/\d+(?:\.\d+)?/g)?.slice(0, 3)
+            if (!rgb || rgb.length !== 3) throw new Error('無法解析標籤色彩')
+            const values = rgb.map((part) => {
+              const channel = Number(part) / 255
+              return channel <= 0.04045
+                ? channel / 12.92
+                : ((channel + 0.055) / 1.055) ** 2.4
+            })
+            return values[0] * 0.2126 + values[1] * 0.7152 + values[2] * 0.0722
+          }
+          const text = luminance(style.color)
+          const background = luminance(style.backgroundColor)
+          return (
+            (Math.max(text, background) + 0.05) /
+            (Math.min(text, background) + 0.05)
+          )
+        })
+      expect(neutralContrast).toBeGreaterThanOrEqual(4.5)
+      const first = bodyRows.first()
+      const link = first.getByRole('link', { name: title })
+      await expect(link).toHaveAttribute('href', `/requests/${rows[0].id}`)
+      expect(
+        await link.evaluate((node) => node.scrollWidth > node.clientWidth),
+      ).toBe(true)
+      await expect(table.getByText('目前可部署', { exact: true })).toHaveCount(
+        0,
+      )
+      await expect(
+        table.getByText('已符合所有排程條件', { exact: true }),
+      ).toHaveCount(0)
+      await expect(
+        table.getByText('查看排程條件', { exact: true }),
+      ).toHaveCount(25)
+      expect(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= innerWidth + 1,
+        ),
+      ).toBe(true)
+      const identity = first.getByRole('button', {
+        name: '查看完整名稱與 ID：11111111…00000000',
+        exact: true,
+      })
+      await identity.scrollIntoViewIfNeeded()
+      await identity.focus()
+      await identity.press('Enter')
+      const dialog = page.getByRole('dialog')
+      await expect(dialog).toBeVisible()
+      await expect(dialog.getByText(title, { exact: true })).toBeVisible()
+      await expect(dialog.getByText(rows[0].id, { exact: true })).toBeVisible()
+      await expect(dialog).toContainText('不代表部署或重試授權')
+      await expect(
+        dialog.getByText('指定最早時間', { exact: true }),
+      ).toHaveCount(0)
+      const copy = dialog.getByRole('button', {
+        name: '複製完整 ID',
+        exact: true,
+      })
+      await copy.focus()
+      await copy.press('Enter')
+      await expect(dialog.getByRole('status')).toContainText('已複製完整 ID')
+      expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(
+        rows[0].id,
+      )
+      const bounds = await dialog.boundingBox()
+      expect(bounds?.x).toBeGreaterThanOrEqual(0)
+      expect((bounds?.x ?? 0) + (bounds?.width ?? 0)).toBeLessThanOrEqual(width)
+      expect(
+        await dialog.evaluate(
+          (node) => node.scrollWidth <= node.clientWidth + 1,
+        ),
+      ).toBe(true)
+      await page.screenshot({
+        path: testInfo.outputPath('request-details.png'),
+      })
+      await copy.press('Escape')
+      await expect(dialog).toBeHidden()
+      await expect(identity).toBeFocused()
+      const schedule = first.getByRole('button', {
+        name: '查看排程條件：11111111…00000000',
+        exact: true,
+      })
+      await schedule.scrollIntoViewIfNeeded()
+      await schedule.focus()
+      await schedule.press('Enter')
+      await expect(dialog).toBeVisible()
+      await expect(dialog).toContainText('已符合排程條件')
+      await dialog
+        .getByRole('button', { name: '關閉', exact: true })
+        .last()
+        .click()
+      await expect(dialog).toBeHidden()
+      await expect(schedule).toBeFocused()
+      await table.locator('.ant-table-content').evaluate((node) => {
+        node.scrollLeft = 0
+      })
+      await page.screenshot({ path: testInfo.outputPath('request-list.png') })
+      expect(queryParams).toHaveLength(2)
+      expect(new URLSearchParams(queryParams[0]).get('limit')).toBe('20')
+      expect(new URLSearchParams(queryParams[1]).get('limit')).toBe('50')
+      expect(new URLSearchParams(queryParams[0]).get('environmentId')).toBe(
+        ids.environment,
+      )
+      expect(new URLSearchParams(queryParams[0]).has('cursor')).toBe(false)
+      expect(mutations).toEqual([])
+      await page.evaluate(
+        () =>
+          new Promise<void>((resolve) =>
+            requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+          ),
+      )
+      expect(
+        await page.evaluate(() => window.requestListRuntimeErrors),
+      ).toEqual([])
+    })
+  }
+}
+
 test('自動 Request 經審核與部署後呈現 DAG 及 Partial Failed', async ({
   page,
 }) => {
@@ -45,8 +264,12 @@ test('自動 Request 經審核與部署後呈現 DAG 及 Partial Failed', async 
   await mockApplication(page, state)
 
   await page.goto('/requests')
-  await page.getByLabel('選擇 Request scope').click()
-  await page.getByText('Organization A / Project A / production').click()
+  await page.getByRole('combobox', { name: 'Project', exact: true }).click()
+  await page.getByRole('option', { name: 'Project A', exact: true }).click()
+  await page
+    .getByRole('combobox', { name: '環境（必填）', exact: true })
+    .click()
+  await page.getByRole('option', { name: 'production', exact: true }).click()
   await page.getByRole('link', { name: 'Automatic payment deployment' }).click()
   await expect(page.getByRole('button', { name: '核准申請' })).toBeVisible()
 
@@ -414,7 +637,10 @@ async function mockApplication(
       url.pathname === '/api/v1/deployment-requests'
     )
       return route.fulfill(
-        json({ data: [requestSummary(state.request)], meta: meta() }),
+        json({
+          data: [requestSummary(state.request)],
+          meta: { ...meta(), hasMore: false },
+        }),
       )
     if (request.method() === 'GET')
       return route.fulfill(json({ data: state.request, meta: meta() }))

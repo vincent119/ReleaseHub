@@ -53,5 +53,7 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
     include: ['./src/**/*.test.{ts,tsx}'],
+    // 限制並行資源競爭，同時保留檔案並行與原有測試保障。
+    maxWorkers: '50%',
   },
 })

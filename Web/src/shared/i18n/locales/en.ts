@@ -16,6 +16,24 @@ export const en = {
       reload: 'Reload',
     },
   },
+  scopeFilter: {
+    organization: 'Organization',
+    project: 'Project',
+    environment: 'Environment',
+    environmentRequired: 'Environment (required)',
+    environmentOptional: 'Environment (optional)',
+    organizationPlaceholder: 'Select an organization',
+    projectPlaceholder: 'Select a Project',
+    environmentPlaceholder: 'Select an environment',
+    fullName: 'View full {{field}} name',
+    chooseOrganization: 'Select an organization first.',
+    chooseProject: 'Select a Project first.',
+    noOrganizations: 'No organizations are available.',
+    noProjects: 'No Projects are available in this organization.',
+    noEnvironments: 'No environments are available in this Project.',
+    noMatches: 'No options match your search.',
+    loading: 'Loading available scopes.',
+  },
   feedback: {
     successTitle: 'Success',
     infoTitle: 'Information',
@@ -386,6 +404,21 @@ export const en = {
       revision: 'Git revision',
     },
     empty: 'There are no Applications you may view.',
+    loading: 'Loading Applications.',
+    scope: {
+      label: 'Application scope filters',
+      hint: 'Optionally narrow the list by scope. Without filters, all authorized Applications are shown.',
+      clear: 'Clear filters',
+      empty:
+        'No authorized Applications match this scope. Adjust or clear the filters.',
+      unavailable: 'Scope options are unavailable.',
+      listAvailable: 'The loaded Application list remains accessible.',
+      retained:
+        'Existing filters remain applied. Clear them to view all authorized Applications.',
+      retry: 'Retry scope options',
+      invalidated:
+        'The previous scope is unavailable. Filters were cleared to show all authorized Applications.',
+    },
     error: {
       title: 'Applications are unavailable',
       description:
@@ -687,6 +720,8 @@ export const en = {
       project: 'Select Project',
       environment: 'Select Environment',
       select: 'Select a Project first.',
+      invalidated:
+        'The previous scope is no longer available. Invalid selections were cleared; select a scope again.',
     },
     list: {
       title: 'Plan list',
@@ -817,10 +852,42 @@ export const en = {
     unavailable:
       'Deployment Requests are unavailable or outside your current scope.',
     empty: 'There are no Deployment Requests in this scope.',
+    query: {
+      search: 'Search by name',
+      searchPlaceholder: 'Search request names in this scope',
+      searchTooLong: 'Use at most 255 characters in the name search.',
+      status: 'Request status',
+      allStatuses: 'All statuses',
+      pageSize: 'Page size',
+      pageSizeOption: '{{count}} rows',
+      apply: 'Search',
+      clear: 'Clear filters',
+      refresh: 'Refresh requests',
+      order: 'Ordered by most recently updated',
+      updated: 'Returned to the first page to fetch the latest list.',
+      invalid:
+        'The query or cursor is invalid. Reload the first page or adjust the filters.',
+      badPage:
+        'The server did not provide usable pagination metadata. Reload the first page.',
+      firstPage: 'Reload the first page',
+      loading: 'Loading deployment requests…',
+      noResults:
+        'No deployment requests match these filters. Adjust or clear the filters.',
+      emptyPage:
+        'There are no requests on this page. Go back or refresh the list.',
+      pagination: 'Deployment request pages',
+      page: 'Page {{number}}, {{count}} rows on this page',
+      previous: 'Previous',
+      next: 'Next',
+      atFirst: 'Already on the first page',
+      noNext: 'No usable cursor for the next page',
+    },
     scope: {
       label: 'Select Request scope',
       placeholder: 'Select Organization / Project / Environment',
       empty: 'Select an Environment to view its requests.',
+      invalidated:
+        'The previous scope is no longer available. Invalid selections were cleared; select a scope again.',
     },
     columns: {
       title: 'Title',
@@ -828,10 +895,31 @@ export const en = {
       classification: 'Classification',
       version: 'Version',
       applications: 'Applications',
-      schedule: 'Next eligible time',
+      schedule: 'Schedule conditions',
       updatedAt: 'Updated',
     },
-    schedule: { requested: 'Requested earliest', next: 'Next eligible' },
+    schedule: {
+      requested: 'Requested earliest',
+      next: 'Next eligible',
+      view: 'View schedule conditions',
+      reason: 'Schedule reason',
+      notice:
+        'These are current environment schedule conditions, not a change to historical deployment results or authorization to deploy or retry.',
+      states: {
+        Ready: 'Schedule conditions met',
+        Waiting: 'Waiting for schedule',
+      },
+    },
+    details: {
+      title: 'Request and schedule information',
+      identity: 'View full name and ID: {{id}}',
+      schedule: 'View schedule conditions: {{id}}',
+      id: 'Request ID',
+      copy: 'Copy full ID',
+      copysuccess: 'Full ID copied.',
+      copyerror: 'Copy failed. Select the full ID and copy it manually.',
+      close: 'Close',
+    },
   },
   requestDetail: {
     unavailable:

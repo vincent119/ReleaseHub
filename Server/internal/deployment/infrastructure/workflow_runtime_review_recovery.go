@@ -47,6 +47,14 @@ func updateReviewRuntime(ctx context.Context, tx *gorm.DB, change deployapp.Work
 	return updateRuntimeInstance(ctx, tx, reviewTransitionChange(change))
 }
 
+func updateReviewLocks(ctx context.Context, tx *gorm.DB, change deployapp.WorkflowReviewChange) error {
+	lock := runtimeLockChange{versionID: change.Task.RequestVersionID, expected: change.ExpectedLock, next: reviewNextLock(change)}
+	if err := updateRequestVersionLock(ctx, tx, lock); err != nil {
+		return err
+	}
+	return updateReviewRuntime(ctx, tx, change)
+}
+
 func applyReviewTransition(ctx context.Context, tx *gorm.DB, change deployapp.WorkflowReviewChange) error {
 	if change.Result == nil {
 		return nil

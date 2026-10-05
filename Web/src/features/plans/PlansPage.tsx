@@ -1,7 +1,7 @@
 import { PlusOutlined } from '@ant-design/icons'
 import { useQueryClient } from '@tanstack/react-query'
 import { Alert, Button, Empty, Flex, Space, Typography } from 'antd'
-import { useEffect, useState } from 'react'
+import { useEffect, useReducer, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import {
@@ -17,6 +17,7 @@ import type { DeploymentPlan, DeploymentPlanVersion } from '@/generated/model'
 import { parseAPIErrorResponse, type APIErrorView } from '@/shared/api/apiError'
 import definitionStyles from '@/shared/definition/DefinitionWorkspace.module.css'
 import { useFeedback } from '@/shared/feedback/useFeedback'
+import { resolveResourceScope, type ResourceScopeValue } from '@/shared/scope'
 
 import { DeploymentBindingPanel } from './components/DeploymentBindingPanel'
 import { DeploymentSchedulePanel } from './components/DeploymentSchedulePanel'
@@ -41,29 +42,93 @@ interface EditorState {
 }
 type PlanMutationOperation = 'create' | 'version' | 'lifecycle'
 
+interface ScopeState {
+  choice?: ResourceScopeValue
+  invalidated: boolean
+  selection: { planID?: string; versionID?: string }
+}
+
+type ScopeAction =
+  | { type: 'choose' | 'invalidate'; value: ResourceScopeValue }
+  | { type: 'plan' | 'version'; id: string }
+
+function scopeReducer(state: ScopeState, action: ScopeAction): ScopeState {
+  switch (action.type) {
+    case 'choose':
+    case 'invalidate':
+      return {
+        choice: action.value,
+        invalidated: action.type === 'invalidate',
+        selection: {},
+      }
+    case 'plan':
+      return { ...state, selection: { planID: action.id } }
+    case 'version':
+      return {
+        ...state,
+        selection: { ...state.selection, versionID: action.id },
+      }
+  }
+}
+
 export function PlansPage() {
   const { t } = useTranslation()
   const feedback = useFeedback()
   const queryClient = useQueryClient()
   const resources = useGetCatalogResourceTree()
   const workflows = useListReleaseWorkflows()
-  const [scope, setScope] = useState<PlanScopeChoice>()
+  const [{ choice, invalidated: scopeInvalidated, selection }, dispatchScope] =
+    useReducer(scopeReducer, { invalidated: false, selection: {} })
+  const [editor, setEditor] = useState<EditorState>()
+  const [submitting, setSubmitting] = useState(false)
+  const organizations =
+    resources.data?.status === 200 ? resources.data.data.data : []
+  const catalogAvailable =
+    !resources.isPending && !resources.isError && resources.data?.status === 200
+  const resolved = resolveResourceScope(organizations, choice).value
+  // 同次 render 清除失效 scope 與選取，避免先提交舊 Plan 或版本的畫面。
+  if (
+    catalogAvailable &&
+    choice &&
+    ((choice.organizationId !== undefined &&
+      choice.organizationId !== resolved.organizationId) ||
+      (choice.projectId !== undefined &&
+        choice.projectId !== resolved.projectId) ||
+      (choice.environmentId !== undefined &&
+        choice.environmentId !== resolved.environmentId))
+  ) {
+    dispatchScope({ type: 'invalidate', value: resolved })
+    setEditor(undefined)
+  }
+  const scope: PlanScopeChoice | undefined =
+    catalogAvailable && resolved.organizationId && resolved.projectId
+      ? {
+          organizationId: resolved.organizationId,
+          projectId: resolved.projectId,
+          environmentId: resolved.environmentId,
+        }
+      : undefined
   const plansQuery = useListDeploymentPlans(
     { projectId: scope?.projectId ?? emptyID },
     { query: { enabled: Boolean(scope?.projectId) } },
   )
-  const [planID, setPlanID] = useState<string>()
-  const [versionID, setVersionID] = useState<string>()
-  const [editor, setEditor] = useState<EditorState>()
-  const [submitting, setSubmitting] = useState(false)
+  const { planID, versionID } = selection
   const planListStatus = plansQuery.data?.status
-  const planListAvailable = planListStatus === 200 && !plansQuery.isError
+  const planListAvailable =
+    Boolean(scope) &&
+    planListStatus === 200 &&
+    !plansQuery.isError &&
+    !plansQuery.isPending &&
+    !plansQuery.isPlaceholderData
   const planListUnavailable = Boolean(
     scope &&
     (plansQuery.isError ||
       (planListStatus !== undefined && planListStatus !== 200)),
   )
-  const plans = plansQuery.data?.status === 200 ? plansQuery.data.data.data : []
+  const plans =
+    planListAvailable && plansQuery.data?.status === 200
+      ? plansQuery.data.data.data
+      : []
   const plan = plans.find((item) => item.id === planID) ?? plans[0]
   const version = selectedVersion(plan, versionID)
   useEffect(() => {
@@ -132,9 +197,14 @@ export function PlansPage() {
       ),
     )
   }
-  if (resources.isError || workflows.isError)
+  if (
+    resources.isError ||
+    workflows.isError ||
+    (resources.data && resources.data.status !== 200) ||
+    (workflows.data && workflows.data.status !== 200)
+  )
     return <Alert type="error" showIcon title={t('plans.unavailable')} />
-  if (editor)
+  if (editor && scope)
     return (
       <PlanEditorWorkspace
         title={
@@ -149,8 +219,6 @@ export function PlansPage() {
         onSubmit={(value) => void save(value)}
       />
     )
-  const organizations =
-    resources.data?.status === 200 ? resources.data.data.data : []
   const workflowValues =
     workflows.data?.status === 200 ? workflows.data.data.data : []
   return (
@@ -179,13 +247,15 @@ export function PlansPage() {
       </Flex>
       <PlanScopeSelector
         organizations={organizations}
-        scope={scope}
+        scope={choice}
+        loading={resources.isPending}
         onChange={(value) => {
-          setScope(value)
-          setPlanID(undefined)
-          setVersionID(undefined)
+          dispatchScope({ type: 'choose', value })
         }}
       />
+      {scopeInvalidated && (
+        <Alert type="warning" showIcon title={t('plans.scope.invalidated')} />
+      )}
       {planListUnavailable ? (
         <Alert type="error" showIcon title={t('plans.unavailable')} />
       ) : !scope ? (
@@ -196,10 +266,9 @@ export function PlansPage() {
             <PlanList
               plans={plans}
               selected={plan?.id}
-              loading={plansQuery.isPending}
+              loading={plansQuery.isPending || plansQuery.isPlaceholderData}
               onSelect={(id) => {
-                setPlanID(id)
-                setVersionID(undefined)
+                dispatchScope({ type: 'plan', id })
               }}
             />
             <PlanDetail
@@ -207,7 +276,7 @@ export function PlansPage() {
               version={version}
               versionID={versionID}
               submitting={submitting}
-              onVersion={setVersionID}
+              onVersion={(id) => dispatchScope({ type: 'version', id })}
               onNewVersion={() =>
                 plan && version && setEditor(versionEditor(plan, version))
               }
@@ -228,16 +297,20 @@ export function PlansPage() {
               }
             />
           </div>
-          {scope.environmentId && (
+          {scope.environmentId && planListAvailable && (
             <>
               <DeploymentBindingPanel
+                key={`${scope.organizationId}:${scope.projectId}:${scope.environmentId}`}
                 organizationId={scope.organizationId}
                 projectId={scope.projectId}
                 environmentId={scope.environmentId}
                 workflows={workflowValues}
                 plans={plans}
               />
-              <DeploymentSchedulePanel environmentId={scope.environmentId} />
+              <DeploymentSchedulePanel
+                key={scope.environmentId}
+                environmentId={scope.environmentId}
+              />
             </>
           )}
         </>

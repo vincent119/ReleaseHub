@@ -1,7 +1,14 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react'
 import { App } from 'antd'
 import { I18nextProvider } from 'react-i18next'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { DeploymentRequestVersion } from '@/generated/model'
 import i18n from '@/shared/i18n/config'
@@ -21,6 +28,13 @@ describe('RequestOverview capability handling', () => {
     document.cookie = 'releasehub_csrf=csrf-token; path=/'
   })
 
+  afterEach(async () => {
+    // 沒有全域 afterEach 時 RTL 不會自動清理，通知必須隨本檔 root 卸載。
+    await act(async () => {
+      cleanup()
+    })
+  })
+
   it('keeps edited input when a stale capability is rejected', async () => {
     api.update.mockResolvedValue({ status: 404 })
     renderOverview(requestFixture(), vi.fn())
@@ -30,9 +44,14 @@ describe('RequestOverview capability handling', () => {
     fireEvent.change(description, {
       target: { value: '保留這段尚未送出的內容' },
     })
-    fireEvent.click(screen.getByRole('button', { name: '建立新 Version' }))
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: '建立新 Version' }))
+    })
 
     await waitFor(() => expect(api.update).toHaveBeenCalledOnce())
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      i18n.t('requestDetail.metadata.rejected'),
+    )
     expect(screen.getByRole('dialog')).toBeInTheDocument()
     expect(description).toHaveValue('保留這段尚未送出的內容')
   })

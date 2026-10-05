@@ -7,6 +7,10 @@ export function requestStatusColor(status: string) {
   return 'blue'
 }
 
+export function shortRequestID(id: string) {
+  return id.length > 20 ? `${id.slice(0, 8)}…${id.slice(-8)}` : id
+}
+
 export function requestStatusLabel(status: string) {
   return status === 'PartialFailed' ? 'Partial Failed' : status
 }

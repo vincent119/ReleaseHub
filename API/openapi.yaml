@@ -915,18 +915,50 @@ paths:
       security:
         - sessionCookie: []
       parameters:
-        - $ref: "#/components/parameters/Cursor"
-        - $ref: "#/components/parameters/Limit"
+        - name: cursor
+          in: query
+          required: false
+          description: Server 產生的游標，綁定 scope、search、status、limit 與排序；條件改變須從第一頁開始。
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 1024
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: search
+          in: query
+          required: false
+          description: 最新 Request Version 名稱的包含搜尋，trim 後最多 255 個 Unicode 字元；不分大小寫，SQL wildcard 作一般文字。
+          schema:
+            type: string
+        - name: status
+          in: query
+          required: false
+          description: 篩選最新 Request Version 的單一狀態；省略代表全部。
+          schema:
+            $ref: "#/components/schemas/DeploymentRequestStatus"
         - $ref: "#/components/parameters/OrganizationId"
         - $ref: "#/components/parameters/ProjectId"
         - $ref: "#/components/parameters/EnvironmentId"
       responses:
         "200":
-          description: Deployment Requests ordered by creation time descending.
+          description: 依更新時間及 Request ID 降冪排序的有界頁面；預設 20、最多 100 筆，透過 meta.hasMore／nextCursor 取得後續頁，不提供跨資料更新的快照或總筆數。
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/DeploymentRequestListResponse"
+        "400":
+          description: 無效的 query 或 cursor；回傳 INVALID_REQUEST，不退回全量或空成功結果。
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "401":
           description: The user is unauthenticated or the session has expired.
         "404":

@@ -24,8 +24,9 @@ func TestDeploymentRequestListProjectsServerScheduleEligibility(t *testing.T) {
 	scope, err := authz.NewEnvironmentScope(detail.Summary.OrganizationID, detail.Summary.ProjectID, detail.Summary.EnvironmentID)
 	require.NoError(t, err)
 
-	values, err := service.List(context.Background(), RequestPrincipal{UserID: uuid.New()}, scope)
+	page, err := service.List(context.Background(), RequestPrincipal{UserID: uuid.New()}, scope, DeploymentRequestListQuery{})
 	require.NoError(t, err)
+	values := page.Items
 	require.Len(t, values, 1)
 	require.Equal(t, deploydomain.DeploymentRequestScheduleWaiting, values[0].Schedule.State)
 	require.Equal(t, deploydomain.DeploymentScheduleWaitingForScheduledTime, values[0].Schedule.Reason)

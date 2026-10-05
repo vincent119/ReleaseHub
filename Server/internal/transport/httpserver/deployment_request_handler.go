@@ -15,7 +15,7 @@ import (
 )
 
 type deploymentRequestService interface {
-	List(context.Context, deployapp.RequestPrincipal, authz.Scope) ([]deploydomain.DeploymentRequestSummary, error)
+	List(context.Context, deployapp.RequestPrincipal, authz.Scope, deployapp.DeploymentRequestListQuery) (deployapp.DeploymentRequestListPage, error)
 	Get(context.Context, deployapp.RequestPrincipal, uuid.UUID) (deploydomain.DeploymentRequestDetail, error)
 	UpdateMetadata(context.Context, deployapp.RequestPrincipal, deployapp.MetadataVersionChange, string) (deploydomain.DeploymentRequestDetail, error)
 }
@@ -31,12 +31,11 @@ func (h *deploymentHandler) ListDeploymentRequests(c *gin.Context, params contra
 		respondInvalidDeploymentRequest(c)
 		return
 	}
-	values, err := h.requests.List(c.Request.Context(), principal, scope)
+	page, err := h.requests.List(c.Request.Context(), principal, scope, deploymentRequestListQuery(params))
 	if !respondDeploymentRequestError(c, err, http.StatusInternalServerError) {
 		return
 	}
-	meta := responseMeta(c)
-	c.JSON(http.StatusOK, contract.DeploymentRequestListResponse{Data: deploymentRequestSummaries(values), Meta: contract.CursorPageMeta{RequestId: meta.RequestId, Timestamp: meta.Timestamp}})
+	respondDeploymentRequestList(c, page)
 }
 
 // GetDeploymentRequest returns the latest immutable Version and its snapshots.
@@ -92,19 +91,18 @@ func respondDeploymentRequestError(c *gin.Context, err error, conflictStatus int
 	if err == nil {
 		return true
 	}
-	if errors.Is(err, deployapp.ErrRequestForbidden) || errors.Is(err, deployapp.ErrRequestNotFound) {
+	switch {
+	case errors.Is(err, deployapp.ErrRequestForbidden) || errors.Is(err, deployapp.ErrRequestNotFound):
 		respondError(c, http.StatusNotFound, "DEPLOYMENT_REQUEST_NOT_FOUND", "Deployment Request was not found")
-		return false
-	}
-	if errors.Is(err, deployapp.ErrRequestInvalid) {
+	case errors.Is(err, deployapp.ErrRequestInvalid):
 		respondError(c, http.StatusUnprocessableEntity, "DEPLOYMENT_REQUEST_INVALID", "Deployment Request is invalid")
-		return false
-	}
-	if errors.Is(err, deployapp.ErrRequestConflict) {
+	case errors.Is(err, deployapp.ErrRequestQueryInvalid):
+		respondInvalidDeploymentRequest(c)
+	case errors.Is(err, deployapp.ErrRequestConflict):
 		respondError(c, conflictStatus, "DEPLOYMENT_REQUEST_CONFLICT", "Deployment Request changed concurrently")
-		return false
+	default:
+		respondError(c, http.StatusInternalServerError, "DEPLOYMENT_REQUEST_FAILED", "Unable to read Deployment Request")
 	}
-	respondError(c, http.StatusInternalServerError, "DEPLOYMENT_REQUEST_FAILED", "Unable to read Deployment Request")
 	return false
 }
 

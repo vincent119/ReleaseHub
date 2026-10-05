@@ -54,11 +54,18 @@ type fakeDeploymentRequestService struct {
 	detail    deploydomain.DeploymentRequestDetail
 	listCalls int
 	metadata  deployapp.MetadataVersionChange
+	listQuery deployapp.DeploymentRequestListQuery
+	listPage  *deployapp.DeploymentRequestListPage
+	listError error
 }
 
-func (s *fakeDeploymentRequestService) List(_ context.Context, _ deployapp.RequestPrincipal, _ authz.Scope) ([]deploydomain.DeploymentRequestSummary, error) {
+func (s *fakeDeploymentRequestService) List(_ context.Context, _ deployapp.RequestPrincipal, _ authz.Scope, query deployapp.DeploymentRequestListQuery) (deployapp.DeploymentRequestListPage, error) {
 	s.listCalls++
-	return []deploydomain.DeploymentRequestSummary{s.detail.Summary}, nil
+	s.listQuery = query
+	if s.listPage != nil {
+		return *s.listPage, s.listError
+	}
+	return deployapp.DeploymentRequestListPage{Items: []deploydomain.DeploymentRequestSummary{s.detail.Summary}}, s.listError
 }
 
 func (s *fakeDeploymentRequestService) Get(_ context.Context, _ deployapp.RequestPrincipal, _ uuid.UUID) (deploydomain.DeploymentRequestDetail, error) {

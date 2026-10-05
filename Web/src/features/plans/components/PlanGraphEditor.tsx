@@ -1,6 +1,7 @@
 import { PlusOutlined } from '@ant-design/icons'
 import { Alert, Button, Empty, InputNumber, Typography } from 'antd'
 import { useEffect, useState } from 'react'
+import { flushSync } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 
 import type { DeploymentPlanDocument } from '@/generated/model'
@@ -31,6 +32,15 @@ export function PlanGraphEditor({
   const { graph, document, dispatch } = usePlanEditor(initialDocument)
   const selection = useGraphSelection()
   const [addingDependency, setAddingDependency] = useState(false)
+  const [canvasReady, setCanvasReady] = useState(!readOnly)
+  useEffect(() => {
+    if (!readOnly) return
+    // 外框先配置；在下一幀同步掛載，避免並行提交落入尺寸通知處理期間。
+    const frame = requestAnimationFrame(() => {
+      flushSync(() => setCanvasReady(true))
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [readOnly])
   useEffect(() => onChange?.(document), [document, onChange])
   const emit = (action: Parameters<typeof dispatch>[0]) => dispatch(action)
   const node = graph.nodes.find((item) => item.id === selection.selectedNodeID)
@@ -93,19 +103,21 @@ export function PlanGraphEditor({
         </>
       }
       canvas={
-        <DefinitionGraphCanvas
-          nodes={graph.nodes}
-          edges={graph.edges}
-          onNodesChange={(changes) => emit({ type: 'nodes', changes })}
-          onEdgesChange={(changes) => emit({ type: 'edges', changes })}
-          onConnect={(connection) => emit({ type: 'connect', connection })}
-          onNodeDragStop={() => emit({ type: 'reorder' })}
-          readOnly={readOnly}
-          miniMapClassName={frameStyles.miniMap}
-          onSelectNode={selection.selectNode}
-          onSelectEdge={selection.selectEdge}
-          onClearSelection={selection.clearSelection}
-        />
+        canvasReady && (
+          <DefinitionGraphCanvas
+            nodes={graph.nodes}
+            edges={graph.edges}
+            onNodesChange={(changes) => emit({ type: 'nodes', changes })}
+            onEdgesChange={(changes) => emit({ type: 'edges', changes })}
+            onConnect={(connection) => emit({ type: 'connect', connection })}
+            onNodeDragStop={() => emit({ type: 'reorder' })}
+            readOnly={readOnly}
+            miniMapClassName={frameStyles.miniMap}
+            onSelectNode={selection.selectNode}
+            onSelectEdge={selection.selectEdge}
+            onClearSelection={selection.clearSelection}
+          />
+        )
       }
       inspector={
         <>

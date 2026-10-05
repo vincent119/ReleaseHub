@@ -38,7 +38,7 @@ type RequestMutation struct {
 
 // DeploymentRequestRepository is the consumer-owned request persistence port.
 type DeploymentRequestRepository interface {
-	List(context.Context, authz.Scope) ([]deploydomain.DeploymentRequestSummary, error)
+	List(context.Context, authz.Scope, DeploymentRequestListFilter) ([]deploydomain.DeploymentRequestSummary, error)
 	Load(context.Context, uuid.UUID) (deploydomain.DeploymentRequestDetail, error)
 	SupersedeMetadata(context.Context, RequestMutation, MetadataVersionChange) (deploydomain.DeploymentRequestDetail, error)
 }
@@ -77,25 +77,37 @@ func NewDeploymentRequestService(repository DeploymentRequestRepository, schedul
 }
 
 // List returns requests only after scope authorization.
-func (s *DeploymentRequestService) List(ctx context.Context, principal RequestPrincipal, scope authz.Scope) ([]deploydomain.DeploymentRequestSummary, error) {
+func (s *DeploymentRequestService) List(ctx context.Context, principal RequestPrincipal, scope authz.Scope, query DeploymentRequestListQuery) (DeploymentRequestListPage, error) {
 	if err := s.authorize(ctx, principal, s.view, scope); err != nil {
-		return nil, err
+		return DeploymentRequestListPage{}, err
 	}
-	values, err := s.repository.List(ctx, scope)
+	filter, err := normalizeRequestListQuery(scope, query)
 	if err != nil {
-		return nil, err
+		return DeploymentRequestListPage{}, err
 	}
+	values, err := s.repository.List(ctx, scope, filter)
+	if err != nil {
+		return DeploymentRequestListPage{}, err
+	}
+	page, err := requestListPage(scope, filter, values)
+	if err != nil {
+		return DeploymentRequestListPage{}, err
+	}
+	return page, s.projectListSchedule(ctx, scope, page.Items)
+}
+
+func (s *DeploymentRequestService) projectListSchedule(ctx context.Context, scope authz.Scope, values []deploydomain.DeploymentRequestSummary) error {
 	policy, err := s.schedules.Get(ctx, scope.EnvironmentID)
 	if err != nil {
-		return nil, fmt.Errorf("load deployment request schedule: %w", err)
+		return fmt.Errorf("load deployment request schedule: %w", err)
 	}
 	now := s.clock.Now()
 	for index := range values {
 		if err := projectDeploymentRequestSchedule(&values[index], policy, now); err != nil {
-			return nil, err
+			return err
 		}
 	}
-	return values, nil
+	return nil
 }
 
 // Get returns a single request after resolving its persisted scope.

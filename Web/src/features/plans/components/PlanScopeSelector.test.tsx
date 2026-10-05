@@ -1,4 +1,5 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { ConfigProvider } from 'antd'
 import { I18nextProvider } from 'react-i18next'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -6,7 +7,8 @@ import type { CatalogOrganizationNode } from '@/generated/model'
 import i18n from '@/shared/i18n/config'
 
 import styles from './PlanScopeSelector.module.css'
-import { PlanScopeSelector, type PlanScopeChoice } from './PlanScopeSelector'
+import { PlanScopeSelector } from './PlanScopeSelector'
+import type { ResourceScopeValue } from '@/shared/scope'
 
 describe('PlanScopeSelector', () => {
   beforeEach(async () => {
@@ -21,26 +23,29 @@ describe('PlanScopeSelector', () => {
     })
   })
 
-  afterEach(cleanup)
+  afterEach(async () => {
+    await act(async () => cleanup())
+  })
 
   it('applies the shared width rule and disables Environment initially', () => {
     renderSelector()
 
-    const project = screen.getByLabelText('選擇 Project')
-    const environment = screen.getByLabelText('選擇 Environment')
+    const project = screen.getByLabelText('Project')
+    const environment = screen.getByLabelText('環境（選填）')
 
-    expect(project.closest('.ant-select')).toHaveClass(styles.scopeSelect)
-    expect(environment.closest('.ant-select')).toHaveClass(styles.scopeSelect)
+    expect(document.querySelector(`.${styles.scopeCard}`)).toBeInTheDocument()
+    expect(project).toBeEnabled()
     expect(environment).toBeDisabled()
   })
 
-  it('returns the existing organization and project selection contract', () => {
+  it('returns the existing organization and project selection contract', async () => {
     const onChange = vi.fn()
     renderSelector({ onChange })
 
-    fireEvent.mouseDown(screen.getByLabelText('選擇 Project'))
-    const option = screen.getByTitle('default / Payment platform')
-    expect(option).toHaveAttribute('title', 'default / Payment platform')
+    fireEvent.mouseDown(screen.getByLabelText('Project'))
+    const option = await screen.findByText('Payment platform', {
+      selector: '.ant-select-item-option-content',
+    })
     fireEvent.click(option)
 
     expect(onChange).toHaveBeenCalledWith({
@@ -49,7 +54,7 @@ describe('PlanScopeSelector', () => {
     })
   })
 
-  it('returns Environment without changing the selected parent scope', () => {
+  it('returns Environment without changing the selected parent scope', async () => {
     const onChange = vi.fn()
     renderSelector({
       scope: {
@@ -59,8 +64,12 @@ describe('PlanScopeSelector', () => {
       onChange,
     })
 
-    fireEvent.mouseDown(screen.getByLabelText('選擇 Environment'))
-    fireEvent.click(screen.getByTitle('Production'))
+    fireEvent.mouseDown(screen.getByLabelText('環境（選填）'))
+    fireEvent.click(
+      await screen.findByText('Production', {
+        selector: '.ant-select-item-option-content',
+      }),
+    )
 
     expect(onChange).toHaveBeenCalledWith({
       organizationId: 'organization-1',
@@ -68,26 +77,50 @@ describe('PlanScopeSelector', () => {
       environmentId: 'environment-1',
     })
   })
+
+  it('選擇組織但未選 Project 時仍回報過渡值，避免保留舊 scope', async () => {
+    const onChange = vi.fn()
+    const other = {
+      ...organizations[0],
+      id: 'organization-2',
+      name: '另一組織',
+      projects: [],
+    }
+    render(
+      <I18nextProvider i18n={i18n}>
+        <PlanScopeSelector
+          organizations={[...organizations, other]}
+          onChange={onChange}
+        />
+      </I18nextProvider>,
+    )
+    fireEvent.mouseDown(screen.getByLabelText('組織'))
+    fireEvent.click(
+      await screen.findByText('另一組織', {
+        selector: '.ant-select-item-option-content',
+      }),
+    )
+    expect(onChange).toHaveBeenCalledWith({ organizationId: 'organization-2' })
+    expect(screen.getByLabelText('Project')).toBeDisabled()
+  })
 })
 
 function renderSelector({
   scope,
   onChange = vi.fn(),
 }: {
-  scope?: {
-    organizationId: string
-    projectId: string
-    environmentId?: string
-  }
-  onChange?: (value: PlanScopeChoice) => void
+  scope?: ResourceScopeValue
+  onChange?: (value: ResourceScopeValue) => void
 } = {}) {
   return render(
     <I18nextProvider i18n={i18n}>
-      <PlanScopeSelector
-        organizations={organizations}
-        scope={scope}
-        onChange={onChange}
-      />
+      <ConfigProvider theme={{ token: { motion: false } }}>
+        <PlanScopeSelector
+          organizations={organizations}
+          scope={scope}
+          onChange={onChange}
+        />
+      </ConfigProvider>
     </I18nextProvider>,
   )
 }

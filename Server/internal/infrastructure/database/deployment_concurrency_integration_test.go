@@ -133,65 +133,27 @@ func TestWorkflowAppendRollsBackVersionAuditAndOutbox(t *testing.T) {
 }
 
 func TestWorkflowRuntimeConcurrentCommandsCreateOneBusinessResult(t *testing.T) {
-	ctx := context.Background()
-	db := workflowTestDatabase(t, ctx)
-	ids := seedDeploymentSchemaScope(t, db)
-	reviewerID := uuid.New()
-	execDeploymentSQL(t, db, `INSERT INTO users (id, username) VALUES (?, 'concurrent-reviewer')`, reviewerID)
-	workflowVersion := seedRuntimeWorkflow(t, ctx, db, reviewerID)
-	planVersionID := seedRuntimePlan(t, db, ids)
-	requestVersionID := seedRuntimeRequest(t, db, ids, workflowVersion.ID, planVersionID)
-	repository, _ := deployinfra.NewWorkflowRuntimeRepository(db)
-	service := runtimeService(t, repository)
-	if _, err := service.Start(ctx, deployapp.WorkflowStartInput{
-		RequestVersionID: requestVersionID, IdempotencyKey: "concurrent-runtime-start", RequestID: "concurrent-runtime",
-	}); err != nil {
-		t.Fatalf("start concurrent workflow runtime: %v", err)
+	fixture := workflowConcurrencyFixtureFor(t, runtimeIntegrationDocument)
+	if fixture.snapshot.CurrentReview == nil {
+		t.Fatal("concurrent review fixture has no review task")
 	}
-
-	snapshot, err := repository.Load(ctx, requestVersionID)
-	if err != nil || snapshot.CurrentReview == nil {
-		t.Fatalf("load concurrent workflow review: %#v %v", snapshot, err)
-	}
-	auditsBefore, outboxBefore := tableCount(t, db, "audit_logs"), tableCount(t, db, "outbox_events")
-	reviewBlocker := holdRowLock(t, db, "deployment_request_versions", requestVersionID)
+	auditsBefore, outboxBefore := tableCount(t, fixture.db, "audit_logs"), tableCount(t, fixture.db, "outbox_events")
+	reviewBlocker := holdRowLock(t, fixture.db, "deployment_request_versions", fixture.snapshot.RequestVersionID)
 	reviewErrors := runConcurrentErrors(t, 2, func(_ int) error {
-		_, decideErr := service.DecideReview(ctx, deployapp.WorkflowPrincipal{UserID: reviewerID}, deployapp.WorkflowReviewInput{
-			RequestVersionID: requestVersionID, ReviewTaskID: snapshot.CurrentReview.ID,
-			ExpectedLock: snapshot.Instance.LockVersion, Decision: deploydomain.ReviewDecisionApprove,
+		_, decideErr := fixture.service.DecideReview(t.Context(), fixture.principal, deployapp.WorkflowReviewInput{
+			RequestVersionID: fixture.snapshot.RequestVersionID, ReviewTaskID: fixture.snapshot.CurrentReview.ID,
+			ExpectedLock: fixture.snapshot.Instance.LockVersion, Decision: deploydomain.ReviewDecisionApprove,
 			IdempotencyKey: "concurrent-review", RequestID: "concurrent-runtime",
 		})
 		return decideErr
 	})
-	waitForBlockedQueries(t, db, "deployment_request_versions", 2)
+	waitForBlockedQueries(t, fixture.db, "deployment_request_versions", 2)
 	commitBlocker(t, reviewBlocker)
 	assertOneSuccessOneConflict(t, reviewErrors, deployapp.ErrWorkflowRuntimeConflict)
-	assertCountWhere(t, db, "deployment_review_decisions", "idempotency_key = ?", "concurrent-review", 1)
-	assertTableCountDelta(t, db, "audit_logs", auditsBefore, 1)
-	assertTableCountDelta(t, db, "outbox_events", outboxBefore, 1)
-
-	snapshot, err = repository.Load(ctx, requestVersionID)
-	if err != nil || snapshot.CurrentReview == nil {
-		t.Fatalf("reload concurrent workflow review: %#v %v", snapshot, err)
-	}
-	auditsBefore, outboxBefore = tableCount(t, db, "audit_logs"), tableCount(t, db, "outbox_events")
-	transitionBlocker := holdRowLock(t, db, "deployment_request_versions", requestVersionID)
-	transitionErrors := runConcurrentErrors(t, 2, func(_ int) error {
-		_, transitionErr := service.Transition(ctx, deployapp.WorkflowPrincipal{UserID: reviewerID}, deployapp.WorkflowTransitionInput{
-			RequestVersionID: requestVersionID, ExpectedLock: snapshot.Instance.LockVersion,
-			TransitionKey: "deploy", Trigger: deploydomain.WorkflowTriggerReviewSatisfied,
-			Facts:          map[deploydomain.WorkflowFact]string{deploydomain.WorkflowFactReviewStatus: "Approved"},
-			IdempotencyKey: "concurrent-transition", RequestID: "concurrent-runtime",
-		})
-		return transitionErr
-	})
-	waitForBlockedQueries(t, db, "deployment_request_versions", 2)
-	commitBlocker(t, transitionBlocker)
-	assertOneSuccessOneConflict(t, transitionErrors, deployapp.ErrWorkflowRuntimeConflict)
-	assertCountWhere(t, db, "deployment_workflow_transitions", "idempotency_key = ?", "concurrent-transition", 1)
-	assertCountWhere(t, db, "deployment_jobs", "idempotency_key = ?", "workflow-deployment:concurrent-transition", 1)
-	assertTableCountDelta(t, db, "audit_logs", auditsBefore, 1)
-	assertTableCountDelta(t, db, "outbox_events", outboxBefore, 1)
+	assertConcurrentReviewEffects(t, fixture, "concurrent-review")
+	assertConcurrentTransitionEffects(t, fixture, "concurrent-review")
+	assertTableCountDelta(t, fixture.db, "audit_logs", auditsBefore, 2)
+	assertTableCountDelta(t, fixture.db, "outbox_events", outboxBefore, 2)
 }
 
 func TestExecutionRetryConcurrentIdempotencyCreatesOneCommand(t *testing.T) {

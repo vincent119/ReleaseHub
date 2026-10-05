@@ -6044,6 +6044,11 @@ export type listDeploymentRequestsResponse200 = {
   status: 200
 }
 
+export type listDeploymentRequestsResponse400 = {
+  data: ErrorResponse
+  status: 400
+}
+
 export type listDeploymentRequestsResponse401 = {
   data: void
   status: 401
@@ -6057,7 +6062,7 @@ export type listDeploymentRequestsResponse404 = {
 export type listDeploymentRequestsResponseSuccess = (listDeploymentRequestsResponse200) & {
   headers: Headers;
 };
-export type listDeploymentRequestsResponseError = (listDeploymentRequestsResponse401 | listDeploymentRequestsResponse404) & {
+export type listDeploymentRequestsResponseError = (listDeploymentRequestsResponse400 | listDeploymentRequestsResponse401 | listDeploymentRequestsResponse404) & {
   headers: Headers;
 };
 
@@ -6110,7 +6115,7 @@ export const getListDeploymentRequestsQueryKey = (params?: ListDeploymentRequest
     }
 
 
-export const getListDeploymentRequestsQueryOptions = <TData = Awaited<ReturnType<typeof listDeploymentRequests>>, TError = void>(params: ListDeploymentRequestsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listDeploymentRequests>>, TError, TData>>, fetch?: RequestInit}
+export const getListDeploymentRequestsQueryOptions = <TData = Awaited<ReturnType<typeof listDeploymentRequests>>, TError = ErrorResponse | void>(params: ListDeploymentRequestsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listDeploymentRequests>>, TError, TData>>, fetch?: RequestInit}
 ) => {
 
 const {query: queryOptions, fetch: fetchOptions} = options ?? {};
@@ -6129,10 +6134,10 @@ const {query: queryOptions, fetch: fetchOptions} = options ?? {};
 }
 
 export type ListDeploymentRequestsQueryResult = NonNullable<Awaited<ReturnType<typeof listDeploymentRequests>>>
-export type ListDeploymentRequestsQueryError = void
+export type ListDeploymentRequestsQueryError = ErrorResponse | void
 
 
-export function useListDeploymentRequests<TData = Awaited<ReturnType<typeof listDeploymentRequests>>, TError = void>(
+export function useListDeploymentRequests<TData = Awaited<ReturnType<typeof listDeploymentRequests>>, TError = ErrorResponse | void>(
  params: ListDeploymentRequestsParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listDeploymentRequests>>, TError, TData>> & Pick<
         DefinedInitialDataOptions<
           Awaited<ReturnType<typeof listDeploymentRequests>>,
@@ -6142,7 +6147,7 @@ export function useListDeploymentRequests<TData = Awaited<ReturnType<typeof list
       >, fetch?: RequestInit}
  , queryClient?: QueryClient
   ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useListDeploymentRequests<TData = Awaited<ReturnType<typeof listDeploymentRequests>>, TError = void>(
+export function useListDeploymentRequests<TData = Awaited<ReturnType<typeof listDeploymentRequests>>, TError = ErrorResponse | void>(
  params: ListDeploymentRequestsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listDeploymentRequests>>, TError, TData>> & Pick<
         UndefinedInitialDataOptions<
           Awaited<ReturnType<typeof listDeploymentRequests>>,
@@ -6152,7 +6157,7 @@ export function useListDeploymentRequests<TData = Awaited<ReturnType<typeof list
       >, fetch?: RequestInit}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useListDeploymentRequests<TData = Awaited<ReturnType<typeof listDeploymentRequests>>, TError = void>(
+export function useListDeploymentRequests<TData = Awaited<ReturnType<typeof listDeploymentRequests>>, TError = ErrorResponse | void>(
  params: ListDeploymentRequestsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listDeploymentRequests>>, TError, TData>>, fetch?: RequestInit}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
@@ -6160,7 +6165,7 @@ export function useListDeploymentRequests<TData = Awaited<ReturnType<typeof list
  * @summary List Deployment Requests visible to the current user
  */
 
-export function useListDeploymentRequests<TData = Awaited<ReturnType<typeof listDeploymentRequests>>, TError = void>(
+export function useListDeploymentRequests<TData = Awaited<ReturnType<typeof listDeploymentRequests>>, TError = ErrorResponse | void>(
  params: ListDeploymentRequestsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listDeploymentRequests>>, TError, TData>>, fetch?: RequestInit}
  , queryClient?: QueryClient
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {

@@ -19,8 +19,14 @@ for (const theme of ['light', 'dark'] as const) {
     )
 
     await page.goto('/requests')
-    await page.getByLabel('Select Request scope').click()
-    await page.getByText('default / status-webhooks / production').click()
+    await page.getByRole('combobox', { name: 'Project', exact: true }).click()
+    await page
+      .getByRole('option', { name: 'status-webhooks', exact: true })
+      .click()
+    await page
+      .getByRole('combobox', { name: 'Environment (required)', exact: true })
+      .click()
+    await page.getByRole('option', { name: 'production', exact: true }).click()
     await expectThemedLink(
       page.getByRole('link', { name: 'status-webhooks' }),
       expectedColor,
@@ -110,7 +116,7 @@ async function preparePage(page: Page, theme: 'light' | 'dark') {
             updatedAt: '2026-09-21T08:00:00Z',
           },
         ],
-        meta: meta(),
+        meta: { ...meta(), hasMore: false },
       }),
     ),
   )

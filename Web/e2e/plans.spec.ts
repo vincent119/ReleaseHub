@@ -68,9 +68,11 @@ test('在 Environment scope 管理發布排程且保留 Server version', async (
   })
 
   await page.goto('/plans')
-  await page.getByLabel('選擇 Project').click()
-  await page.getByText('Organization A / Project A').click()
-  await page.getByLabel('選擇 Environment').click()
+  await page.getByRole('combobox', { name: 'Project', exact: true }).click()
+  await page.getByRole('option', { name: 'Project A', exact: true }).click()
+  await page
+    .getByRole('combobox', { name: '環境（選填）', exact: true })
+    .click()
   await page.getByText('production', { exact: true }).click()
 
   await expect(
@@ -135,8 +137,8 @@ test('建立 A/C 到 B 的 Plan 並綁定已發布版本', async ({ context, pag
   })
 
   await page.goto('/plans')
-  await page.getByLabel('選擇 Project').click()
-  await page.getByText('Organization A / Project A').click()
+  await page.getByRole('combobox', { name: 'Project', exact: true }).click()
+  await page.getByRole('option', { name: 'Project A', exact: true }).click()
   await page.getByRole('button', { name: '建立 Plan' }).click()
   await page.getByRole('button', { name: '新增 Application' }).click()
   await page.getByRole('button', { name: '新增 Application' }).click()
@@ -160,7 +162,9 @@ test('建立 A/C 到 B 的 Plan 並綁定已發布版本', async ({ context, pag
     },
   ])
   await page.getByRole('button', { name: '發布版本' }).click()
-  await page.getByLabel('選擇 Environment').click()
+  await page
+    .getByRole('combobox', { name: '環境（選填）', exact: true })
+    .click()
   await page.getByText('production', { exact: true }).click()
   await page.getByLabel('Release Workflow Version').click()
   await page.getByText('Production approval · v1').click()
@@ -207,8 +211,8 @@ test('建立 Plan 名稱衝突時顯示具體通知並保留編輯內容', async
   )
 
   await page.goto('/plans')
-  await page.getByLabel('選擇 Project').click()
-  await page.getByText('Organization A / Project A').click()
+  await page.getByRole('combobox', { name: 'Project', exact: true }).click()
+  await page.getByRole('option', { name: 'Project A', exact: true }).click()
   await page.getByRole('button', { name: '建立 Plan' }).click()
   await page.getByRole('button', { name: '儲存 Plan' }).click()
 
@@ -242,8 +246,8 @@ for (const theme of ['light', 'dark'] as const) {
     )
 
     await page.goto('/plans')
-    await page.getByLabel('選擇 Project').click()
-    await page.getByText('Organization A / Project A').click()
+    await page.getByRole('combobox', { name: 'Project', exact: true }).click()
+    await page.getByRole('option', { name: 'Project A', exact: true }).click()
     await page.getByRole('button', { name: '建立 Plan' }).click()
     await page.getByRole('button', { name: '新增 Application' }).click()
     await page.getByRole('button', { name: '新增 Application' }).click()
@@ -333,8 +337,8 @@ test('Workflow 與 Plan 詳細頁使用一致的工作區與 Graph frame', async
   )
 
   await page.goto('/plans')
-  await page.getByLabel('選擇 Project').click()
-  await page.getByText('Organization A / Project A').click()
+  await page.getByRole('combobox', { name: 'Project', exact: true }).click()
+  await page.getByRole('option', { name: 'Project A', exact: true }).click()
   await expect(page.getByLabel('Deployment Plan 圖形編輯區')).toBeVisible()
   const planFrame = await graphFrameMetrics(page, 'Deployment Plan 結構工具列')
   const planSelection = await selectedListItemMetrics(page)
@@ -450,8 +454,8 @@ for (const theme of ['light', 'dark'] as const) {
     )
 
     await page.goto('/plans')
-    await page.getByLabel('選擇 Project').click()
-    await page.getByText('Organization A / Project A').click()
+    await page.getByRole('combobox', { name: 'Project', exact: true }).click()
+    await page.getByRole('option', { name: 'Project A', exact: true }).click()
 
     const nodes = page
       .getByLabel('Deployment Plan 圖形編輯區')
