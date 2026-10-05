@@ -165,13 +165,17 @@ func newDeploymentExecutor(dependencies workerDependencies, preflight *deployapp
 	if err != nil {
 		return nil, nil, err
 	}
+	executor, err := deployapp.NewDeploymentExecutor(deploymentExecutorOptions(dependencies, preflight, repository, locks))
+	return executor, queue, err
+}
+
+func deploymentExecutorOptions(dependencies workerDependencies, preflight *deployapp.PreflightService, repository *deployinfra.ExecutionRepository, locks *deployinfra.ApplicationLocks) deployapp.DeploymentExecutorOptions {
 	cfg := dependencies.cfg.Worker
-	executor, err := deployapp.NewDeploymentExecutor(deployapp.DeploymentExecutorOptions{
+	return deployapp.DeploymentExecutorOptions{
 		Repository: repository, Preflight: preflight, Argo: dependencies.resources.argoClient,
 		Locks: locks, MaxParallel: cfg.MaxParallelDeployments, LockTTL: cfg.ApplicationLockDuration,
 		WatchTimeout: cfg.DeploymentPollInterval,
-	})
-	return executor, queue, err
+	}
 }
 
 func newApplicationReconciler(dependencies workerDependencies) (*argoapp.Reconciler, error) {

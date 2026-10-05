@@ -35,9 +35,12 @@ func NewDeploymentRequestRepository(db *gorm.DB) (*DeploymentRequestRepository, 
 }
 
 // List returns current request summaries in one persisted Environment scope.
-func (r *DeploymentRequestRepository) List(ctx context.Context, scope authz.Scope) ([]deploydomain.DeploymentRequestSummary, error) {
+func (r *DeploymentRequestRepository) List(ctx context.Context, scope authz.Scope, filter deployapp.DeploymentRequestListFilter) ([]deploydomain.DeploymentRequestSummary, error) {
+	if filter.Limit < 1 || filter.Limit > 100 {
+		return nil, deployapp.ErrRequestQueryInvalid
+	}
 	var models []requestSummaryModel
-	err := r.db.WithContext(ctx).Raw(requestSummaryQuery, scope.OrganizationID, scope.ProjectID, scope.EnvironmentID).Scan(&models).Error
+	err := r.db.WithContext(ctx).Raw(requestSummaryQuery, requestListArguments(scope, filter)...).Scan(&models).Error
 	if err != nil {
 		return nil, fmt.Errorf("list deployment requests: %w", err)
 	}
@@ -239,7 +242,11 @@ JOIN LATERAL (
   WHERE request_id = request.id ORDER BY version_number DESC LIMIT 1
 ) version ON true
 WHERE request.organization_id = ? AND request.project_id = ? AND request.environment_id = ?
-ORDER BY request.updated_at DESC`
+  AND (? = '' OR version.title ILIKE ? ESCAPE '\')
+  AND (? = '' OR version.status = ?)
+  AND (?::timestamptz IS NULL OR (request.updated_at, request.id) < (?, ?))
+ORDER BY request.updated_at DESC, request.id DESC
+LIMIT ?`
 
 type requestSummaryModel struct {
 	ID               uuid.UUID

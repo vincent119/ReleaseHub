@@ -12,6 +12,7 @@ import (
 
 	authz "github.com/vincent119/ReleaseHub/Server/internal/authorization/domain"
 	"github.com/vincent119/ReleaseHub/Server/internal/config"
+	deployapp "github.com/vincent119/ReleaseHub/Server/internal/deployment/application"
 	deployinfra "github.com/vincent119/ReleaseHub/Server/internal/deployment/infrastructure"
 	"github.com/vincent119/ReleaseHub/Server/internal/infrastructure/database"
 	"github.com/vincent119/ReleaseHub/Server/migrations"
@@ -39,7 +40,7 @@ func TestDeploymentRequestRepositoryListsLatestVersionSummary(t *testing.T) {
 		t.Fatalf("create environment scope: %v", err)
 	}
 
-	empty, err := repository.List(ctx, scope)
+	empty, err := repository.List(ctx, scope, deployapp.DeploymentRequestListFilter{Limit: 20})
 	if err != nil || len(empty) != 0 {
 		t.Fatalf("list empty deployment request scope: %#v %v", empty, err)
 	}
@@ -48,7 +49,7 @@ func TestDeploymentRequestRepositoryListsLatestVersionSummary(t *testing.T) {
 	secondVersionID := seedSecondDeploymentRequestVersion(t, db, firstVersionID)
 	cloneDeploymentRequestApplication(t, db, firstVersionID, secondVersionID)
 
-	values, err := repository.List(ctx, scope)
+	values, err := repository.List(ctx, scope, deployapp.DeploymentRequestListFilter{Limit: 20})
 	if err != nil {
 		t.Fatalf("list deployment requests: %v", err)
 	}

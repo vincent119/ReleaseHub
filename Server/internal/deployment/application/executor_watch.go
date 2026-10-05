@@ -46,7 +46,7 @@ func (e *DeploymentExecutor) evaluateObservation(ctx context.Context, execution 
 	}
 	revisionAccepted, err := e.acceptRevision(ctx, execution, application, timing)
 	if err != nil {
-		return true, e.failNodeWithObservation(ctx, execution, application, "target_revision_mismatch", err)
+		return true, e.failRevisionMismatch(ctx, execution, application, err)
 	}
 	timing.stableSince = conditionStableSince(execution.target.Node, application, timing.stableSince, timing.now)
 	condition := nodeConditionResult(execution.target.Node, application, *timing)
@@ -161,19 +161,32 @@ func (e *DeploymentExecutor) saveNode(ctx context.Context, execution nodeExecuti
 }
 
 func (e *DeploymentExecutor) failNode(ctx context.Context, execution nodeExecution, code string, cause error) error {
-	return e.failNodeWithObservation(ctx, execution, argodomain.Application{}, code, cause)
+	return e.failNodeWithObservation(ctx, execution, nodeFailureDetails{code: code, cause: cause})
 }
 
-func (e *DeploymentExecutor) failNodeWithObservation(ctx context.Context, execution nodeExecution, application argodomain.Application, code string, cause error) error {
+type nodeFailureDetails struct {
+	application argodomain.Application
+	code        string
+	cause       error
+}
+
+func (e *DeploymentExecutor) failRevisionMismatch(ctx context.Context, execution nodeExecution, application argodomain.Application, cause error) error {
+	return e.failNodeWithObservation(ctx, execution, nodeFailureDetails{
+		application: application, code: "target_revision_mismatch", cause: cause,
+	})
+}
+
+func (e *DeploymentExecutor) failNodeWithObservation(ctx context.Context, execution nodeExecution, failure nodeFailureDetails) error {
+	application := failure.application
 	if err := e.repository.UpdateNode(ctx, ExecutionNodeUpdate{
 		ExecutionID: execution.executionID, ApplicationID: execution.target.Preflight.Snapshot.ApplicationID,
 		Status: "Failed", OperationID: execution.operationID, SyncStatus: application.SyncStatus,
-		HealthStatus: application.HealthStatus, ActualRevision: application.ResolvedRevision, ErrorCode: code,
-		ErrorMessage: cause.Error(), UpdatedAt: e.now().UTC(),
+		HealthStatus: application.HealthStatus, ActualRevision: application.ResolvedRevision, ErrorCode: failure.code,
+		ErrorMessage: failure.cause.Error(), UpdatedAt: e.now().UTC(),
 	}); err != nil {
 		return fmt.Errorf("persist failed deployment node %s: %w", execution.target.Node.Key, err)
 	}
-	return nodeFailure{cause: fmt.Errorf("execute deployment node %s: %w", execution.target.Node.Key, cause)}
+	return nodeFailure{cause: fmt.Errorf("execute deployment node %s: %w", execution.target.Node.Key, failure.cause)}
 }
 
 func nodeConditionResult(node deploydomain.DeploymentPlanNode, application argodomain.Application, timing conditionTiming) deploydomain.DeploymentConditionResult {

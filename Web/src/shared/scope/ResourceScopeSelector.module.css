@@ -1,0 +1,81 @@
+.selector {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--rh-space-4);
+  min-width: 0;
+  width: 100%;
+}
+
+.field {
+  flex: 1 1 16rem;
+  min-width: 0;
+  max-width: 24rem;
+}
+
+.label {
+  display: block;
+  margin-bottom: var(--rh-space-2);
+  color: var(--rh-color-text-primary);
+  font-weight: 600;
+}
+
+.control {
+  display: flex;
+  gap: var(--rh-space-1);
+  align-items: center;
+  min-width: 0;
+}
+
+.select {
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+}
+
+.nameSlot {
+  /* 預留提示空間，避免選取與清除時讓 popup 追蹤不同寬度。 */
+  flex: 0 0 44px;
+  width: 44px;
+  height: 44px;
+}
+
+.nameButton {
+  width: 44px;
+  height: 44px;
+  color: var(--rh-color-text-secondary);
+}
+
+.nameButton:focus-visible {
+  outline: 2px solid var(--rh-color-focus);
+  outline-offset: 2px;
+}
+
+.hint {
+  display: block;
+  margin-top: var(--rh-space-2);
+  color: var(--rh-color-text-secondary);
+}
+
+.popup {
+  max-width: calc(100vw - 32px);
+}
+
+.popup :global(.ant-select-item-option-content) {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.fullName {
+  display: block;
+  max-width: min(32rem, calc(100vw - 64px));
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 575px) {
+  .field {
+    flex-basis: 100%;
+    max-width: none;
+  }
+}

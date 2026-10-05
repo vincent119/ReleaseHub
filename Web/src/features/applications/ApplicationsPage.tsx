@@ -10,6 +10,7 @@ import {
   Typography,
 } from 'antd'
 import type { TableProps } from 'antd'
+import { useState } from 'react'
 import { Link, useParams } from 'react-router'
 import { useTranslation } from 'react-i18next'
 
@@ -18,18 +19,66 @@ import {
   useDryRunApplicationOnboarding,
   useGetCatalogApplication,
   useGetCatalogApplicationStatus,
+  useGetCatalogResourceTree,
   useListVisibleCatalogApplications,
 } from '@/generated/api'
 import type { CatalogApplication } from '@/generated/model'
 import { RuntimeTopologyPanel } from '@/features/runtime'
 import { useFeedback } from '@/shared/feedback/useFeedback'
 import { ThemedLink } from '@/shared/link'
+import {
+  ResourceScopeSelector,
+  resolveResourceScope,
+  type ResourceScopeValue,
+} from '@/shared/scope'
 
 import styles from './ApplicationsPage.module.css'
 
 export function ApplicationsPage() {
   const { t } = useTranslation()
   const applications = useListVisibleCatalogApplications()
+  const resources = useGetCatalogResourceTree()
+  const [choice, setChoice] = useState<ResourceScopeValue>()
+  const [scopeInvalidated, setScopeInvalidated] = useState(false)
+  const organizations =
+    resources.data?.status === 200 ? resources.data.data.data : []
+  const catalogAvailable =
+    !resources.isPending && !resources.isError && resources.data?.status === 200
+  const catalogFailed =
+    resources.isError ||
+    Boolean(resources.data && resources.data.status !== 200)
+  const resolved = resolveResourceScope(organizations, choice).value
+  // 只有成功的 Catalog 能確認範圍失效，暫時失敗不應擴大目前篩選。
+  if (
+    catalogAvailable &&
+    choice &&
+    ((choice.organizationId !== undefined &&
+      choice.organizationId !== resolved.organizationId) ||
+      (choice.projectId !== undefined &&
+        choice.projectId !== resolved.projectId) ||
+      (choice.environmentId !== undefined &&
+        choice.environmentId !== resolved.environmentId))
+  ) {
+    setChoice(undefined)
+    setScopeInvalidated(true)
+  }
+  const hasFilter = Boolean(
+    choice?.organizationId || choice?.projectId || choice?.environmentId,
+  )
+  // 單組織控制項的預設 ID 不代表使用者已要求篩選，也不能以 tree 取代授權清單。
+  const visibleApplications =
+    applications.data?.status === 200 ? applications.data.data.data : []
+  const filteredApplications = visibleApplications.filter(
+    (application) =>
+      (!choice?.organizationId ||
+        application.organizationId === choice.organizationId) &&
+      (!choice?.projectId || application.projectId === choice.projectId) &&
+      (!choice?.environmentId ||
+        application.environmentId === choice.environmentId),
+  )
+  const applicationsFailed =
+    applications.isError ||
+    Boolean(applications.data && applications.data.status !== 200)
   const columns: TableProps<CatalogApplication>['columns'] = [
     {
       title: t('applications.columns.name'),
@@ -60,17 +109,6 @@ export function ApplicationsPage() {
     },
   ]
 
-  if (applications.isError || applications.data?.status !== 200) {
-    return (
-      <Alert
-        type="error"
-        showIcon
-        title={t('applications.error.title')}
-        description={t('applications.error.description')}
-      />
-    )
-  }
-
   return (
     <Space orientation="vertical" size="large" className={styles.pageSection}>
       <div>
@@ -79,18 +117,96 @@ export function ApplicationsPage() {
           {t('applications.description')}
         </Typography.Paragraph>
       </div>
-      <Card>
-        <Table<CatalogApplication>
-          rowKey="id"
-          columns={columns}
-          dataSource={
-            applications.data?.status === 200 ? applications.data.data.data : []
-          }
-          loading={applications.isPending}
-          pagination={false}
-          locale={{ emptyText: t('applications.empty') }}
+      <section
+        className={styles.filters}
+        aria-label={t('applications.scope.label')}
+      >
+        <ResourceScopeSelector
+          organizations={organizations}
+          value={choice}
+          environmentMode="optional"
+          loading={resources.isPending}
+          disabled={!catalogAvailable}
+          onChange={(value) => {
+            setChoice(value)
+            setScopeInvalidated(false)
+          }}
         />
-      </Card>
+        <div className={styles.filterActions}>
+          <Typography.Text type="secondary">
+            {t('applications.scope.hint')}
+          </Typography.Text>
+          <Button
+            className={styles.filterAction}
+            disabled={!hasFilter}
+            onClick={() => {
+              setChoice(undefined)
+              setScopeInvalidated(false)
+            }}
+          >
+            {t('applications.scope.clear')}
+          </Button>
+        </div>
+      </section>
+      {catalogFailed && (
+        <Alert
+          type="warning"
+          showIcon
+          title={t('applications.scope.unavailable')}
+          description={
+            !applicationsFailed && !applications.isPending
+              ? t(
+                  hasFilter
+                    ? 'applications.scope.retained'
+                    : 'applications.scope.listAvailable',
+                )
+              : undefined
+          }
+          action={
+            <Button
+              className={styles.filterAction}
+              loading={resources.isFetching}
+              onClick={() => void resources.refetch()}
+            >
+              {t('applications.scope.retry')}
+            </Button>
+          }
+        />
+      )}
+      {scopeInvalidated && (
+        <Alert
+          type="warning"
+          showIcon
+          title={t('applications.scope.invalidated')}
+        />
+      )}
+      {applicationsFailed ? (
+        <Alert
+          type="error"
+          showIcon
+          title={t('applications.error.title')}
+          description={t('applications.error.description')}
+        />
+      ) : (
+        <Card>
+          <Table<CatalogApplication>
+            rowKey="id"
+            columns={columns}
+            dataSource={filteredApplications}
+            loading={applications.isPending}
+            pagination={false}
+            locale={{
+              emptyText: t(
+                applications.isPending
+                  ? 'applications.loading'
+                  : hasFilter && visibleApplications.length > 0
+                    ? 'applications.scope.empty'
+                    : 'applications.empty',
+              ),
+            }}
+          />
+        </Card>
+      )}
     </Space>
   )
 }

@@ -2,6 +2,7 @@ package httpserver_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -15,7 +16,38 @@ import (
 	auditapp "github.com/vincent119/ReleaseHub/Server/internal/audit/application"
 	auditdomain "github.com/vincent119/ReleaseHub/Server/internal/audit/domain"
 	authz "github.com/vincent119/ReleaseHub/Server/internal/authorization/domain"
+	contract "github.com/vincent119/ReleaseHub/Server/internal/transport/openapi"
 )
+
+func TestAuditFilterOptionsPreserveOrderLabelsAndEmptyArrays(t *testing.T) {
+	tests := []struct {
+		name    string
+		options []auditapp.FilterOption
+	}{
+		{name: "nil"},
+		{name: "empty", options: []auditapp.FilterOption{}},
+		{name: "ordered", options: []auditapp.FilterOption{{Value: "b", Label: "Second"}, {Value: "a", Label: "First"}}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			options := testAPIOptions(&fakeAuthFlow{})
+			options.Audit.Queries = &fakeAuditQueryService{scope: authz.NewPlatformScope(), options: test.options}
+			response := auditRequest(t, newTestHTTPRouter(t, options), "/api/v1/audit/filter-options?scopeKind=platform&field=action")
+			var body contract.AuditFilterOptionListResponse
+			if response.Code != http.StatusOK || json.Unmarshal(response.Body.Bytes(), &body) != nil || body.Data == nil {
+				t.Fatalf("filter options response = %d %s", response.Code, response.Body.String())
+			}
+			if len(body.Data) != len(test.options) {
+				t.Fatalf("filter options = %d, want %d", len(body.Data), len(test.options))
+			}
+			for index, option := range body.Data {
+				if option.Value != test.options[index].Value || option.Label != test.options[index].Label {
+					t.Fatalf("filter option %d changed: %#v", index, option)
+				}
+			}
+		})
+	}
+}
 
 func TestAuditRoutesUseInjectedServiceAndOmitListMetadata(t *testing.T) {
 	organizationID, projectID := uuid.New(), uuid.New()

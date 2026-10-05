@@ -10,7 +10,13 @@ import { App as AntdApp } from 'antd'
 import { I18nextProvider } from 'react-i18next'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { DeploymentPlanDocument } from '@/generated/model'
+import type {
+  CatalogOrganizationNode,
+  DeploymentPlan,
+  DeploymentPlanDocument,
+  DeploymentPlanVersion,
+} from '@/generated/model'
+import type { ResourceScopeValue } from '@/shared/scope'
 import i18n from '@/shared/i18n/config'
 
 import { PlansPage } from './PlansPage'
@@ -47,48 +53,132 @@ vi.mock('./components/PlanScopeSelector', () => ({
   PlanScopeSelector: ({
     onChange,
   }: {
-    onChange: (value: { organizationId: string; projectId: string }) => void
+    onChange: (value: ResourceScopeValue) => void
   }) => (
-    <button
-      type="button"
-      onClick={() =>
-        onChange({ organizationId: 'organization-1', projectId: 'project-1' })
-      }
-    >
-      選擇測試 Project
-    </button>
+    <>
+      <button
+        type="button"
+        onClick={() =>
+          onChange({ organizationId: 'organization-1', projectId: 'project-1' })
+        }
+      >
+        選擇測試 Project
+      </button>
+      <button
+        type="button"
+        onClick={() =>
+          onChange({ organizationId: 'organization-1', projectId: 'project-2' })
+        }
+      >
+        切換測試 Project
+      </button>
+      <button
+        type="button"
+        onClick={() => onChange({ organizationId: 'organization-1' })}
+      >
+        清除測試 Project
+      </button>
+      <button
+        type="button"
+        onClick={() =>
+          onChange({
+            organizationId: 'organization-1',
+            projectId: 'project-1',
+            environmentId: 'global-1',
+          })
+        }
+      >
+        選擇測試 Global
+      </button>
+    </>
   ),
 }))
 
 vi.mock('./components/PlanList', () => ({
-  PlanList: () => <div>Plan 清單測試</div>,
+  PlanList: ({
+    plans,
+    selected,
+    loading,
+    onSelect,
+  }: {
+    plans: DeploymentPlan[]
+    selected?: string
+    loading: boolean
+    onSelect: (id: string) => void
+  }) => (
+    <div
+      data-testid="plan-list"
+      data-selected={selected}
+      data-loading={loading}
+    >
+      Plan 清單測試
+      {plans.map((plan) => (
+        <button key={plan.id} type="button" onClick={() => onSelect(plan.id)}>
+          {plan.name}
+        </button>
+      ))}
+    </div>
+  ),
 }))
 
 vi.mock('./components/PlanDetail', () => ({
   PlanDetail: ({
     onNewVersion,
     onLifecycle,
+    plan,
+    version,
+    versionID,
+    onVersion,
   }: {
     onNewVersion: () => void
     onLifecycle: (lifecycle: 'Published') => void
+    plan?: DeploymentPlan
+    version?: DeploymentPlanVersion
+    versionID?: string
+    onVersion: (id: string) => void
   }) => (
-    <>
+    <section
+      data-testid="plan-detail"
+      data-plan={plan?.id}
+      data-version={version?.id}
+      data-selected-version={versionID}
+    >
       <button type="button" onClick={onNewVersion}>
         建立測試版本
       </button>
       <button type="button" onClick={() => onLifecycle('Published')}>
         發布測試版本
       </button>
-    </>
+      <button type="button" onClick={() => onVersion('version-1')}>
+        選擇測試舊版本
+      </button>
+    </section>
   ),
 }))
 
 vi.mock('./components/DeploymentBindingPanel', () => ({
-  DeploymentBindingPanel: () => null,
+  DeploymentBindingPanel: ({
+    organizationId,
+    projectId,
+    environmentId,
+  }: {
+    organizationId: string
+    projectId: string
+    environmentId: string
+  }) => (
+    <div
+      data-testid="binding"
+      data-organization={organizationId}
+      data-project={projectId}
+      data-environment={environmentId}
+    />
+  ),
 }))
 
 vi.mock('./components/DeploymentSchedulePanel', () => ({
-  DeploymentSchedulePanel: () => null,
+  DeploymentSchedulePanel: ({ environmentId }: { environmentId: string }) => (
+    <div data-testid="schedule" data-environment={environmentId} />
+  ),
 }))
 
 vi.mock('./components/PlanEditorWorkspace', () => ({
@@ -139,13 +229,16 @@ describe('PlansPage editor mode', () => {
     api.createVersion.mockReset()
     api.lifecycle.mockReset()
     api.refetch.mockReset()
+    api.usePlans.mockReset()
+    api.useResources.mockReset()
     feedback.error.mockReset()
     feedback.success.mockReset()
     queryClient.clear()
     document.cookie = 'releasehub_csrf=csrf-token; path=/'
     api.useResources.mockReturnValue({
+      isPending: false,
       isError: false,
-      data: { status: 200, data: { data: [] } },
+      data: { status: 200, data: { data: organizations } },
     })
     api.useWorkflows.mockReturnValue({
       isError: false,
@@ -335,17 +428,149 @@ describe('PlansPage editor mode', () => {
     )
     expect(screen.getByRole('button', { name: /建立 Plan/ })).toBeDisabled()
   })
+
+  it('Project 足以查詢，Global 只作 binding／schedule context', () => {
+    renderPage()
+    expect(api.usePlans.mock.lastCall).toEqual([
+      { projectId: '00000000-0000-0000-0000-000000000000' },
+      { query: { enabled: false } },
+    ])
+    selectScope()
+    expect(api.usePlans.mock.lastCall).toEqual([
+      { projectId: 'project-1' },
+      { query: { enabled: true } },
+    ])
+    expect(screen.queryByTestId('binding')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: '選擇測試 Global' }))
+    expect(api.usePlans.mock.lastCall?.[0]).toEqual({ projectId: 'project-1' })
+    expect(screen.getByTestId('binding')).toHaveAttribute(
+      'data-environment',
+      'global-1',
+    )
+    expect(screen.getByTestId('schedule')).toHaveAttribute(
+      'data-environment',
+      'global-1',
+    )
+    fireEvent.click(screen.getByRole('button', { name: '切換測試 Project' }))
+    expect(screen.queryByTestId('binding')).toBeNull()
+    expect(screen.queryByTestId('schedule')).toBeNull()
+  })
+
+  it('新 Project 載入時隔離舊 Plan、版本與環境，禁止依舊結果建立', () => {
+    renderPage()
+    selectScope()
+    fireEvent.click(screen.getByRole('button', { name: '選擇測試 Global' }))
+    expect(screen.getByTestId('plan-detail')).toHaveAttribute(
+      'data-plan',
+      'plan-1',
+    )
+    api.usePlans.mockReturnValue({
+      isPending: true,
+      isError: false,
+      data: { status: 200, data: { data: [deploymentPlan] } },
+      refetch: api.refetch,
+    })
+    fireEvent.click(screen.getByRole('button', { name: '切換測試 Project' }))
+    expect(api.usePlans.mock.lastCall?.[0]).toEqual({ projectId: 'project-2' })
+    expect(screen.getByTestId('plan-list')).toHaveAttribute(
+      'data-loading',
+      'true',
+    )
+    expect(screen.queryByRole('button', { name: 'Production plan' })).toBeNull()
+    expect(screen.getByTestId('plan-detail')).not.toHaveAttribute('data-plan')
+    expect(screen.getByTestId('plan-detail')).not.toHaveAttribute(
+      'data-version',
+    )
+    expect(screen.getByRole('button', { name: /建立 Plan/ })).toBeDisabled()
+    expect(screen.queryByTestId('binding')).toBeNull()
+  })
+
+  it('即使兩個 Project 皆可見共用 Plan，切換時也清除舊 Plan／version 選取', () => {
+    const shared = {
+      ...deploymentPlan,
+      ownerKind: 'platform',
+      ownerProjectId: undefined,
+      versions: [
+        ...deploymentPlan.versions,
+        { ...deploymentPlan.versions[0], id: 'version-2', versionNumber: 2 },
+      ],
+    }
+    api.usePlans.mockReturnValue({
+      isPending: false,
+      isError: false,
+      data: { status: 200, data: { data: [shared] } },
+      refetch: api.refetch,
+    })
+    renderPage()
+    selectScope()
+    fireEvent.click(screen.getByRole('button', { name: 'Production plan' }))
+    fireEvent.click(screen.getByRole('button', { name: '選擇測試舊版本' }))
+    expect(screen.getByTestId('plan-detail')).toHaveAttribute(
+      'data-version',
+      'version-1',
+    )
+    fireEvent.click(screen.getByRole('button', { name: '切換測試 Project' }))
+    expect(screen.getByTestId('plan-detail')).toHaveAttribute(
+      'data-version',
+      'version-2',
+    )
+    expect(screen.getByTestId('plan-detail')).not.toHaveAttribute(
+      'data-selected-version',
+    )
+    fireEvent.click(screen.getByRole('button', { name: '清除測試 Project' }))
+    expect(screen.queryByTestId('plan-detail')).toBeNull()
+    expect(api.usePlans.mock.lastCall?.[1]).toEqual({
+      query: { enabled: false },
+    })
+  })
+
+  it('Catalog 移除 Project 後清除選取並停用查詢與 mutation 入口', () => {
+    const page = renderPage()
+    selectScope()
+    api.useResources.mockReturnValue({
+      isPending: false,
+      isError: false,
+      data: { status: 200, data: { data: [] } },
+    })
+    page.rerender(pageElement())
+    expect(api.usePlans.mock.lastCall?.[1]).toEqual({
+      query: { enabled: false },
+    })
+    expect(screen.queryByTestId('plan-detail')).toBeNull()
+    expect(screen.getByRole('button', { name: /建立 Plan/ })).toBeDisabled()
+    expect(
+      screen.getByText(i18n.t('plans.scope.invalidated')),
+    ).toBeInTheDocument()
+  })
+
+  it('Catalog 或 Workflow 的 HTTP 錯誤不呈現為空資料', () => {
+    api.useResources.mockReturnValue({
+      isPending: false,
+      isError: false,
+      data: { status: 500 },
+    })
+    renderPage()
+    expect(screen.getByText(i18n.t('plans.unavailable'))).toBeInTheDocument()
+    expect(screen.queryByText(i18n.t('plans.scope.select'))).toBeNull()
+    expect(api.usePlans.mock.lastCall?.[1]).toEqual({
+      query: { enabled: false },
+    })
+  })
 })
 
 function renderPage(queryClient = new QueryClient()) {
-  return render(
+  return render(pageElement(queryClient))
+}
+
+function pageElement(queryClient = new QueryClient()) {
+  return (
     <QueryClientProvider client={queryClient}>
       <AntdApp>
         <I18nextProvider i18n={i18n}>
           <PlansPage />
         </I18nextProvider>
       </AntdApp>
-    </QueryClientProvider>,
+    </QueryClientProvider>
   )
 }
 
@@ -388,3 +613,36 @@ const deploymentPlan = {
     },
   ],
 }
+
+const organizations: CatalogOrganizationNode[] = [
+  {
+    id: 'organization-1',
+    name: '測試組織',
+    version: 1,
+    isDefault: true,
+    canRename: false,
+    canDelete: false,
+    canCreateProject: false,
+    projects: [
+      {
+        id: 'project-1',
+        name: 'Project A',
+        canManage: false,
+        environments: [
+          {
+            id: 'global-1',
+            name: 'Global',
+            type: 'Production',
+            applications: [],
+          },
+        ],
+      },
+      {
+        id: 'project-2',
+        name: 'Project B',
+        canManage: false,
+        environments: [],
+      },
+    ],
+  },
+]

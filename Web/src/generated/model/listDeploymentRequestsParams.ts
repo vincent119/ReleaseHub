@@ -5,22 +5,31 @@
  * Shared HTTP API contract for the ReleaseHub frontend and backend.
  * OpenAPI spec version: 1.0.0
  */
-import type { CursorParameter } from './cursorParameter';
+import type { DeploymentRequestStatus } from './deploymentRequestStatus';
 import type { EnvironmentIdParameter } from './environmentIdParameter';
-import type { LimitParameter } from './limitParameter';
 import type { OrganizationIdParameter } from './organizationIdParameter';
 import type { ProjectIdParameter } from './projectIdParameter';
 
 export type ListDeploymentRequestsParams = {
 /**
+ * Server 產生的游標，綁定 scope、search、status、limit 與排序；條件改變須從第一頁開始。
  * @minLength 1
+ * @maxLength 1024
  */
-cursor?: CursorParameter;
+cursor?: string;
 /**
  * @minimum 1
  * @maximum 100
  */
-limit?: LimitParameter;
+limit?: number;
+/**
+ * 最新 Request Version 名稱的包含搜尋，trim 後最多 255 個 Unicode 字元；不分大小寫，SQL wildcard 作一般文字。
+ */
+search?: string;
+/**
+ * 篩選最新 Request Version 的單一狀態；省略代表全部。
+ */
+status?: DeploymentRequestStatus;
 organizationId: OrganizationIdParameter;
 projectId: ProjectIdParameter;
 environmentId: EnvironmentIdParameter;

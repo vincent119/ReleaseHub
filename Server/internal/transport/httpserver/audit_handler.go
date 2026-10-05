@@ -84,11 +84,15 @@ func (h *auditHandler) ListAuditFilterOptions(c *gin.Context, params contract.Li
 	if !respondAuditError(c, err) {
 		return
 	}
+	c.JSON(http.StatusOK, contract.AuditFilterOptionListResponse{Data: auditFilterOptions(options), Meta: responseMeta(c)})
+}
+
+func auditFilterOptions(options []auditapp.FilterOption) []contract.AuditFilterOption {
 	response := make([]contract.AuditFilterOption, 0, len(options))
 	for _, option := range options {
 		response = append(response, contract.AuditFilterOption{Value: option.Value, Label: option.Label})
 	}
-	c.JSON(http.StatusOK, contract.AuditFilterOptionListResponse{Data: response, Meta: responseMeta(c)})
+	return response
 }
 
 // GetAuditEvent returns one authorized Audit Trail detail with safe metadata.
