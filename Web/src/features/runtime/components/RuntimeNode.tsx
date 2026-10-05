@@ -7,43 +7,49 @@ import {
   DeploymentUnitOutlined,
   SafetyCertificateOutlined,
 } from '@ant-design/icons'
-import { Button, Typography } from 'antd'
+import { Button, Tooltip, Typography } from 'antd'
 import type { ReactNode } from 'react'
 
-import type { RuntimeResourceFlowNode } from '../model/runtimeGraph'
+import {
+  runtimeDisplayName,
+  type RuntimeResourceFlowNode,
+} from '../model/runtimeGraph'
 import styles from './RuntimeTopologyPanel.module.css'
 
 export function RuntimeNode({ data }: NodeProps<RuntimeResourceFlowNode>) {
   return (
-    <Button
-      data-runtime-node-id={data.resource.id}
-      data-health={data.resource.healthStatus || 'Unknown'}
-      className={`${styles.node} ${data.active ? styles.nodeActive : ''}`}
-      onClick={() =>
-        window.dispatchEvent(
-          new CustomEvent('releasehub:runtime-node', {
-            detail: data.resource.id,
-          }),
-        )
-      }
-    >
-      <Handle type="target" position={Position.Left} />
-      <span className={styles.nodeIcon} aria-hidden="true">
-        {resourceIcon(data.resource.kind)}
-      </span>
-      <span className={styles.nodeBody}>
-        <Typography.Text strong ellipsis>
-          {data.resource.name}
-        </Typography.Text>
-        <span className={styles.nodeMeta}>
-          <span className={styles.kindChip}>{data.resource.kind}</span>
-          <Typography.Text type="secondary" ellipsis>
-            {data.resource.healthStatus || '—'}
-          </Typography.Text>
+    <Tooltip title={data.resource.name} trigger={['hover', 'focus']}>
+      <Button
+        aria-label={`${data.resource.kind} ${data.resource.name}`}
+        data-runtime-node-id={data.resource.id}
+        data-health={data.resource.healthStatus || 'Unknown'}
+        className={`${styles.node} ${data.active ? styles.nodeActive : ''}`}
+        onClick={() =>
+          window.dispatchEvent(
+            new CustomEvent('releasehub:runtime-node', {
+              detail: data.resource.id,
+            }),
+          )
+        }
+      >
+        <Handle type="target" position={Position.Left} />
+        <span className={styles.nodeIcon} aria-hidden="true">
+          {resourceIcon(data.resource.kind)}
         </span>
-      </span>
-      <Handle type="source" position={Position.Right} />
-    </Button>
+        <span className={styles.nodeBody}>
+          <span className={styles.nodeName}>
+            {runtimeDisplayName(data.resource.name)}
+          </span>
+          <span className={styles.nodeMeta}>
+            <span className={styles.kindChip}>{data.resource.kind}</span>
+            <Typography.Text type="secondary" ellipsis>
+              {data.resource.healthStatus || '—'}
+            </Typography.Text>
+          </span>
+        </span>
+        <Handle type="source" position={Position.Right} />
+      </Button>
+    </Tooltip>
   )
 }
 
