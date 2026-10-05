@@ -6,6 +6,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from '@testing-library/react'
 import { I18nextProvider } from 'react-i18next'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -168,13 +169,25 @@ describe('AuditPage', () => {
     for (const tag of scopeTags) expect(tag).toHaveClass(tagStyles.neutral)
   })
 
-  it('opens safe metadata detail and advances with the server cursor', async () => {
+  it('安全 Metadata 查看入口保留全頁可及性名稱與可見性', () => {
     renderPage()
 
-    fireEvent.click(screen.getByRole('button', { name: /查看/ }))
+    expect(screen.getByRole('button', { name: /查看/ })).toBeVisible()
+  })
+
+  it('opens safe metadata detail', async () => {
+    renderPage()
+
+    fireEvent.click(
+      within(screen.getByRole('table')).getByRole('button', { name: /查看/ }),
+    )
     expect(await screen.findByText('安全 Metadata')).toBeInTheDocument()
     expect(screen.getByText(/"safe": "value"/)).toBeInTheDocument()
     expect(screen.getByText('部分 Metadata 已遮罩或截斷。')).toBeInTheDocument()
+  })
+
+  it('advances with the server cursor', async () => {
+    renderPage()
 
     fireEvent.click(screen.getByRole('button', { name: '下一頁' }))
     await waitFor(() =>

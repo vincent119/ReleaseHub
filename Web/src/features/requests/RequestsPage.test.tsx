@@ -23,6 +23,8 @@ import linkStyles from '@/shared/link/ThemedLink.module.css'
 import tagStyles from '@/shared/tag/SemanticTag.module.css'
 
 import { RequestsPage } from './RequestsPage'
+import { RequestList } from './components/RequestList'
+import { initialRequestListCriteria } from './model/listQuery'
 
 const api = vi.hoisted(() => ({ resources: vi.fn(), requests: vi.fn() }))
 
@@ -80,7 +82,7 @@ describe('RequestsPage schedule projection', () => {
     vi.unstubAllGlobals()
   })
 
-  it('保留 Server 排程原因、時間與表格連結樣式', async () => {
+  it('保留 Server 排程列表與表格連結樣式', async () => {
     renderPage()
     await selectScope()
 
@@ -90,6 +92,11 @@ describe('RequestsPage schedule projection', () => {
       linkStyles.link,
     )
     expect(screen.getByText('Standard')).toHaveClass(tagStyles.neutral)
+  })
+
+  it('詳細資訊保留 Server 排程原因與時間', async () => {
+    renderPage()
+    await selectScope()
     fireEvent.click(
       screen.getByRole('button', { name: '查看排程條件：request-1' }),
     )
@@ -196,8 +203,7 @@ describe('RequestsPage schedule projection', () => {
             }
           : {},
       )
-      renderPage()
-      await selectScope()
+      renderList()
       fireEvent.click(
         screen.getByRole('button', {
           name: `查看完整名稱與 ID：${request.id}`,
@@ -399,7 +405,7 @@ function mockList(data: unknown[]) {
   })
 }
 
-function pageElement() {
+function pageElement(content = <RequestsPage />) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   })
@@ -408,7 +414,7 @@ function pageElement() {
       <ConfigProvider theme={{ token: { motion: false } }}>
         <MemoryRouter>
           <QueryClientProvider client={queryClient}>
-            <RequestsPage />
+            {content}
           </QueryClientProvider>
         </MemoryRouter>
       </ConfigProvider>
@@ -418,6 +424,21 @@ function pageElement() {
 
 function renderPage() {
   return render(pageElement())
+}
+
+function renderList() {
+  return render(
+    pageElement(
+      <RequestList
+        scope={{
+          organizationId: 'organization-1',
+          projectId: 'project-1',
+          environmentId: 'environment-1',
+        }}
+        criteria={initialRequestListCriteria}
+      />,
+    ),
+  )
 }
 
 async function choose(label: string, name: string) {
