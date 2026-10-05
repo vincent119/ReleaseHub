@@ -62,13 +62,19 @@ for (const warning of [
     const summary = page
       .locator('[aria-live="polite"]')
       .filter({ hasText: '觀測時間' })
-    await expect(summary).toContainText('共 3 個資源')
+    await expect(summary).toContainText('此視圖 3／回傳 3 個資源')
     const before = await summary.textContent()
     recovered = true
     await page.getByRole('button', { name: '重新整理', exact: true }).click()
     await expect(page.getByRole('alert')).toHaveCount(0)
-    await expect(canvas.locator('.react-flow__node-runtime')).toHaveCount(4)
-    await expect(summary).toContainText('共 4 個資源')
+    await expect(canvas.locator('.react-flow__node-runtime')).toHaveCount(
+      warning.code === 'network_evidence_unresolved' ? 3 : 4,
+    )
+    await expect(summary).toContainText(
+      warning.code === 'network_evidence_unresolved'
+        ? '此視圖 3／回傳 4 個資源'
+        : '此視圖 4／回傳 4 個資源',
+    )
     await expect(summary).not.toHaveText(before ?? '')
     await page.getByRole('tab', { name: '狀態總覽', exact: true }).click()
     await expect(page.getByText('Synced', { exact: true })).toBeVisible()
@@ -157,7 +163,9 @@ for (const theme of ['light', 'dark'] as const) {
         .evaluate((element) => {
           return new DOMMatrixReadOnly(getComputedStyle(element).transform).a
         })
-      expect(zoom).toBeGreaterThanOrEqual(0.74)
+      expect(zoom).toBeGreaterThan(0)
+      expect(zoom).toBeLessThanOrEqual(1)
+      await expectGraphWithinCanvas(canvas)
 
       await canvas
         .locator('.react-flow__node-runtime')
@@ -225,6 +233,170 @@ test('reduced motion keeps the topology legible without node animation', async (
   await edge.evaluate((element) => element.classList.add('animated'))
   await expect(edge.locator('path').first()).toHaveCSS('animation-name', 'none')
 })
+
+test('network view shows only evidenced endpoints and keeps the full resource view', async ({
+  page,
+}) => {
+  const ids = [
+    'status-webhooks-ingress',
+    'status-webhooks-service',
+    'status-webhooks-deploy-b9cc74fc5-54kq9',
+    'status-webhooks-deploy-b9cc74fc5-64kq9',
+  ]
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await preparePage(page, 'light')
+  await page.route(
+    `**/api/v1/catalog/applications/${applicationID}/runtime/topology?**`,
+    (route) => {
+      const base = topology()
+      const resource = base.nodes[0]
+      const nodes = [
+        ...ids.map((id, index) => ({
+          ...resource,
+          id,
+          name: id,
+          kind: index === 0 ? 'Ingress' : index === 1 ? 'Service' : 'Pod',
+        })),
+        ...Array.from({ length: 11 }, (_, index) => ({
+          ...resource,
+          id: `unrelated-${index}`,
+          name: `unrelated-${index}`,
+        })),
+      ]
+      const view = new URL(route.request().url()).searchParams.get('view')
+      return route.fulfill(
+        json({
+          data: {
+            ...base,
+            view,
+            nodes,
+            edges:
+              view === 'network'
+                ? [
+                    {
+                      id: 'entry',
+                      source: ids[0],
+                      target: ids[1],
+                      kind: 'network',
+                    },
+                    {
+                      id: 'pod-1',
+                      source: ids[1],
+                      target: ids[2],
+                      kind: 'network',
+                    },
+                    {
+                      id: 'pod-2',
+                      source: ids[1],
+                      target: ids[3],
+                      kind: 'network',
+                    },
+                  ]
+                : [],
+          },
+          meta: meta(),
+        }),
+      )
+    },
+  )
+  await page.goto(`/applications/${applicationID}`)
+  await page.getByRole('tab', { name: '資源拓撲' }).click()
+  const canvas = page.getByLabel('Application 即時資源拓撲')
+  await expect(canvas.locator('.react-flow__node-runtime')).toHaveCount(15)
+  await expectGraphWithinCanvas(canvas)
+  await page.getByText('網路拓撲', { exact: true }).click()
+  await expect(canvas.locator('.react-flow__node-runtime')).toHaveCount(4)
+  await expect(canvas.locator('.react-flow__edge')).toHaveCount(3)
+  await expect(
+    page.locator('[aria-live="polite"]').filter({ hasText: '觀測時間' }),
+  ).toContainText('此視圖 4／回傳 15 個資源')
+  await expectGraphWithinCanvas(canvas)
+  const firstPod = canvas.getByRole('button', { name: `Pod ${ids[2]}` })
+  const secondPod = canvas.getByRole('button', { name: `Pod ${ids[3]}` })
+  await expect(firstPod).toContainText('54kq9')
+  await expect(secondPod).toContainText('64kq9')
+  expect(
+    await firstPod
+      .locator('[class*="nodeName"]')
+      .evaluate((element) => element.scrollWidth <= element.clientWidth),
+  ).toBe(true)
+  await expect(firstPod).toHaveAttribute('data-runtime-node-id', ids[2])
+  await firstPod.click()
+  await expect(page.getByRole('dialog')).toContainText(ids[2])
+  await page.getByRole('dialog').getByRole('button', { name: '關閉' }).click()
+  await page.getByText('資源階層', { exact: true }).click()
+  await expect(canvas.locator('.react-flow__node-runtime')).toHaveCount(15)
+})
+
+test('large overview fits all nodes, and reading zoom can be restored after resize', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 900, height: 700 })
+  await preparePage(page, 'dark')
+  await page.route(
+    `**/api/v1/catalog/applications/${applicationID}/runtime/topology?**`,
+    (route) => {
+      const base = topology()
+      const resource = base.nodes[0]
+      return route.fulfill(
+        json({
+          data: {
+            ...base,
+            nodes: Array.from({ length: 100 }, (_, index) => ({
+              ...resource,
+              id: `resource-${index}`,
+              name: `resource-${index}`,
+            })),
+            edges: [],
+          },
+          meta: meta(),
+        }),
+      )
+    },
+  )
+  await page.goto(`/applications/${applicationID}`)
+  await page.getByRole('tab', { name: '資源拓撲' }).click()
+  const canvas = page.getByLabel('Application 即時資源拓撲')
+  await expect(canvas.locator('.react-flow__node-runtime')).toHaveCount(100)
+  await expectGraphWithinCanvas(canvas)
+  await page.getByRole('button', { name: '閱讀比例' }).click()
+  await expect
+    .poll(() =>
+      canvas
+        .locator('.react-flow__viewport')
+        .evaluate(
+          (element) =>
+            new DOMMatrixReadOnly(getComputedStyle(element).transform).a,
+        ),
+    )
+    .toBeCloseTo(1, 2)
+  await page.setViewportSize({ width: 320, height: 568 })
+  await page.getByRole('button', { name: '全圖總覽' }).click()
+  await expectGraphWithinCanvas(canvas)
+})
+
+async function expectGraphWithinCanvas(canvas: ReturnType<Page['getByLabel']>) {
+  await expect
+    .poll(() =>
+      canvas.evaluate((element) => {
+        const bounds = element.getBoundingClientRect()
+        const nodes = [...element.querySelectorAll('.react-flow__node')]
+        return (
+          nodes.length > 0 &&
+          nodes.every((node) => {
+            const rect = node.getBoundingClientRect()
+            return (
+              rect.left >= bounds.left + 4 &&
+              rect.right <= bounds.right - 4 &&
+              rect.top >= bounds.top + 4 &&
+              rect.bottom <= bounds.bottom - 4
+            )
+          })
+        )
+      }),
+    )
+    .toBe(true)
+}
 
 test('refresh preserves the user zoom level', async ({ page }) => {
   await preparePage(page, 'dark')

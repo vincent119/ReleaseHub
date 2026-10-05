@@ -172,6 +172,12 @@
   flex-direction: column;
   gap: 8px;
 }
+.nodeName {
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .nodeIcon {
   display: grid;
   flex: 0 0 34px;

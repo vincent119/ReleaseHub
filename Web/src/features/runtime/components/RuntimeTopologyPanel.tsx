@@ -3,6 +3,7 @@ import {
   Controls,
   MiniMap,
   ReactFlow,
+  type ReactFlowInstance,
   type Viewport,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
@@ -25,7 +26,10 @@ import { useThemePreference } from '@/shared/theme/useThemePreference'
 
 import {
   runtimeFitViewOptions,
+  runtimeDisplayTopology,
   runtimeTopologyToGraph,
+  type RuntimeFlowEdge,
+  type RuntimeFlowNode,
 } from '../model/runtimeGraph'
 import { ApplicationRootNode } from './ApplicationRootNode'
 import { RuntimeNode } from './RuntimeNode'
@@ -55,6 +59,10 @@ export function RuntimeTopologyPanel({
   const [selected, setSelected] = useState<string>()
   const panelRef = useRef<HTMLDivElement>(null)
   const selectedNodeRef = useRef<string | undefined>(undefined)
+  const flowRef = useRef<ReactFlowInstance<
+    RuntimeFlowNode,
+    RuntimeFlowEdge
+  > | null>(null)
   const [viewports, setViewports] = useState<Record<string, Viewport>>({})
   const viewportKey = `${applicationId}:${view}`
   const savedViewport = viewports[viewportKey]
@@ -90,14 +98,28 @@ export function RuntimeTopologyPanel({
       warnings: Array.isArray(response.warnings) ? response.warnings : [],
     }
   }, [topology.data])
+  const displayTopology = useMemo(
+    () => (value ? runtimeDisplayTopology(value) : undefined),
+    [value],
+  )
   const graph = useMemo(
     () =>
-      value
-        ? runtimeTopologyToGraph(value, active, applicationName)
+      displayTopology
+        ? runtimeTopologyToGraph(displayTopology, active, applicationName)
         : { nodes: [], edges: [] },
-    [active, applicationName, value],
+    [active, applicationName, displayTopology],
   )
-  const resource = value?.nodes.find((node) => node.id === selected)
+  const displayCount = displayTopology?.nodes.length ?? 0
+  const networkHasUnlinkedEntrance = useMemo(() => {
+    if (view !== 'network' || !displayTopology) return false
+    const linkedIds = new Set(
+      displayTopology.edges.flatMap((edge) => [edge.source, edge.target]),
+    )
+    return displayTopology.nodes.some((node) => !linkedIds.has(node.id))
+  }, [displayTopology, view])
+  const resource = displayTopology?.nodes.some((node) => node.id === selected)
+    ? value?.nodes.find((node) => node.id === selected)
+    : undefined
   const restoreNodeFocus = () => {
     setSelected(undefined)
     window.requestAnimationFrame(() => {
@@ -134,7 +156,10 @@ export function RuntimeTopologyPanel({
         <Space>
           <Segmented
             value={view}
-            onChange={(next) => setView(next as RuntimeTopologyView)}
+            onChange={(next) => {
+              setSelected(undefined)
+              setView(next as RuntimeTopologyView)
+            }}
             options={[
               {
                 value: 'resources',
@@ -157,18 +182,35 @@ export function RuntimeTopologyPanel({
             <Typography.Text type="secondary" aria-live="polite">
               {t('runtimeTopology.observation', {
                 count: value.nodes.length,
+                visible: displayCount,
                 time: new Date(value.observedAt).toLocaleString(),
               })}
             </Typography.Text>
           )}
         </Space>
-        <Button
-          data-runtime-refresh
-          loading={topology.isFetching}
-          onClick={() => void topology.refetch()}
-        >
-          {t('runtimeTopology.refresh')}
-        </Button>
+        <Space wrap>
+          {graph.nodes.length > 0 && (
+            <>
+              <Button
+                onClick={() =>
+                  void flowRef.current?.fitView(runtimeFitViewOptions)
+                }
+              >
+                {t('runtimeTopology.fitView')}
+              </Button>
+              <Button onClick={() => void flowRef.current?.zoomTo(1)}>
+                {t('runtimeTopology.readableZoom')}
+              </Button>
+            </>
+          )}
+          <Button
+            data-runtime-refresh
+            loading={topology.isFetching}
+            onClick={() => void topology.refetch()}
+          >
+            {t('runtimeTopology.refresh')}
+          </Button>
+        </Space>
       </Flex>
       {topology.isError || (topology.data && topology.data.status !== 200) ? (
         <Alert type="error" showIcon title={t('runtimeTopology.unavailable')} />
@@ -186,6 +228,18 @@ export function RuntimeTopologyPanel({
               title={t(`runtimeTopology.warnings.${warning}`)}
             />
           ))}
+          {networkHasUnlinkedEntrance && (
+            <Alert
+              type="info"
+              showIcon
+              title={t('runtimeTopology.unlinkedEntrance')}
+            />
+          )}
+          {savedViewport && savedViewport.zoom < 0.75 && (
+            <Typography.Text type="secondary">
+              {t('runtimeTopology.overviewHint')}
+            </Typography.Text>
+          )}
           {graph.nodes.length === 0 ? (
             <Empty description={t('runtimeTopology.empty')} />
           ) : (
@@ -222,6 +276,9 @@ export function RuntimeTopologyPanel({
                   fitView={!savedViewport}
                   fitViewOptions={runtimeFitViewOptions}
                   defaultViewport={savedViewport}
+                  onInit={(instance) => {
+                    flowRef.current = instance
+                  }}
                   onMoveEnd={(_, viewport) =>
                     setViewports((current) => ({
                       ...current,

@@ -2,7 +2,12 @@ import { describe, expect, it } from 'vitest'
 
 import type { RuntimeTopology } from '@/generated/model'
 
-import { runtimeFitViewOptions, runtimeTopologyToGraph } from './runtimeGraph'
+import {
+  runtimeDisplayName,
+  runtimeDisplayTopology,
+  runtimeFitViewOptions,
+  runtimeTopologyToGraph,
+} from './runtimeGraph'
 
 describe('runtimeTopologyToGraph', () => {
   it('groups top-level resources under an inert Application node while preserving vendor edges', () => {
@@ -68,7 +73,7 @@ describe('runtimeTopologyToGraph', () => {
       target: 'pod',
     })
     expect(graph.nodes[0].position.x).toBeLessThan(graph.nodes[1].position.x)
-    expect(runtimeFitViewOptions.minZoom).toBeGreaterThanOrEqual(0.75)
+    expect(runtimeFitViewOptions.minZoom).toBeLessThan(0.75)
   })
 
   it('keeps network relationships free of presentation nodes', () => {
@@ -98,6 +103,92 @@ describe('runtimeTopologyToGraph', () => {
       source: 'service',
       target: 'pod',
     })
+  })
+
+  it('projects only valid network endpoints and explicit entry evidence without changing the response', () => {
+    const topology: RuntimeTopology = {
+      applicationId: 'application-1',
+      view: 'network',
+      observedAt: '2026-09-23T08:00:00Z',
+      partial: true,
+      warnings: ['network_evidence_unresolved'],
+      nodes: [
+        resource('ingress'),
+        resource('service'),
+        resource('pod-1'),
+        resource('pod-2'),
+        resource('unlinked-entry'),
+        resource('secret'),
+        resource('replica-set'),
+      ],
+      edges: [
+        { id: 'edge-1', source: 'ingress', target: 'service', kind: 'network' },
+        { id: 'edge-2', source: 'service', target: 'pod-1', kind: 'network' },
+        { id: 'edge-3', source: 'service', target: 'pod-2', kind: 'network' },
+        {
+          id: 'invalid',
+          source: 'service',
+          target: 'missing',
+          kind: 'network',
+        },
+        {
+          id: 'owner',
+          source: 'replica-set',
+          target: 'pod-1',
+          kind: 'resource',
+        },
+      ],
+    }
+    topology.nodes[4].externalUrls = ['https://entry.example']
+    const projected = runtimeDisplayTopology(topology)
+
+    expect(projected.nodes.map((node) => node.id)).toEqual([
+      'ingress',
+      'service',
+      'pod-1',
+      'pod-2',
+      'unlinked-entry',
+    ])
+    expect(projected.edges.map((edge) => edge.id)).toEqual([
+      'edge-1',
+      'edge-2',
+      'edge-3',
+    ])
+    expect(projected.warnings).toBe(topology.warnings)
+    expect(projected.partial).toBe(true)
+    expect(topology.nodes).toHaveLength(7)
+    expect(topology.edges).toHaveLength(5)
+    expect(runtimeTopologyToGraph(projected).nodes).toHaveLength(5)
+  })
+
+  it('keeps only explicit entrances when network edges are absent', () => {
+    const topology: RuntimeTopology = {
+      applicationId: 'application-1',
+      view: 'network',
+      observedAt: '2026-09-23T08:00:00Z',
+      partial: false,
+      warnings: ['network_evidence_unavailable'],
+      nodes: [resource('ingress'), resource('secret')],
+      edges: [],
+    }
+    topology.nodes[0].ingress = ['example.com']
+    expect(
+      runtimeDisplayTopology(topology).nodes.map((node) => node.id),
+    ).toEqual(['ingress'])
+    topology.nodes[0].ingress = []
+    expect(runtimeDisplayTopology(topology).nodes).toEqual([])
+    expect(
+      runtimeDisplayTopology({ ...topology, view: 'resources' }).nodes,
+    ).toBe(topology.nodes)
+  })
+
+  it('keeps differentiating long Pod and ReplicaSet suffixes', () => {
+    const prefix = 'status-webhooks-deploy-b9cc74fc5-'
+    expect(runtimeDisplayName(`${prefix}54kq9`)).not.toBe(
+      runtimeDisplayName(`${prefix}64kq9`),
+    )
+    expect(runtimeDisplayName(`${prefix}54kq9`)).toMatch(/54kq9$/)
+    expect(runtimeDisplayName('short-name')).toBe('short-name')
   })
 })
 

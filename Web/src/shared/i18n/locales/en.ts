@@ -470,9 +470,16 @@ export const en = {
     },
     views: { resources: 'Resource hierarchy', network: 'Network topology' },
     refresh: 'Refresh',
+    fitView: 'Fit all',
+    readableZoom: 'Reading zoom',
+    overviewHint:
+      'The overview shows the full structure. Use Reading zoom and pan to inspect names.',
+    unlinkedEntrance:
+      'The entry resource has explicit evidence, but no relationship can be confirmed.',
     live: 'Deployment in progress; refreshes every 5 seconds',
     current: 'Shows current live state, not an execution snapshot',
-    observation: 'Observed at {{time}} with {{count}} resources',
+    observation:
+      'Observed at {{time}}; {{visible}} shown in this view of {{count}} returned resources',
     empty: 'There are no resources to display.',
     unavailable: 'Live Application resources are unavailable.',
     logsPodOnly: 'Logs are available only for Pod nodes.',

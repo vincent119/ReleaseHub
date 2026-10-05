@@ -422,11 +422,35 @@ for (const warning of [
         const url = new URL(route.request().url())
         const applicationId = url.pathname.split('/')[5]
         const limited = applicationId === ids.appA && !recovered
+        const base = topologyFixture(applicationId)
+        const network = warning.code === 'network_evidence_unresolved'
+        const serviceId = `service-${applicationId}`
         return route.fulfill(
           json({
             data: {
-              ...topologyFixture(applicationId),
+              ...base,
               view: url.searchParams.get('view'),
+              nodes: network
+                ? [
+                    ...base.nodes,
+                    {
+                      ...base.nodes[0],
+                      id: serviceId,
+                      kind: 'Service',
+                      name: `service-${applicationId}`,
+                    },
+                  ]
+                : base.nodes,
+              edges: network
+                ? [
+                    {
+                      id: `network-${applicationId}`,
+                      source: serviceId,
+                      target: base.nodes[0].id,
+                      kind: 'network',
+                    },
+                  ]
+                : base.edges,
               warnings: limited ? [warning.code] : [],
               partial: limited,
             },

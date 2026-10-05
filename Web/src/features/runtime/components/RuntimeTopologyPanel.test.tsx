@@ -9,7 +9,11 @@ const api = vi.hoisted(() => ({
   events: vi.fn(),
   logs: vi.fn(),
 }))
-const flow = vi.hoisted(() => ({ render: vi.fn() }))
+const flow = vi.hoisted(() => ({
+  render: vi.fn(),
+  fitView: vi.fn(),
+  zoomTo: vi.fn(),
+}))
 
 vi.mock('@/shared/theme/useThemePreference', () => ({
   useThemePreference: () => ({ resolvedTheme: 'dark' }),
@@ -40,8 +44,13 @@ vi.mock('@xyflow/react', () => ({
       event: MouseEvent | TouchEvent | null,
       viewport: { x: number; y: number; zoom: number },
     ) => void
+    onInit?: (instance: {
+      fitView: typeof flow.fitView
+      zoomTo: typeof flow.zoomTo
+    }) => void
   }) => {
     flow.render(props)
+    props.onInit?.({ fitView: flow.fitView, zoomTo: flow.zoomTo })
     return <div data-testid="runtime-flow">{props.children}</div>
   },
 }))
@@ -49,6 +58,8 @@ vi.mock('@xyflow/react', () => ({
 describe('RuntimeTopologyPanel', () => {
   beforeEach(() => {
     flow.render.mockClear()
+    flow.fitView.mockClear()
+    flow.zoomTo.mockClear()
     api.topology.mockReturnValue({
       data: {
         status: 200,
@@ -199,7 +210,90 @@ describe('RuntimeTopologyPanel', () => {
     expect(screen.queryByText('runtimeTopology.empty')).not.toBeInTheDocument()
   })
 
-  it('passes the resolved theme and a readable zoom floor to the canvas', () => {
+  it('shows only network evidence endpoints while retaining Server count and warnings', () => {
+    const result = api.topology()
+    const node = (id: string) => ({
+      id,
+      group: '',
+      version: 'v1',
+      kind: 'Pod',
+      namespace: 'payments',
+      name: id,
+      healthStatus: 'Healthy',
+      healthMessage: '',
+      orphaned: false,
+      images: [],
+      info: [],
+      ingress: [],
+      externalUrls: [],
+    })
+    result.data.data.data.nodes = [
+      node('ingress'),
+      node('service'),
+      node('pod-1'),
+      node('pod-2'),
+      ...Array.from({ length: 11 }, (_, index) => node(`unrelated-${index}`)),
+    ]
+    result.data.data.data.edges = [
+      { id: 'one', source: 'ingress', target: 'service', kind: 'network' },
+      { id: 'two', source: 'service', target: 'pod-1', kind: 'network' },
+      { id: 'three', source: 'service', target: 'pod-2', kind: 'network' },
+    ]
+    result.data.data.data.warnings = ['network_evidence_unresolved']
+    api.topology.mockImplementation((_applicationId, options) => ({
+      ...result,
+      data: {
+        status: 200,
+        data: { data: { ...result.data.data.data, view: options.view } },
+      },
+    }))
+
+    render(<RuntimeTopologyPanel applicationId="application-1" />)
+    expect(flow.render.mock.lastCall?.[0].nodes).toHaveLength(16)
+    fireEvent.click(screen.getByText('runtimeTopology.views.network'))
+    expect(flow.render.mock.lastCall?.[0].nodes).toHaveLength(4)
+    expect(
+      screen.getByText('runtimeTopology.warnings.network_evidence_unresolved'),
+    ).toBeInTheDocument()
+    expect(screen.getByText('runtimeTopology.observation')).toBeInTheDocument()
+    expect(result.data.data.data.nodes).toHaveLength(15)
+  })
+
+  it('shows an explicit entrance without inventing a network edge', () => {
+    const result = api.topology()
+    result.data.data.data.view = 'network'
+    result.data.data.data.nodes = [
+      {
+        id: 'ingress',
+        group: '',
+        version: 'v1',
+        kind: 'Ingress',
+        namespace: 'payments',
+        name: 'ingress',
+        healthStatus: 'Healthy',
+        healthMessage: '',
+        orphaned: false,
+        images: [],
+        info: [],
+        ingress: ['example.com'],
+        externalUrls: [],
+      },
+    ]
+    result.data.data.data.warnings = ['network_evidence_unresolved']
+
+    render(<RuntimeTopologyPanel applicationId="application-1" />)
+    fireEvent.click(screen.getByText('runtimeTopology.views.network'))
+
+    expect(flow.render.mock.lastCall?.[0].nodes).toHaveLength(1)
+    expect(
+      screen.getByText('runtimeTopology.unlinkedEntrance'),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText('runtimeTopology.warnings.network_evidence_unresolved'),
+    ).toBeInTheDocument()
+  })
+
+  it('passes the resolved theme and a full-graph zoom floor to the canvas', () => {
     const result = api.topology()
     result.data.data.data.nodes = [
       {
@@ -228,7 +322,7 @@ describe('RuntimeTopologyPanel', () => {
 
     expect(flow.render.mock.lastCall?.[0]).toMatchObject({
       colorMode: 'dark',
-      minZoom: 0.75,
+      minZoom: 0.001,
       nodes: [
         expect.objectContaining({ type: 'application', selectable: false }),
         expect.objectContaining({ type: 'runtime' }),
@@ -237,6 +331,16 @@ describe('RuntimeTopologyPanel', () => {
     expect(
       screen.getAllByText('runtimeTopology.legend.presentation').length,
     ).toBeGreaterThan(0)
+    fireEvent.click(
+      screen.getByRole('button', { name: 'runtimeTopology.fitView' }),
+    )
+    expect(flow.fitView).toHaveBeenCalledWith(
+      expect.objectContaining({ minZoom: 0.001, maxZoom: 1 }),
+    )
+    fireEvent.click(
+      screen.getByRole('button', { name: 'runtimeTopology.readableZoom' }),
+    )
+    expect(flow.zoomTo).toHaveBeenCalledWith(1)
   })
 
   it('restores each Application viewport after switching between Applications', () => {
@@ -304,6 +408,28 @@ describe('RuntimeTopologyPanel', () => {
         externalUrls: [],
       },
     ]
+    api.topology.mockImplementation((_applicationId, options) => ({
+      ...result,
+      data: {
+        status: 200,
+        data: {
+          data: {
+            ...result.data.data.data,
+            view: options.view,
+            ...(options.view === 'network'
+              ? {
+                  nodes: [
+                    {
+                      ...result.data.data.data.nodes[0],
+                      ingress: ['example.com'],
+                    },
+                  ],
+                }
+              : {}),
+          },
+        },
+      },
+    }))
 
     render(<RuntimeTopologyPanel applicationId="application-1" />)
     flow.render.mock.lastCall?.[0].onMoveEnd?.(null, {

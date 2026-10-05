@@ -24,9 +24,43 @@ const applicationNodeId = (applicationId: string) =>
 
 export const runtimeFitViewOptions = {
   padding: 0.16,
-  minZoom: 0.75,
+  minZoom: 0.001,
   maxZoom: 1,
 } as const
+
+export function runtimeDisplayTopology(
+  topology: RuntimeTopology,
+): RuntimeTopology {
+  if (topology.view !== 'network') return topology
+
+  const resourceIds = new Set(topology.nodes.map((node) => node.id))
+  const edges = topology.edges.filter(
+    (edge) =>
+      edge.kind === 'network' &&
+      resourceIds.has(edge.source) &&
+      resourceIds.has(edge.target),
+  )
+  const visibleIds = new Set(
+    edges.flatMap((edge) => [edge.source, edge.target]),
+  )
+  for (const node of topology.nodes) {
+    if (node.ingress.length > 0 || node.externalUrls.length > 0) {
+      visibleIds.add(node.id)
+    }
+  }
+
+  // 僅投影顯示，不能更動查詢快取、後端證據或資源詳情的原始識別。
+  return {
+    ...topology,
+    nodes: topology.nodes.filter((node) => visibleIds.has(node.id)),
+    edges,
+  }
+}
+
+export function runtimeDisplayName(name: string): string {
+  if (name.length <= 18) return name
+  return `${name.slice(0, 8)}…${name.slice(-9)}`
+}
 
 export function runtimeTopologyToGraph(
   topology: RuntimeTopology,
