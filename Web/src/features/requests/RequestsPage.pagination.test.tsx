@@ -9,6 +9,7 @@ import {
 } from '@testing-library/react'
 import { HttpResponse, http } from 'msw'
 import { setupServer } from 'msw/node'
+import { useReducer } from 'react'
 import {
   afterAll,
   afterEach,
@@ -21,13 +22,20 @@ import {
 
 import { DeploymentRequestStatus } from '@/generated/model'
 import i18n from '@/shared/i18n/config'
+import { RequestList } from './components/RequestList'
+import { RequestListFilters } from './components/RequestListFilters'
 import { RequestsPage } from './RequestsPage'
 import {
   listTestAPI,
   listTestWrapper,
   requestRows,
   testCatalog,
+  testScope,
 } from './model/listQuery.testHelpers'
+import {
+  initialRequestListCriteria,
+  requestListCriteriaReducer,
+} from './model/listQuery'
 
 const server = setupServer()
 beforeAll(() => server.listen({ onUnhandledRequest: 'error' }))
@@ -58,11 +66,31 @@ async function choose(label: string, option: string) {
   })
 }
 
-function start() {
+function ScopedListHarness() {
+  const [criteria, dispatch] = useReducer(
+    requestListCriteriaReducer,
+    initialRequestListCriteria,
+  )
+  return (
+    <>
+      <RequestListFilters
+        criteria={criteria}
+        disabled={false}
+        dispatch={dispatch}
+      />
+      <RequestList scope={testScope} criteria={criteria} />
+    </>
+  )
+}
+
+function start(mode: 'page' | 'list' = 'page') {
   const api = listTestAPI()
   server.use(api.handler)
   const { Wrapper, client } = listTestWrapper()
-  render(<RequestsPage />, { wrapper: Wrapper })
+  // 列表專屬情境不重跑選擇器設定，完整頁面仍由 scope 案例與 E2E 驗證。
+  render(mode === 'page' ? <RequestsPage /> : <ScopedListHarness />, {
+    wrapper: Wrapper,
+  })
   return { api, client }
 }
 
@@ -89,14 +117,23 @@ function pageButton(name: '上一頁' | '下一頁') {
 }
 
 describe('Request 列表分頁控制', () => {
-  it('scope 未齊不查詢，預設 20 筆，搜尋重設游標', async () => {
+  it('scope 未齊不查詢', () => {
     const { api } = start()
     expect(screen.getByRole('button', { name: /搜\s*尋/ })).toBeDisabled()
     expect(api.calls).toHaveLength(0)
+  })
+
+  it('選定 scope 後預設 20 筆', async () => {
+    const { api } = start()
     await selectScope()
     expect(api.calls[0].get('limit')).toBe('20')
     expect(screen.getAllByRole('link', { name: /^部署 \d/ })).toHaveLength(20)
     expect(pageButton('上一頁')).toBeDisabled()
+  })
+
+  it('下一頁後搜尋重設游標', async () => {
+    const { api } = start('list')
+    await screen.findByRole('link', { name: '部署 000' })
     await act(async () => {
       fireEvent.click(pageButton('下一頁'))
     })
@@ -108,9 +145,9 @@ describe('Request 列表分頁控制', () => {
     expect(api.calls.at(-1)?.has('cursor')).toBe(false)
   })
 
-  it('狀態、筆數與 scope 改變重設游標，保留已套用條件', async () => {
-    const { api } = start()
-    await selectScope()
+  it('下一頁後改變狀態與筆數會重設游標', async () => {
+    const { api } = start('list')
+    await screen.findByRole('link', { name: '部署 000' })
     fireEvent.click(pageButton('下一頁'))
     await screen.findByRole('link', { name: '部署 020' })
     await choose('申請狀態', 'Failed')
@@ -121,6 +158,13 @@ describe('Request 列表分頁控制', () => {
     await waitFor(() => expect(api.calls.at(-1)?.get('limit')).toBe('50'))
     expect(api.calls.at(-1)?.has('cursor')).toBe(false)
     await screen.findByRole('link', { name: '部署 005' })
+  })
+
+  it('下一頁後改變 scope 會重設游標', async () => {
+    const { api } = start()
+    await selectScope()
+    fireEvent.click(pageButton('下一頁'))
+    await screen.findByRole('link', { name: '部署 020' })
     await choose('環境（必填）', 'Global')
     await waitFor(() =>
       expect(api.calls.at(-1)?.get('environmentId')).toBe(
@@ -129,6 +173,21 @@ describe('Request 列表分頁控制', () => {
     )
     expect(api.calls.at(-1)?.has('cursor')).toBe(false)
     expect(api.calls.at(-1)?.has('search')).toBe(false)
+  })
+
+  it('改變 scope 時保留已套用的狀態與筆數', async () => {
+    const { api } = start()
+    await selectScope()
+    await choose('申請狀態', 'Failed')
+    await screen.findByRole('link', { name: '部署 005' })
+    await choose('每頁筆數', '50 筆')
+    await waitFor(() => expect(api.calls.at(-1)?.get('limit')).toBe('50'))
+    await choose('環境（必填）', 'Global')
+    await waitFor(() =>
+      expect(api.calls.at(-1)?.get('environmentId')).toBe(
+        testCatalog[0].projects[0].environments[1].id,
+      ),
+    )
     expect(api.calls.at(-1)?.get('status')).toBe('Failed')
     expect(api.calls.at(-1)?.get('limit')).toBe('50')
   })
@@ -228,9 +287,9 @@ describe('Request 列表分頁控制', () => {
     },
   )
 
-  it('更新通知只顯示更新訊息；重新整理取得第一頁，空列表與英文文案可識別', async () => {
-    const { api } = start()
-    await selectScope()
+  it('後頁重新整理取得第一頁並只顯示更新通知', async () => {
+    const { api } = start('list')
+    await screen.findByRole('link', { name: '部署 000' })
     fireEvent.click(pageButton('下一頁'))
     await screen.findByRole('link', { name: '部署 020' })
     fireEvent.click(screen.getByRole('button', { name: '重新整理列表' }))
@@ -239,6 +298,11 @@ describe('Request 列表分頁控制', () => {
       i18n.t('requests.query.updated'),
     )
     expect(api.calls.at(-1)?.has('cursor')).toBe(false)
+  })
+
+  it('空列表重新整理後中文與英文文案可識別', async () => {
+    start('list')
+    await screen.findByRole('link', { name: '部署 000' })
     server.use(listTestAPI(requestRows(0)).handler)
     fireEvent.click(screen.getByRole('button', { name: '重新整理列表' }))
     await screen.findByText(i18n.t('requests.empty'))
