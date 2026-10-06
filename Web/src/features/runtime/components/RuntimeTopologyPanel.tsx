@@ -76,6 +76,12 @@ export function RuntimeTopologyPanel({
   )
   const [selected, setSelected] = useState<string>()
   const panelRef = useRef<HTMLDivElement>(null)
+  const canvasRef = useRef<HTMLDivElement>(null)
+  const [canvasWidth, setCanvasWidth] = useState<number | undefined>(() =>
+    window.innerWidth < 600 ? window.innerWidth : undefined,
+  )
+  const lastFittedWidthRef = useRef<number | undefined>(undefined)
+  const compact = canvasWidth !== undefined && canvasWidth < 600
   const selectedNodeRef = useRef<string | undefined>(undefined)
   const groupFocusRef = useRef<
     { applicationId: string; id: string } | undefined
@@ -85,7 +91,10 @@ export function RuntimeTopologyPanel({
     RuntimeFlowEdge
   > | null>(null)
   const [viewports, setViewports] = useState<Record<string, Viewport>>({})
-  const viewportKey = `${applicationId}:${view}:${view === 'resources' ? resourceMode : 'network'}`
+  const [readingViewports, setReadingViewports] = useState<
+    Record<string, boolean>
+  >({})
+  const viewportKey = `${applicationId}:${view}:${view === 'resources' ? resourceMode : 'network'}:${compact ? 'compact' : 'standard'}`
   const savedViewport = viewports[viewportKey]
   const topology = useGetCatalogApplicationRuntimeTopology(
     applicationId,
@@ -139,6 +148,7 @@ export function RuntimeTopologyPanel({
         new Set(expandedGroupIds),
         active,
         applicationName,
+        compact,
       )
     return {
       ...runtimeTopologyToGraph(displayTopology, active, applicationName),
@@ -150,12 +160,58 @@ export function RuntimeTopologyPanel({
   }, [
     active,
     applicationName,
+    compact,
     displayTopology,
     expandedGroupIds,
     resourceMode,
     view,
   ])
   const displayCount = displayTopology?.nodes.length ?? 0
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    if (canvas.clientWidth > 0) setCanvasWidth(canvas.clientWidth)
+    if (typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(([entry]) => {
+      if (entry.contentRect.width > 0) setCanvasWidth(entry.contentRect.width)
+    })
+    observer.observe(canvas)
+    return () => observer.disconnect()
+  }, [graph.nodes.length, topology.isPending, view])
+  useEffect(() => {
+    if (
+      canvasWidth === undefined ||
+      canvasWidth === lastFittedWidthRef.current ||
+      graph.nodes.length === 0
+    )
+      return
+    lastFittedWidthRef.current = canvasWidth
+    if (readingViewports[viewportKey]) return
+    let pendingFrame = 0
+    const firstFrame = window.requestAnimationFrame(() => {
+      pendingFrame = window.requestAnimationFrame(() => {
+        void flowRef.current?.fitView(
+          view === 'resources' &&
+            resourceMode === 'layered' &&
+            graph.groupingAvailable
+            ? { ...runtimeFitViewOptions, padding: 0.04, minZoom: 1 }
+            : runtimeFitViewOptions,
+        )
+      })
+    })
+    return () => {
+      window.cancelAnimationFrame(firstFrame)
+      if (pendingFrame) window.cancelAnimationFrame(pendingFrame)
+    }
+  }, [
+    canvasWidth,
+    graph.groupingAvailable,
+    graph.nodes.length,
+    resourceMode,
+    view,
+    viewportKey,
+    readingViewports,
+  ])
   const networkHasUnlinkedEntrance = useMemo(() => {
     if (view !== 'network' || !displayTopology) return false
     const linkedIds = new Set(
@@ -196,6 +252,7 @@ export function RuntimeTopologyPanel({
       const group = graph.groups.find((item) => item.groupId === groupId)
       if (!group || expandedGroupIds.includes(groupId)) return
       groupFocusRef.current = { applicationId, id: group.memberIds[0] }
+      setReadingViewports((current) => ({ ...current, [viewportKey]: true }))
       setExpandedGroups((current) => ({
         ...current,
         [applicationId]: [...(current[applicationId] ?? []), groupId],
@@ -203,7 +260,7 @@ export function RuntimeTopologyPanel({
     }
     window.addEventListener('releasehub:runtime-group', expand)
     return () => window.removeEventListener('releasehub:runtime-group', expand)
-  }, [applicationId, expandedGroupIds, graph.groups])
+  }, [applicationId, expandedGroupIds, graph.groups, viewportKey])
   useEffect(() => {
     groupFocusRef.current = undefined
   }, [applicationId, view])
@@ -298,13 +355,25 @@ export function RuntimeTopologyPanel({
           {graph.nodes.length > 0 && (
             <>
               <Button
-                onClick={() =>
+                onClick={() => {
+                  setReadingViewports((current) => ({
+                    ...current,
+                    [viewportKey]: false,
+                  }))
                   void flowRef.current?.fitView(runtimeFitViewOptions)
-                }
+                }}
               >
                 {t('runtimeTopology.fitView')}
               </Button>
-              <Button onClick={() => void flowRef.current?.zoomTo(1)}>
+              <Button
+                onClick={() => {
+                  setReadingViewports((current) => ({
+                    ...current,
+                    [viewportKey]: true,
+                  }))
+                  void flowRef.current?.zoomTo(1)
+                }}
+              >
                 {t('runtimeTopology.readableZoom')}
               </Button>
             </>
@@ -356,10 +425,18 @@ export function RuntimeTopologyPanel({
                             current[applicationId] ?? []
                           ).filter((id) => id !== group.groupId),
                         }))
+                        setReadingViewports((current) => ({
+                          ...current,
+                          [viewportKey]: false,
+                        }))
                       }}
                     >
                       {t('runtimeTopology.group.collapse', {
-                        kind: group.kind ?? t('runtimeTopology.group.other'),
+                        kind: group.compactOverview
+                          ? t('runtimeTopology.group.compact', {
+                              count: group.memberIds.length,
+                            })
+                          : (group.kind ?? t('runtimeTopology.group.other')),
                       })}
                     </Button>
                   ))}
@@ -386,6 +463,19 @@ export function RuntimeTopologyPanel({
               {t('runtimeTopology.overviewHint')}
             </Typography.Text>
           )}
+          {view === 'resources' &&
+            resourceMode === 'layered' &&
+            compact &&
+            graph.groupedResourceCount > 0 && (
+              <Typography.Text type="secondary">
+                {t('runtimeTopology.compactHint')}
+              </Typography.Text>
+            )}
+          {readingViewports[viewportKey] && (
+            <Typography.Text type="secondary">
+              {t('runtimeTopology.readingHint')}
+            </Typography.Text>
+          )}
           {graph.nodes.length === 0 ? (
             <Empty description={t('runtimeTopology.empty')} />
           ) : (
@@ -409,8 +499,14 @@ export function RuntimeTopologyPanel({
                 </span>
               </div>
               <div
+                ref={canvasRef}
                 className={styles.canvas}
                 aria-label={t('runtimeTopology.title')}
+                style={
+                  compact && graph.groupedResourceCount > 0
+                    ? { height: Math.max(420, graph.nodes.length * 94 + 24) }
+                    : undefined
+                }
               >
                 <ReactFlow
                   key={viewportKey}
@@ -444,7 +540,7 @@ export function RuntimeTopologyPanel({
                   elementsSelectable
                 >
                   <Background />
-                  <MiniMap pannable zoomable />
+                  {!compact && <MiniMap pannable zoomable />}
                   <Controls showInteractive={false} />
                 </ReactFlow>
               </div>

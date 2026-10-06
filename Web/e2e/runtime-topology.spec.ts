@@ -3,6 +3,151 @@ import { expect, test, type Page } from '@playwright/test'
 const applicationID = '019c1230-0000-7000-8000-000000000010'
 
 for (const theme of ['light', 'dark'] as const) {
+  for (const size of [
+    { width: 1200, height: 900 },
+    { width: 900, height: 700 },
+    { width: 390, height: 700 },
+    { width: 320, height: 568 },
+  ])
+    test(`${theme} ${size.width}×${size.height} 首次載入含 Unknown 輔助資源的分層圖不裁切`, async ({
+      page,
+    }) => {
+      await page.setViewportSize(size)
+      await preparePage(page, theme)
+      await page.route(
+        `**/api/v1/catalog/applications/${applicationID}/runtime/topology?**`,
+        (route) => {
+          const data = layeredTopology()
+          for (const node of data.nodes) {
+            if (
+              [
+                'namespace',
+                'secret',
+                'service-account',
+                'network-policy',
+                'pod-disruption-budget',
+                'role-binding',
+              ].includes(node.id)
+            )
+              node.healthStatus = ''
+          }
+          return route.fulfill(json({ data, meta: meta() }))
+        },
+      )
+      await page.goto(`/applications/${applicationID}`)
+      await page.getByRole('tab', { name: '資源拓撲' }).click()
+      const canvas = page.getByLabel('Application 即時資源拓撲')
+      await expect(canvas.locator('.react-flow__node')).toHaveCount(
+        size.width < 600 ? 4 : 6,
+      )
+      await expectGraphWithinCanvas(canvas)
+      await expect(
+        canvas.getByRole('button', { name: /Unknown 6/ }),
+      ).toBeVisible()
+      const zoom = await canvas
+        .locator('.react-flow__viewport')
+        .evaluate(
+          (element) =>
+            new DOMMatrixReadOnly(getComputedStyle(element).transform).a,
+        )
+      expect(zoom).toBeGreaterThanOrEqual(1)
+      const fonts = await canvas.evaluate((element) => {
+        const zoom = new DOMMatrixReadOnly(
+          getComputedStyle(element.querySelector('.react-flow__viewport')!)
+            .transform,
+        ).a
+        const size = (selector: string) =>
+          Number.parseFloat(
+            getComputedStyle(element.querySelector(selector)!).fontSize,
+          ) * zoom
+        return {
+          name: size('.react-flow__node-runtime [class*="nodeName"]'),
+          health: size('.react-flow__node-runtime .ant-typography-secondary'),
+          kind: size('.react-flow__node-runtime [class*="kindChip"]'),
+          group: size('.react-flow__node-runtime-group [class*="nodeName"]'),
+        }
+      })
+      expect(fonts.name).toBeGreaterThanOrEqual(14)
+      expect(fonts.health).toBeGreaterThanOrEqual(14)
+      expect(fonts.kind).toBeGreaterThanOrEqual(12)
+      expect(fonts.group).toBeGreaterThanOrEqual(12)
+    })
+}
+
+test('320px 可讀摘要容納 100 個資源並保留原始數量', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 568 })
+  await preparePage(page, 'dark')
+  await page.route(
+    `**/api/v1/catalog/applications/${applicationID}/runtime/topology?**`,
+    (route) => {
+      const data = layeredTopology()
+      const deployment = data.nodes.find((node) => node.id === 'deployment')!
+      data.nodes = [
+        deployment,
+        ...Array.from({ length: 99 }, (_, index) => ({
+          ...deployment,
+          id: `replica-${index}`,
+          name: `replica-${index}`,
+          kind: 'ReplicaSet',
+        })),
+      ]
+      data.edges = Array.from({ length: 99 }, (_, index) => ({
+        id: `edge-${index}`,
+        source: 'deployment',
+        target: `replica-${index}`,
+        kind: 'resource' as const,
+      }))
+      return route.fulfill(json({ data, meta: meta() }))
+    },
+  )
+  await page.goto(`/applications/${applicationID}`)
+  await page.getByRole('tab', { name: '資源拓撲' }).click()
+  const canvas = page.getByLabel('Application 即時資源拓撲')
+  await expect(canvas.locator('.react-flow__node')).toHaveCount(2)
+  await expectGraphWithinCanvas(canvas)
+  await expect(canvas.getByRole('button', { name: /Healthy 99/ })).toBeVisible()
+  await expect(page.getByText(/回傳 100 個資源/)).toBeVisible()
+})
+
+test('分層圖跨桌面與窄版 resize 後各自恢復入框視角', async ({ page }) => {
+  await page.setViewportSize({ width: 1200, height: 900 })
+  await preparePage(page, 'light')
+  await page.route(
+    `**/api/v1/catalog/applications/${applicationID}/runtime/topology?**`,
+    (route) => {
+      const data = layeredTopology()
+      for (const node of data.nodes) {
+        if (
+          [
+            'namespace',
+            'secret',
+            'service-account',
+            'network-policy',
+            'pod-disruption-budget',
+            'role-binding',
+          ].includes(node.id)
+        )
+          node.healthStatus = ''
+      }
+      return route.fulfill(json({ data, meta: meta() }))
+    },
+  )
+  await page.goto(`/applications/${applicationID}`)
+  await page.getByRole('tab', { name: '資源拓撲' }).click()
+  const canvas = page.getByLabel('Application 即時資源拓撲')
+  await expect(canvas.locator('.react-flow__node')).toHaveCount(6)
+  await expectGraphWithinCanvas(canvas)
+
+  await page.setViewportSize({ width: 320, height: 568 })
+  await expect(canvas.locator('.react-flow__node')).toHaveCount(4)
+  await expectGraphWithinCanvas(canvas)
+
+  await page.setViewportSize({ width: 1200, height: 900 })
+  await expect(canvas.locator('.react-flow__node')).toHaveCount(6)
+  await expectGraphWithinCanvas(canvas)
+})
+
+for (const theme of ['light', 'dark'] as const) {
   for (const width of [1440, 900])
     test(`${theme} ${width}px 分層首屏保留可讀字級，群組可展開並切換全部資源`, async ({
       page,
@@ -175,7 +320,7 @@ test.describe('觸控分層拓撲', () => {
     await page.getByRole('tab', { name: '資源拓撲' }).click()
     const canvas = page.getByLabel('Application 即時資源拓撲')
     await expect(canvas.locator('.react-flow__node-runtime-group')).toHaveCount(
-      2,
+      1,
     )
     const zoom = await canvas
       .locator('.react-flow__viewport')
@@ -184,11 +329,14 @@ test.describe('觸控分層拓撲', () => {
           new DOMMatrixReadOnly(getComputedStyle(element).transform).a,
       )
     expect(zoom).toBeGreaterThanOrEqual(1)
-    await canvas.getByRole('button', { name: /展開 其他頂層資源/ }).tap()
-    await expect(canvas.locator('.react-flow__node-runtime')).toHaveCount(9)
-    await page.getByRole('button', { name: '收合 其他頂層資源' }).tap()
+    await canvas.getByRole('button', { name: /展開 其餘 12 個資源/ }).tap()
+    await expect(canvas.locator('.react-flow__node-runtime')).toHaveCount(15)
+    await expect(
+      canvas.locator('.react-flow__edge:not(.runtime-presentation-edge)'),
+    ).toHaveCount(6)
+    await page.getByRole('button', { name: '收合 其餘 12 個資源' }).tap()
     await expect(canvas.locator('.react-flow__node-runtime-group')).toHaveCount(
-      2,
+      1,
     )
   })
 })
@@ -321,7 +469,7 @@ for (const theme of ['light', 'dark'] as const) {
       const kindChip = canvas.getByText('Deployment', { exact: true })
       await expect(kindChip).toHaveCSS(
         'background-color',
-        theme === 'light' ? 'rgb(234, 242, 255)' : 'rgb(23, 32, 51)',
+        theme === 'light' ? 'rgb(246, 248, 251)' : 'rgb(9, 11, 18)',
       )
       await expect(kindChip).toHaveCSS(
         'color',
@@ -727,6 +875,10 @@ for (const theme of ['light', 'dark'] as const) {
       await page.goto(`/applications/${applicationID}`)
       await page.getByRole('tab', { name: '資源拓撲' }).click()
       const canvas = page.getByLabel('Application 即時資源拓撲')
+      if (viewport.width < 600) {
+        await canvas.getByRole('button', { name: /展開 其餘/ }).click()
+        await expect(canvas.locator('.react-flow__node-runtime')).toHaveCount(4)
+      }
       const node = canvas.getByRole('button', { name: /pod/ }).first()
       await node.focus()
       await page.keyboard.press('Enter')
@@ -840,6 +992,10 @@ test('320px 長 Summary 只在內容區捲動且關閉控制保持可用', async
   )
   await page.goto(`/applications/${applicationID}`)
   await page.getByRole('tab', { name: '資源拓撲' }).click()
+  await page
+    .getByLabel('Application 即時資源拓撲')
+    .getByRole('button', { name: /展開 其餘/ })
+    .click()
   const node = page.locator('[data-runtime-node-id="pod"]')
   await node.click()
   const dialog = page.getByRole('dialog')
@@ -1400,7 +1556,7 @@ test('runtime theme switches in place with readable status and observation', asy
       await expect(node.getByText('Healthy')).toHaveCSS('color', secondary)
       await expect(node).toHaveCSS(
         'background-color',
-        dark ? 'rgb(18, 59, 49)' : 'rgb(226, 246, 236)',
+        dark ? 'rgb(15, 23, 42)' : 'rgb(255, 255, 255)',
       )
       await expect(node).toHaveCSS(
         'border-top-color',
@@ -1499,11 +1655,8 @@ for (const theme of ['light', 'dark'] as const) {
           probe.style.color = `var(${token})`
           return getComputedStyle(probe).color
         }
-        const expectedSurface = resolve(
-          tone === 'neutral'
-            ? '--rh-color-surface'
-            : `--rh-feedback-${tone}-bg`,
-        )
+        const expectedSurface = resolve('--rh-color-surface')
+        const expectedIconSurface = resolve('--rh-color-page')
         const expectedAccent = resolve(
           tone === 'neutral'
             ? '--rh-color-text-secondary'
@@ -1522,26 +1675,180 @@ for (const theme of ['light', 'dark'] as const) {
         const status = element.querySelector('.ant-typography-secondary')!
         const foreground = luminance(getComputedStyle(status).color)
         const background = luminance(style.backgroundColor)
+        const icon = element.querySelector('[class*="nodeIcon"]')!
+        const iconStyle = getComputedStyle(icon)
+        const name = element.querySelector('[class*="nodeName"]')!
+        const chip = element.querySelector('[class*="kindChip"]')!
+        const chipStyle = getComputedStyle(chip)
+        const ratio = (left: string, right: string) => {
+          const light = Math.max(luminance(left), luminance(right))
+          const dark = Math.min(luminance(left), luminance(right))
+          return (light + 0.05) / (dark + 0.05)
+        }
         probe.remove()
         return {
           background: style.backgroundColor,
           accent: style.borderTopColor,
           borderWidth: style.borderTopWidth,
           expectedSurface,
+          iconSurface: iconStyle.backgroundColor,
+          expectedIconSurface,
           expectedAccent,
           contrast:
             (Math.max(foreground, background) + 0.05) /
             (Math.min(foreground, background) + 0.05),
+          nameContrast: ratio(
+            getComputedStyle(name).color,
+            style.backgroundColor,
+          ),
+          chipContrast: ratio(chipStyle.color, chipStyle.backgroundColor),
+          iconContrast: ratio(iconStyle.color, iconStyle.backgroundColor),
+          accentContrast: ratio(style.borderTopColor, style.backgroundColor),
         }
       }, tone)
       expect(measurements.background).toBe(measurements.expectedSurface)
+      expect(measurements.iconSurface).toBe(measurements.expectedIconSurface)
       expect(measurements.accent).toBe(measurements.expectedAccent)
       expect(measurements.borderWidth).toBe('3px')
       expect(measurements.contrast).toBeGreaterThanOrEqual(4.5)
+      expect(measurements.nameContrast).toBeGreaterThanOrEqual(4.5)
+      expect(measurements.chipContrast).toBeGreaterThanOrEqual(4.5)
+      expect(measurements.iconContrast).toBeGreaterThanOrEqual(3)
+      expect(measurements.accentContrast).toBeGreaterThanOrEqual(3)
+      await expect(node.locator('.ant-typography-secondary')).toHaveText(
+        statuses[index] || '未回報',
+      )
+      await expect(node).toHaveAttribute(
+        'aria-description',
+        statuses[index] || '未回報',
+      )
     }
     await page.screenshot({
       path: `/tmp/releasehub-runtime-${theme}.png`,
       fullPage: true,
+    })
+  })
+}
+
+test('同頁切換主題時所有健康狀態維持中性卡片與圖示底色', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1100 })
+  await preparePage(page, 'light')
+  const statuses = [
+    'Healthy',
+    'Progressing',
+    'Missing',
+    'Suspended',
+    'Degraded',
+    'Unknown',
+    '',
+  ]
+  await page.route(
+    `**/api/v1/catalog/applications/${applicationID}/runtime/topology?**`,
+    (route) => {
+      const data = topology()
+      data.nodes = statuses.map((healthStatus, index) => ({
+        ...data.nodes[0],
+        id: `palette-${index}`,
+        name: `palette-${index}`,
+        healthStatus,
+      }))
+      data.edges = []
+      return route.fulfill(json({ data, meta: meta() }))
+    },
+  )
+  await page.goto(`/applications/${applicationID}`)
+  await page.getByRole('tab', { name: '資源拓撲' }).click()
+  await page.getByText('全部資源', { exact: true }).click()
+  for (const theme of ['light', 'dark'] as const) {
+    if (theme === 'dark') {
+      await page
+        .getByRole('button', { name: '開啟 vincent 的帳號選單' })
+        .click()
+      await page.getByRole('menuitem', { name: '主題設定' }).click()
+      await page.getByRole('combobox', { name: '主題', exact: true }).click()
+      await page.getByText('深色', { exact: true }).last().click()
+      await page.keyboard.press('Escape')
+      await page.mouse.click(350, 100)
+    }
+    await expect(page.locator('html')).toHaveAttribute('data-theme', theme)
+    await expect(page.locator('[data-runtime-node-id="palette-0"]')).toHaveCSS(
+      'background-color',
+      theme === 'dark' ? 'rgb(15, 23, 42)' : 'rgb(255, 255, 255)',
+    )
+    const palette = await page
+      .locator('[data-runtime-node-id]')
+      .evaluateAll((nodes) =>
+        nodes.map((node) => {
+          const style = getComputedStyle(node)
+          const icon = node.querySelector('[class*="nodeIcon"]')!
+          return {
+            health: node.getAttribute('data-health'),
+            surface: style.backgroundColor,
+            border: style.borderTopColor,
+            iconSurface: getComputedStyle(icon).backgroundColor,
+            iconColor: getComputedStyle(icon).color,
+            chipSurface: getComputedStyle(
+              node.querySelector('[class*="kindChip"]')!,
+            ).backgroundColor,
+            label: node.querySelector('.ant-typography-secondary')?.textContent,
+          }
+        }),
+      )
+    expect(palette).toHaveLength(statuses.length)
+    for (const [index, item] of palette.entries()) {
+      expect(item.health).toBe(statuses[index] || 'Unknown')
+      expect(item.surface).toBe(
+        theme === 'dark' ? 'rgb(15, 23, 42)' : 'rgb(255, 255, 255)',
+      )
+      expect(item.iconSurface).toBe(
+        theme === 'dark' ? 'rgb(9, 11, 18)' : 'rgb(246, 248, 251)',
+      )
+      expect(item.chipSurface).toBe(item.iconSurface)
+      expect(item.label).toBe(statuses[index] || '未回報')
+    }
+    await page.screenshot({
+      path: `/tmp/releasehub-runtime-palette-after-${theme}.png`,
+      fullPage: true,
+    })
+  }
+})
+
+for (const theme of ['light', 'dark'] as const) {
+  test(`${theme} 分層群組與資源共用中性表面且保留呈現標記`, async ({
+    page,
+  }) => {
+    await preparePage(page, theme)
+    await page.route(
+      `**/api/v1/catalog/applications/${applicationID}/runtime/topology?**`,
+      (route) => route.fulfill(json({ data: layeredTopology(), meta: meta() })),
+    )
+    await page.goto(`/applications/${applicationID}`)
+    await page.getByRole('tab', { name: '資源拓撲' }).click()
+    const canvas = page.getByLabel('Application 即時資源拓撲')
+    const group = canvas.locator('.react-flow__node-runtime-group').first()
+    const resource = canvas.locator('.react-flow__node-runtime').first()
+    await expect(group).toBeVisible()
+    await expect(resource).toBeVisible()
+    const surface = theme === 'dark' ? 'rgb(15, 23, 42)' : 'rgb(255, 255, 255)'
+    const iconSurface =
+      theme === 'dark' ? 'rgb(9, 11, 18)' : 'rgb(246, 248, 251)'
+    for (const node of [group, resource]) {
+      await expect(node.locator('button')).toHaveCSS(
+        'background-color',
+        surface,
+      )
+      await expect(node.locator('[class*="nodeIcon"]')).toHaveCSS(
+        'background-color',
+        iconSurface,
+      )
+    }
+    await expect(group.locator('button')).toHaveCSS(
+      'border-top-style',
+      'dashed',
+    )
+    await expect(group.locator('button')).toContainText('Healthy')
+    await canvas.screenshot({
+      path: `/tmp/releasehub-runtime-group-after-${theme}.png`,
     })
   })
 }

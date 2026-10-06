@@ -263,6 +263,75 @@ describe('runtimeLayeredTopologyToGraph', () => {
     expect(original.edges).toHaveLength(6)
   })
 
+  it('collapses independent Unknown auxiliary leaves without presenting them as Healthy', () => {
+    const original = topology()
+    for (const id of [
+      'namespace',
+      'secret',
+      'account',
+      'policy',
+      'budget',
+      'binding',
+    ]) {
+      original.nodes.find((node) => node.id === id)!.healthStatus = ''
+    }
+
+    const graph = runtimeLayeredTopologyToGraph(original, new Set())
+    const auxiliary = graph.groups.find((group) => group.parentId === null)
+
+    expect(auxiliary).toMatchObject({
+      rootCount: 6,
+      healthCounts: { Unknown: 6 },
+    })
+    expect(auxiliary?.healthCounts.Healthy).toBeUndefined()
+    expect(graph.nodes).toHaveLength(6)
+    expect(graph.visibleResourceCount + graph.groupedResourceCount).toBe(15)
+    expect(
+      original.nodes.find((node) => node.id === 'policy')?.healthStatus,
+    ).toBe('')
+  })
+
+  it('uses a single-column compact summary while preserving direct workload and abnormal nodes', () => {
+    const original = topology()
+    original.nodes.find((node) => node.id === 'policy')!.healthStatus = ''
+    original.nodes.find((node) => node.id === 'secret')!.healthStatus =
+      'Degraded'
+    const collapsed = runtimeLayeredTopologyToGraph(
+      original,
+      new Set(),
+      false,
+      'payments',
+      true,
+    )
+    const group = collapsed.groups[0]
+
+    expect(collapsed.nodes.map((node) => node.id)).toEqual([
+      'ingress',
+      'service',
+      'deployment',
+      'secret',
+      group.groupId,
+    ])
+    expect(group.healthCounts.Unknown).toBe(1)
+    expect(group.healthCounts.Degraded).toBeUndefined()
+    expect(group.compactOverview).toBe(true)
+    expect(collapsed.edges).toEqual([])
+    expect(collapsed.nodes.every((node) => node.position.x === 0)).toBe(true)
+
+    const expanded = runtimeLayeredTopologyToGraph(
+      original,
+      new Set([group.groupId]),
+      false,
+      'payments',
+      true,
+    )
+    expect(expanded.nodes).toHaveLength(16)
+    expect(expanded.edges.map((edge) => edge.id)).toEqual(
+      expect.arrayContaining(original.edges.map((edge) => edge.id)),
+    )
+    expect(expanded.groupedResourceCount).toBe(0)
+  })
+
   it('expands with original resource IDs and evidence edges, and keeps stable group identities', () => {
     const original = topology()
     const collapsed = runtimeLayeredTopologyToGraph(original, new Set())
@@ -304,6 +373,18 @@ describe('runtimeLayeredTopologyToGraph', () => {
     expect(fallback.groupingAvailable).toBe(false)
     expect(fallback.nodes).toHaveLength(16)
     expect(fallback.groupedResourceCount).toBe(0)
+    const compactFallback = runtimeLayeredTopologyToGraph(
+      abnormal,
+      new Set(),
+      false,
+      'payments',
+      true,
+    )
+    expect(compactFallback.groupingAvailable).toBe(false)
+    expect(compactFallback.nodes).toHaveLength(16)
+    expect(compactFallback.edges.map((edge) => edge.id)).toEqual(
+      fallback.edges.map((edge) => edge.id),
+    )
   })
 
   it('leaves orphaned and shared-child resources visible instead of inventing ownership', () => {
@@ -362,6 +443,9 @@ describe('runtimeLayeredTopologyToGraph', () => {
     expect(graph.edges.map((edge) => edge.id)).toEqual([
       'network:service:pod-0',
     ])
+    expect(
+      runtimeLayeredTopologyToGraph(projected, new Set(), false, '', true),
+    ).toEqual(graph)
   })
 
   it('keeps a 100-resource response reversible without losing or repeating members', () => {
@@ -395,6 +479,20 @@ describe('runtimeLayeredTopologyToGraph', () => {
       expanded.edges.filter((edge) => edge.id.startsWith('edge-')),
     ).toHaveLength(99)
     expect(large.nodes).toHaveLength(100)
+
+    const compact = runtimeLayeredTopologyToGraph(
+      large,
+      new Set(),
+      false,
+      'payments',
+      true,
+    )
+    expect(compact.nodes).toHaveLength(2)
+    expect(compact.groups[0].memberIds).toHaveLength(99)
+    expect(compact.groups[0].healthCounts).toEqual({ Healthy: 99 })
+    expect(compact.visibleResourceCount + compact.groupedResourceCount).toBe(
+      100,
+    )
   })
 })
 

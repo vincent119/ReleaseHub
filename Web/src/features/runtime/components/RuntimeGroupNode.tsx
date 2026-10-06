@@ -10,16 +10,25 @@ type GroupNode = Node<RuntimeGroupNodeData, 'runtime-group'>
 
 export function RuntimeGroupNode({ data }: NodeProps<GroupNode>) {
   const { t } = useTranslation()
-  const title = data.kind
-    ? t('runtimeTopology.group.kind', {
-        kind: data.kind,
-        count: data.rootCount,
-      })
-    : t('runtimeTopology.group.other')
+  const title = data.compactOverview
+    ? t('runtimeTopology.group.compact', { count: data.memberIds.length })
+    : data.kind
+      ? t('runtimeTopology.group.kind', {
+          kind: data.kind,
+          count: data.rootCount,
+        })
+      : t('runtimeTopology.group.other')
   const kinds = Object.entries(data.kindCounts)
     .map(([kind, count]) => `${kind} ${count}`)
     .join(', ')
   const health = Object.entries(data.healthCounts)
+    .sort(([left], [right]) =>
+      left === 'Unknown'
+        ? -1
+        : right === 'Unknown'
+          ? 1
+          : left.localeCompare(right),
+    )
     .map(([status, count]) => `${status} ${count}`)
     .join(', ')
 
@@ -50,13 +59,15 @@ export function RuntimeGroupNode({ data }: NodeProps<GroupNode>) {
           <span className={styles.nodeName}>{title}</span>
           <span className={styles.nodeMeta}>
             <Typography.Text type="secondary">
-              {t('runtimeTopology.group.resources', {
-                count: data.memberIds.length,
-              })}
-              {' · '}
-              {t('runtimeTopology.group.healthy', {
-                count: data.healthCounts.Healthy ?? 0,
-              })}
+              {!data.compactOverview && (
+                <>
+                  {t('runtimeTopology.group.resources', {
+                    count: data.memberIds.length,
+                  })}
+                  {' · '}
+                </>
+              )}
+              {health}
             </Typography.Text>
           </span>
         </span>

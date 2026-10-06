@@ -20,6 +20,7 @@ export interface RuntimeGroupNodeData extends Record<string, unknown> {
   memberIds: string[]
   kindCounts: Record<string, number>
   healthCounts: Record<string, number>
+  compactOverview?: boolean
 }
 
 export type RuntimeResourceFlowNode = Node<RuntimeNodeData, 'runtime'>
@@ -199,6 +200,7 @@ export function runtimeLayeredTopologyToGraph(
   expandedGroupIds: ReadonlySet<string>,
   deploymentActive = false,
   applicationName = topology.applicationId,
+  compact = false,
 ): RuntimeLayeredGraph {
   const full = runtimeTopologyToGraph(
     topology,
@@ -236,6 +238,84 @@ export function runtimeLayeredTopologyToGraph(
       ...(children.get(edge.source) ?? []),
       edge.target,
     ])
+  }
+
+  if (compact) {
+    const directIds = new Set(
+      topology.nodes
+        .filter(
+          (node) =>
+            protectedKinds.has(node.kind) ||
+            node.orphaned ||
+            (node.healthStatus !== 'Healthy' &&
+              node.healthStatus !== 'Unknown' &&
+              Boolean(node.healthStatus)),
+        )
+        .map((node) => node.id),
+    )
+    const members = topology.nodes
+      .filter((node) => !directIds.has(node.id))
+      .map((node) => node.id)
+      .sort()
+    if (members.length === 0) return fallback()
+    const kindCounts: Record<string, number> = {}
+    const healthCounts: Record<string, number> = {}
+    for (const id of members) {
+      const node = resources.get(id)!
+      kindCounts[node.kind] = (kindCounts[node.kind] ?? 0) + 1
+      const health = node.healthStatus || 'Unknown'
+      healthCounts[health] = (healthCounts[health] ?? 0) + 1
+    }
+    const identity = JSON.stringify([
+      topology.applicationId,
+      'compact',
+      members,
+    ])
+    let groupId = `releasehub:group:${hashGroupIdentity(identity)}`
+    for (let suffix = 1; resources.has(groupId); suffix += 1)
+      groupId = `releasehub:group:${hashGroupIdentity(identity)}:${suffix}`
+    const compactGroup: RuntimeGroupNodeData = {
+      groupId,
+      parentId: null,
+      kind: null,
+      rootCount: members.length,
+      memberIds: members,
+      kindCounts,
+      healthCounts,
+      compactOverview: true,
+    }
+    if (expandedGroupIds.has(compactGroup.groupId))
+      return {
+        ...full,
+        groups: [compactGroup],
+        visibleResourceCount: topology.nodes.length,
+        groupedResourceCount: 0,
+        groupingAvailable: true,
+      }
+    const directNodes = full.nodes.filter(
+      (node) => node.type === 'runtime' && directIds.has(node.id),
+    )
+    const groupNode: RuntimeFlowNode = {
+      id: compactGroup.groupId,
+      type: 'runtime-group',
+      width: nodeWidth,
+      height: nodeHeight,
+      position: { x: 0, y: 0 },
+      draggable: false,
+      data: compactGroup,
+    }
+    return {
+      nodes: [...directNodes, groupNode].map((node, index) => ({
+        ...node,
+        position: { x: 0, y: index * (nodeHeight + 16) },
+      })),
+      // 窄版摘要不能以虛構的線，暗示被收合資源皆隸屬於某個核心節點。
+      edges: [],
+      groups: [compactGroup],
+      visibleResourceCount: directIds.size,
+      groupedResourceCount: members.length,
+      groupingAvailable: true,
+    }
   }
 
   const safeSubtree = (rootId: string): string[] | null => {
@@ -294,7 +374,9 @@ export function runtimeLayeredTopologyToGraph(
       (node) =>
         (incoming.get(node.id) ?? []).length === 0 &&
         (children.get(node.id) ?? []).length === 0 &&
-        node.healthStatus === 'Healthy' &&
+        (node.healthStatus === 'Healthy' ||
+          !node.healthStatus ||
+          node.healthStatus === 'Unknown') &&
         !node.orphaned &&
         !protectedKinds.has(node.kind),
     )

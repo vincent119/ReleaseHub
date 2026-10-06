@@ -9,6 +9,7 @@ import {
 } from '@ant-design/icons'
 import { Button, Tooltip, Typography } from 'antd'
 import type { ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
 
 import {
   runtimeDisplayName,
@@ -17,10 +18,15 @@ import {
 import styles from './RuntimeTopologyPanel.module.css'
 
 export function RuntimeNode({ data }: NodeProps<RuntimeResourceFlowNode>) {
+  const { t } = useTranslation()
+  const health =
+    data.resource.healthStatus || t('runtimeTopology.healthUnknown')
+
   return (
     <Tooltip title={data.resource.name} trigger={['hover', 'focus']}>
       <Button
         aria-label={`${data.resource.kind} ${data.resource.name}`}
+        aria-description={health}
         data-runtime-node-id={data.resource.id}
         data-health={data.resource.healthStatus || 'Unknown'}
         className={`${styles.node} ${data.active ? styles.nodeActive : ''}`}
@@ -43,7 +49,7 @@ export function RuntimeNode({ data }: NodeProps<RuntimeResourceFlowNode>) {
           <span className={styles.nodeMeta}>
             <span className={styles.kindChip}>{data.resource.kind}</span>
             <Typography.Text type="secondary" ellipsis>
-              {data.resource.healthStatus || '—'}
+              {health}
             </Typography.Text>
           </span>
         </span>

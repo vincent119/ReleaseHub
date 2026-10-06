@@ -433,6 +433,7 @@ export const zhTW = {
   },
   runtimeTopology: {
     title: 'Application 即時資源拓撲',
+    healthUnknown: '未回報',
     executionTitle: 'Application 即時部署狀態',
     application: '選擇 Application',
     applicationRoot: 'Application（畫面聚合）',
@@ -446,6 +447,7 @@ export const zhTW = {
     group: {
       kind: '{{kind}} × {{count}}',
       other: '其他頂層資源',
+      compact: '其餘 {{count}} 個資源',
       resources: '{{count}} 個資源',
       healthy: 'Healthy {{count}}',
       expand: '展開 {{title}}，包含 {{count}} 個資源',
@@ -458,6 +460,8 @@ export const zhTW = {
     readableZoom: '閱讀比例',
     overviewHint:
       '全圖總覽是定位用結構圖；文字過小時可按「閱讀比例」並平移查看名稱。',
+    compactHint: '窄版先顯示核心與資源摘要；展開摘要可查看完整資源關係。',
+    readingHint: '目前是可平移的局部閱讀視角，並非全部節點皆在畫布內。',
     unlinkedEntrance: '入口資源有明確證據，但尚無可確認的連線。',
     live: '部署進行中，每 5 秒更新',
     current: '顯示目前即時狀態，不代表該次執行快照',
