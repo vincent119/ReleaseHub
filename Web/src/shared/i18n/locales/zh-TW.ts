@@ -879,6 +879,21 @@ export const zhTW = {
   },
   requestDetail: {
     unavailable: 'Deployment Request 不存在，或你沒有查看權限。',
+    progress: {
+      title: '目前部署進度',
+      workflowStage: 'Workflow 階段',
+      requestStatus: 'Request 狀態：',
+      executionStatus: 'Execution 狀態',
+      loadingExecution: '正在取得 Deployment execution…',
+      nextAction: '下一步',
+      noAction: '目前沒有可執行操作',
+      review: '前往審核',
+      transition: '前往 Workflow 操作',
+      retry: '檢視失敗項目並重試',
+      terminate: '檢視部署並終止',
+      unlock: '檢視並解除鎖定',
+      affectedApplications: '受影響 Applications（{{count}}）',
+    },
     overview: { title: 'Request 摘要' },
     fields: {
       status: '狀態',
@@ -942,11 +957,14 @@ export const zhTW = {
     execution: {
       title: 'Deployment 執行狀態',
       pending: 'Workflow 尚未建立 Deployment execution。',
+      noApplications: 'Execution 尚無 Application 執行項目。',
       unavailable: '無法取得 Deployment execution。',
       attempt: 'Attempt',
       trigger: '觸發來源',
       id: 'Execution ID',
       selectRetry: '選取 {{application}} 進行重試',
+      includeInRetry: '加入重試',
+      viewTopology: '查看 {{application}} 的資源拓撲',
       revisionMismatch: {
         title: '實際部署已成功，但審核版本不一致',
         actualRevision: '實際部署 revision',
