@@ -271,11 +271,19 @@ test('自動 Request 經審核與部署後呈現 DAG 及 Partial Failed', async 
     .click()
   await page.getByRole('option', { name: 'production', exact: true }).click()
   await page.getByRole('link', { name: 'Automatic payment deployment' }).click()
+  await expect(page.getByText('目前部署進度')).toBeVisible()
+  await expect(page.getByRole('link', { name: '前往審核' })).toBeVisible()
   await expect(page.getByRole('button', { name: '核准申請' })).toBeVisible()
 
   await page.getByRole('button', { name: '核准申請' }).click()
+  await expect(
+    page.getByRole('link', { name: '前往 Workflow 操作' }),
+  ).toBeVisible()
   await page.getByRole('button', { name: 'deploy' }).click()
   await expect(page.getByText('Partial Failed').first()).toBeVisible()
+  await expect(
+    page.getByRole('link', { name: '檢視失敗項目並重試' }),
+  ).toBeVisible()
   await expect(page.getByText('等待：app-a')).toBeVisible()
   await expect(page.getByText('Synced · Healthy').first()).toBeVisible()
   await expect(page.getByText('sync failed')).toBeVisible()
@@ -460,6 +468,78 @@ for (const theme of ['light', 'dark'] as const)
       2,
     )
   })
+
+test('每個 Application 的執行證據可獨立展開並進入其拓樸', async ({ page }) => {
+  const state = {
+    request: deployedRequest(requestFixture()),
+    retryBody: undefined as unknown,
+  }
+  await mockApplication(page, state)
+  await page.route(
+    '**/api/v1/catalog/applications/*/runtime/topology?**',
+    (route) => {
+      const applicationId = new URL(route.request().url()).pathname.split(
+        '/',
+      )[5]
+      return route.fulfill(
+        json({ data: topologyFixture(applicationId), meta: meta() }),
+      )
+    },
+  )
+
+  await page.goto(`/requests/${ids.request}`)
+  const node = page
+    .locator('.ant-collapse-item')
+    .filter({ has: page.getByText('app-b', { exact: true }) })
+    .first()
+  await expect(node.getByText('sync failed')).toBeVisible()
+  await node.locator('.ant-collapse-header').click()
+  await expect(node.getByText('sync failed')).not.toBeVisible()
+  await node.locator('.ant-collapse-header').click()
+  await expect(node.getByText('sync failed')).toBeVisible()
+  await node.getByRole('button', { name: '查看 app-b 的資源拓撲' }).click()
+  await expect(
+    page.getByLabel('Application 即時資源拓撲').getByText('app-b-pod'),
+  ).toBeVisible()
+})
+
+for (const theme of ['light', 'dark']) {
+  for (const width of [320, 768, 1440]) {
+    test(`進度優先詳情 ${theme} ${width}px 保持可讀且不水平溢位`, async ({
+      page,
+    }, testInfo) => {
+      await page.setViewportSize({ width, height: 900 })
+      await page.addInitScript((selectedTheme) => {
+        localStorage.setItem('releasehub.theme', selectedTheme)
+      }, theme)
+      const request = deployedRequest(requestFixture())
+      request.title = '跨服務部署申請'.repeat(12)
+      const state = { request, retryBody: undefined as unknown }
+      await mockApplication(page, state)
+
+      await page.goto(`/requests/${ids.request}`)
+      await expect(page.locator('html')).toHaveAttribute('data-theme', theme)
+      await expect(page.getByText('目前部署進度')).toBeVisible()
+      await expect(
+        page.getByRole('link', { name: '檢視失敗項目並重試' }),
+      ).toBeVisible()
+      await expect(page.getByText('受影響 Applications（2）')).toBeVisible()
+      expect(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= innerWidth + 1,
+        ),
+      ).toBe(true)
+      await page.screenshot({ path: testInfo.outputPath('progress-first.png') })
+      const nextAction = page.getByRole('link', {
+        name: '檢視失敗項目並重試',
+      })
+      await nextAction.focus()
+      await nextAction.press('Enter')
+      await expect(page).toHaveURL(/#request-application-evidence$/)
+      await expect(page.locator('#request-application-evidence')).toBeFocused()
+    })
+  }
+}
 
 test('單一 Application 拓樸失敗不遮蔽 Request 與其他 Application', async ({
   page,

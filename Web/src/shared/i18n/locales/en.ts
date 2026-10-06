@@ -942,6 +942,21 @@ export const en = {
   requestDetail: {
     unavailable:
       'The Deployment Request does not exist or is outside your access scope.',
+    progress: {
+      title: 'Current deployment progress',
+      workflowStage: 'Workflow stage',
+      requestStatus: 'Request status:',
+      executionStatus: 'Execution status',
+      loadingExecution: 'Loading the Deployment execution…',
+      nextAction: 'Next action',
+      noAction: 'No action is currently available',
+      review: 'Go to review',
+      transition: 'Go to Workflow actions',
+      retry: 'Inspect failed items and retry',
+      terminate: 'Inspect and terminate deployment',
+      unlock: 'Inspect and unlock',
+      affectedApplications: 'Affected Applications ({{count}})',
+    },
     overview: { title: 'Request summary' },
     fields: {
       status: 'Status',
@@ -1005,11 +1020,14 @@ export const en = {
     execution: {
       title: 'Deployment execution',
       pending: 'The Workflow has not created a Deployment execution.',
+      noApplications: 'The Execution has no Application items yet.',
       unavailable: 'The Deployment execution could not be loaded.',
       attempt: 'Attempt',
       trigger: 'Trigger',
       id: 'Execution ID',
       selectRetry: 'Select {{application}} for retry',
+      includeInRetry: 'Include in retry',
+      viewTopology: 'View resource topology for {{application}}',
       revisionMismatch: {
         title: 'Deployment succeeded, but the reviewed revision differs',
         actualRevision: 'Deployed revision',

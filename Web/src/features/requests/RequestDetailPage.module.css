@@ -1,6 +1,109 @@
 .page {
   display: flex;
   width: 100%;
+  min-width: 0;
+}
+
+.sectionAnchor {
+  width: 100%;
+  min-width: 0;
+}
+
+.breadcrumbCurrent {
+  display: inline-block;
+  max-width: min(24rem, 65vw);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+
+.requestTitle {
+  display: -webkit-box;
+  margin: 0 !important;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.progressSummary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--rh-space-4);
+}
+
+.progressMetric {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+  gap: var(--rh-space-2);
+  padding: var(--rh-space-4);
+  border: 1px solid var(--rh-color-border);
+  border-radius: var(--rh-radius-md);
+  background: var(--rh-color-surface-soft);
+}
+
+.progressValue {
+  color: var(--rh-color-text-primary);
+  font-size: 1.125rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.progressMetric a.progressValue {
+  color: var(--rh-color-primary);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.progressMetric a.progressValue:hover {
+  color: var(--rh-color-primary-hover);
+}
+
+.progressMetric a.progressValue:focus-visible,
+.progressApplicationList a:focus-visible {
+  outline: 2px solid var(--rh-color-focus);
+  outline-offset: 3px;
+}
+
+.progressApplications {
+  margin-top: var(--rh-space-4);
+}
+
+.progressApplicationList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--rh-space-2);
+  max-height: 9rem;
+  margin: var(--rh-space-3) 0 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.progressApplicationList li {
+  display: flex;
+  align-items: center;
+  gap: var(--rh-space-2);
+  min-width: 0;
+  max-width: 100%;
+  padding: var(--rh-space-2) var(--rh-space-3);
+  border: 1px solid var(--rh-color-border);
+  border-radius: var(--rh-radius-md);
+}
+
+.progressApplicationList a {
+  min-width: 0;
+  color: var(--rh-color-primary);
+  overflow-wrap: anywhere;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.progressApplicationList a:hover {
+  color: var(--rh-color-primary-hover);
 }
 
 .summaryGrid {
@@ -35,6 +138,10 @@
 }
 
 @media (max-width: 48rem) {
+  .progressSummary {
+    grid-template-columns: 1fr;
+  }
+
   .summaryGrid {
     grid-template-columns: 1fr;
   }

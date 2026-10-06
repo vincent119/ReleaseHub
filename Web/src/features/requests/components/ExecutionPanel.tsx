@@ -5,6 +5,7 @@ import {
   Checkbox,
   Collapse,
   Descriptions,
+  Empty,
   Form,
   Input,
   Modal,
@@ -28,7 +29,6 @@ import type {
 } from '@/generated/model'
 import { RuntimeTopologyPanel } from '@/features/runtime'
 import { useFeedback } from '@/shared/feedback/useFeedback'
-import { SemanticList, SemanticListItemContent } from '@/shared/list'
 
 import {
   nodeStatusColor,
@@ -121,39 +121,25 @@ export function ExecutionPanel({
           {execution.id}
         </Descriptions.Item>
       </Descriptions>
-      <SemanticList
-        items={execution.nodes}
-        rowKey="id"
-        renderItem={(node) => (
-          <SemanticListItemContent
-            extra={
-              <Tag color={nodeStatusColor(node.status)}>{node.status}</Tag>
-            }
-            title={
-              <Checkbox
-                aria-label={t('requestDetail.execution.selectRetry', {
-                  application: node.nodeKey,
-                })}
-                disabled={
-                  node.status !== 'Failed' ||
-                  !capability('deployment_request.retry')
-                }
-                checked={selected.includes(node.applicationId)}
-                onChange={(event) =>
-                  setSelected(
-                    toggleValue(
-                      selected,
-                      node.applicationId,
-                      event.target.checked,
-                    ),
-                  )
-                }
-              >
-                {node.nodeKey}
-              </Checkbox>
-            }
-            description={
-              <Space orientation="vertical" size={0}>
+      {execution.nodes.length === 0 ? (
+        <Empty description={t('requestDetail.execution.noApplications')} />
+      ) : (
+        <Collapse
+          defaultActiveKey={
+            execution.nodes.length <= 3
+              ? execution.nodes.map((node) => node.id)
+              : failed.map((node) => node.id)
+          }
+          items={execution.nodes.map((node) => ({
+            key: node.id,
+            label: (
+              <Space wrap>
+                <Typography.Text strong>{node.nodeKey}</Typography.Text>
+                <Tag color={nodeStatusColor(node.status)}>{node.status}</Tag>
+              </Space>
+            ),
+            children: (
+              <Space orientation="vertical" size="small">
                 <Typography.Text type="secondary">
                   {node.syncStatus} · {node.healthStatus}
                 </Typography.Text>
@@ -174,11 +160,42 @@ export function ExecutionPanel({
                     </Typography.Text>
                   )
                 )}
+                {node.status === 'Failed' &&
+                  capability('deployment_request.retry') && (
+                    <Checkbox
+                      aria-label={t('requestDetail.execution.selectRetry', {
+                        application: node.nodeKey,
+                      })}
+                      checked={selected.includes(node.applicationId)}
+                      onChange={(event) =>
+                        setSelected(
+                          toggleValue(
+                            selected,
+                            node.applicationId,
+                            event.target.checked,
+                          ),
+                        )
+                      }
+                    >
+                      {t('requestDetail.execution.includeInRetry')}
+                    </Checkbox>
+                  )}
+                <Button
+                  size="small"
+                  onClick={() => {
+                    setTopologyApplication(node.applicationId)
+                    setTopologyOpen(true)
+                  }}
+                >
+                  {t('requestDetail.execution.viewTopology', {
+                    application: node.nodeKey,
+                  })}
+                </Button>
               </Space>
-            }
-          />
-        )}
-      />
+            ),
+          }))}
+        />
+      )}
       {observedApplication && (
         <Collapse
           activeKey={topologyVisible ? ['runtime'] : []}
