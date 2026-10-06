@@ -49,6 +49,31 @@
   overscroll-behavior: contain;
 }
 
+.summaryMode .container {
+  height: auto;
+  max-height: 90dvh;
+}
+
+.summaryMode .body,
+.summaryMode .tabs,
+.summaryMode .tabs :global(.ant-tabs-body-holder) {
+  flex: 0 1 auto;
+}
+
+.summaryMode .tabs :global(.ant-tabs-body) {
+  /* Auto 高度的摘要在短視窗仍需讓 pane 收縮，避免內容被外層 hidden 裁切。 */
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.summaryMode .tabs :global(.ant-tabs-content) {
+  height: auto;
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
 .tabs :global(.ant-descriptions-item-content) {
   overflow-wrap: anywhere;
 }
@@ -77,6 +102,11 @@
       max(var(--rh-space-4), env(safe-area-inset-bottom))
       max(var(--rh-space-4), env(safe-area-inset-left));
     border-radius: 0;
+  }
+
+  .summaryMode .container {
+    height: auto;
+    max-height: 100dvh;
   }
 }
 
