@@ -460,6 +460,7 @@ export const en = {
   },
   runtimeTopology: {
     title: 'Live Application resource topology',
+    healthUnknown: 'Unknown',
     executionTitle: 'Live Application deployment status',
     application: 'Select Application',
     applicationRoot: 'Application (presentation)',
@@ -473,6 +474,7 @@ export const en = {
     group: {
       kind: '{{kind}} × {{count}}',
       other: 'Other top-level resources',
+      compact: '{{count}} more resources',
       resources: '{{count}} resources',
       healthy: 'Healthy {{count}}',
       expand: 'Expand {{title}}, containing {{count}} resources',
@@ -485,6 +487,10 @@ export const en = {
     readableZoom: 'Reading zoom',
     overviewHint:
       'Fit all is a structural map for orientation. Use Reading zoom and pan to inspect names.',
+    compactHint:
+      'The narrow view shows core resources and a summary. Expand the summary to inspect all relationships.',
+    readingHint:
+      'This is a pannable reading view; not every node is currently inside the canvas.',
     unlinkedEntrance:
       'The entry resource has explicit evidence, but no relationship can be confirmed.',
     live: 'Deployment in progress; refreshes every 5 seconds',

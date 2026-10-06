@@ -367,11 +367,16 @@ test('多 Application 切換後各自保留拓樸視角', async ({ page }) => {
   await expect(viewport).toHaveAttribute('style', second ?? '')
 })
 
-for (const theme of ['light', 'dark'] as const)
-  test(`Request ${theme} 900px 分層拓樸共用群組及全部資源模式`, async ({
+for (const [theme, width] of [
+  ['light', 900],
+  ['dark', 900],
+  ['light', 320],
+  ['dark', 320],
+] as const)
+  test(`Request ${theme} ${width}px 分層拓樸共用群組及全部資源模式`, async ({
     page,
   }) => {
-    await page.setViewportSize({ width: 900, height: 900 })
+    await page.setViewportSize({ width, height: 900 })
     await page.addInitScript((mode) => {
       localStorage.setItem('releasehub.theme', mode)
     }, theme)
@@ -445,8 +450,26 @@ for (const theme of ['light', 'dark'] as const)
     await page.getByText('Application 即時部署狀態').click()
     const canvas = page.getByLabel('Application 即時資源拓撲')
     await expect(canvas.locator('.react-flow__node-runtime-group')).toHaveCount(
-      2,
+      width < 600 ? 1 : 2,
     )
+    const expectedCard =
+      theme === 'light' ? 'rgb(255, 255, 255)' : 'rgb(15, 23, 42)'
+    const expectedIcon =
+      theme === 'light' ? 'rgb(246, 248, 251)' : 'rgb(9, 11, 18)'
+    for (const kind of ['runtime', 'runtime-group']) {
+      const item = canvas.locator(`.react-flow__node-${kind}`).first()
+      await expect(item.locator('button')).toHaveCSS(
+        'background-color',
+        expectedCard,
+      )
+      await expect(item.locator('[class*="nodeIcon"]')).toHaveCSS(
+        'background-color',
+        expectedIcon,
+      )
+    }
+    await canvas.screenshot({
+      path: `/tmp/releasehub-request-palette-after-${theme}-${width}.png`,
+    })
     await expect(
       canvas.locator('.react-flow__controls-button').first(),
     ).toHaveCSS(
@@ -461,11 +484,31 @@ for (const theme of ['light', 'dark'] as const)
           new DOMMatrixReadOnly(getComputedStyle(element).transform).a,
       )
     expect(zoom).toBeGreaterThanOrEqual(1)
+    if (width < 600) {
+      await expect
+        .poll(() =>
+          canvas.evaluate((element) => {
+            const bounds = element.getBoundingClientRect()
+            return [...element.querySelectorAll('.react-flow__node')].every(
+              (node) => {
+                const rect = node.getBoundingClientRect()
+                return (
+                  rect.left >= bounds.left + 4 &&
+                  rect.right <= bounds.right - 4 &&
+                  rect.top >= bounds.top + 4 &&
+                  rect.bottom <= bounds.bottom - 4
+                )
+              },
+            )
+          }),
+        )
+        .toBe(true)
+    }
     await page.getByText('全部資源', { exact: true }).click()
     await expect(canvas.locator('.react-flow__node-runtime')).toHaveCount(8)
     await page.getByText('分層總覽', { exact: true }).click()
     await expect(canvas.locator('.react-flow__node-runtime-group')).toHaveCount(
-      2,
+      width < 600 ? 1 : 2,
     )
   })
 

@@ -9,6 +9,13 @@
   border-radius: var(--rh-radius-lg);
   background: var(--rh-color-page);
 }
+@media (max-width: 600px) {
+  .canvas {
+    /* Request 巢狀容器可能窄於 236px 節點，保留可讀卡片的完整邊界。 */
+    width: max(100%, 252px);
+    margin-inline-start: min(0px, calc((100% - 252px) / 2));
+  }
+}
 .canvas :global(.react-flow) {
   --xy-background-color: var(--rh-color-page);
   --xy-background-pattern-dots-color: var(--rh-color-border);
@@ -83,6 +90,7 @@
 .node {
   --runtime-node-accent: var(--rh-color-text-secondary);
   --runtime-node-surface: var(--rh-color-surface);
+  --runtime-node-icon-surface: var(--rh-color-page);
   animation: runtimeAppear 240ms ease-out both;
   width: 236px;
   height: 78px;
@@ -98,33 +106,29 @@
 .node.node:hover,
 .node.node:focus-visible {
   border-color: var(--rh-color-primary);
+  border-top-color: var(--runtime-node-accent);
   background: var(--runtime-node-surface);
 }
 .node[data-health='Healthy'] {
   --runtime-node-accent: var(--rh-color-success);
-  --runtime-node-surface: var(--rh-feedback-success-bg);
 }
 .node[data-health='Progressing'] {
   --runtime-node-accent: var(--rh-color-info);
-  --runtime-node-surface: var(--rh-feedback-info-bg);
 }
 .node[data-health='Missing'],
 .node[data-health='Suspended'] {
   --runtime-node-accent: var(--rh-color-warning);
-  --runtime-node-surface: var(--rh-feedback-warning-bg);
 }
 .node[data-health='Degraded'] {
   --runtime-node-accent: var(--rh-color-error);
-  --runtime-node-surface: var(--rh-feedback-error-bg);
 }
 .groupNode {
   --runtime-node-accent: var(--rh-color-primary);
-  --runtime-node-surface: var(--rh-color-primary-soft);
   border-style: dashed;
 }
 .node .nodeIcon {
   color: var(--runtime-node-accent);
-  background: var(--rh-color-surface);
+  background: var(--runtime-node-icon-surface);
 }
 .node :global(.react-flow__handle) {
   background: var(--runtime-node-accent);
@@ -165,7 +169,7 @@
   border: 1px solid var(--rh-color-border);
   border-radius: var(--rh-radius-sm);
   color: var(--rh-color-text-secondary);
-  background: var(--rh-color-surface-soft);
+  background: var(--rh-color-page);
   font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
