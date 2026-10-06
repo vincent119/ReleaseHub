@@ -442,10 +442,22 @@ export const zhTW = {
       evidence: 'Argo CD 回傳的資源關係',
     },
     views: { resources: '資源階層', network: '網路拓撲' },
+    modes: { layered: '分層總覽', all: '全部資源' },
+    group: {
+      kind: '{{kind}} × {{count}}',
+      other: '其他頂層資源',
+      resources: '{{count}} 個資源',
+      healthy: 'Healthy {{count}}',
+      expand: '展開 {{title}}，包含 {{count}} 個資源',
+      collapse: '收合 {{kind}}',
+      summary:
+        '目前顯示 {{visible}} 個資源，另有 {{grouped}} 個收合於 {{groups}} 個群組。',
+    },
     refresh: '重新整理',
     fitView: '全圖總覽',
     readableZoom: '閱讀比例',
-    overviewHint: '總覽顯示完整結構；按「閱讀比例」放大後可平移查看名稱。',
+    overviewHint:
+      '全圖總覽是定位用結構圖；文字過小時可按「閱讀比例」並平移查看名稱。',
     unlinkedEntrance: '入口資源有明確證據，但尚無可確認的連線。',
     live: '部署進行中，每 5 秒更新',
     current: '顯示目前即時狀態，不代表該次執行快照',

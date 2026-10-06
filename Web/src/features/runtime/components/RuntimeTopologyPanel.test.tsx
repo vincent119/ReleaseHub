@@ -454,4 +454,96 @@ describe('RuntimeTopologyPanel', () => {
       defaultViewport: { x: 75, y: -25, zoom: 1.1 },
     })
   })
+
+  it('shows a layered resource projection, expands a group, and restores the full graph independently', () => {
+    const result = api.topology()
+    const node = (id: string, kind: string) => ({
+      id,
+      group: '',
+      version: 'v1',
+      kind,
+      namespace: 'payments',
+      name: id,
+      healthStatus: 'Healthy',
+      healthMessage: '',
+      orphaned: false,
+      images: [],
+      info: [],
+      ingress: [],
+      externalUrls: [],
+    })
+    result.data.data.data.nodes = [
+      node('deployment', 'Deployment'),
+      node('replica-1', 'ReplicaSet'),
+      node('replica-2', 'ReplicaSet'),
+      node('pod-1', 'Pod'),
+      node('pod-2', 'Pod'),
+      node('service', 'Service'),
+      node('secret', 'Secret'),
+      node('policy', 'NetworkPolicy'),
+    ]
+    result.data.data.data.edges = [
+      {
+        id: 'one',
+        source: 'deployment',
+        target: 'replica-1',
+        kind: 'resource',
+      },
+      {
+        id: 'two',
+        source: 'deployment',
+        target: 'replica-2',
+        kind: 'resource',
+      },
+      { id: 'three', source: 'replica-1', target: 'pod-1', kind: 'resource' },
+      { id: 'four', source: 'replica-2', target: 'pod-2', kind: 'resource' },
+    ]
+
+    render(<RuntimeTopologyPanel applicationId="application-1" />)
+    const first = flow.render.mock.lastCall?.[0]
+    const group = first.nodes.find(
+      (item: { type: string }) => item.type === 'runtime-group',
+    )
+    expect(first.nodes).toHaveLength(5)
+    expect(first.fitViewOptions.minZoom).toBe(1)
+    expect(group).toBeDefined()
+    expect(
+      screen.getByText('runtimeTopology.group.summary'),
+    ).toBeInTheDocument()
+
+    fireEvent(
+      window,
+      new CustomEvent('releasehub:runtime-group', { detail: group.id }),
+    )
+    expect(
+      flow.render.mock.lastCall?.[0].nodes.map(
+        (item: { id: string }) => item.id,
+      ),
+    ).toEqual(expect.arrayContaining(group.data.memberIds))
+    expect(
+      screen.getByRole('button', { name: 'runtimeTopology.group.collapse' }),
+    ).toBeInTheDocument()
+    fireEvent.click(
+      screen.getByRole('button', { name: 'runtimeTopology.group.collapse' }),
+    )
+    expect(
+      flow.render.mock.lastCall?.[0].nodes.some(
+        (item: { id: string }) => item.id === group.id,
+      ),
+    ).toBe(true)
+
+    fireEvent.click(screen.getByText('runtimeTopology.modes.all'))
+    const all = flow.render.mock.lastCall?.[0]
+    expect(all.nodes).toHaveLength(9)
+    expect(all.fitViewOptions.minZoom).toBe(0.001)
+    expect(
+      all.nodes.every(
+        (item: { type: string }) => item.type !== 'runtime-group',
+      ),
+    ).toBe(true)
+    fireEvent.click(screen.getByText('runtimeTopology.modes.layered'))
+    expect(flow.render.mock.lastCall?.[0].nodes).toHaveLength(5)
+    expect(result.data.data.data.nodes).toHaveLength(8)
+    expect(result.data.data.data.edges).toHaveLength(4)
+  })
 })

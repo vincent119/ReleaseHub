@@ -359,6 +359,108 @@ test('多 Application 切換後各自保留拓樸視角', async ({ page }) => {
   await expect(viewport).toHaveAttribute('style', second ?? '')
 })
 
+for (const theme of ['light', 'dark'] as const)
+  test(`Request ${theme} 900px 分層拓樸共用群組及全部資源模式`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 900, height: 900 })
+    await page.addInitScript((mode) => {
+      localStorage.setItem('releasehub.theme', mode)
+    }, theme)
+    const state = {
+      request: deployedRequest(requestFixture()),
+      retryBody: undefined as unknown,
+    }
+    await mockApplication(page, state)
+    await page.route(
+      '**/api/v1/catalog/applications/*/runtime/topology?**',
+      (route) => {
+        const applicationId = new URL(route.request().url()).pathname.split(
+          '/',
+        )[5]
+        const base = topologyFixture(applicationId)
+        const template = base.nodes[0]
+        const node = (id: string, kind: string) => ({
+          ...template,
+          id,
+          name: id,
+          kind,
+        })
+        return route.fulfill(
+          json({
+            data: {
+              ...base,
+              nodes: [
+                node('deployment', 'Deployment'),
+                node('replica-1', 'ReplicaSet'),
+                node('replica-2', 'ReplicaSet'),
+                node('pod-1', 'Pod'),
+                node('pod-2', 'Pod'),
+                node('service', 'Service'),
+                node('secret', 'Secret'),
+                node('policy', 'NetworkPolicy'),
+              ],
+              edges: [
+                {
+                  id: 'one',
+                  source: 'deployment',
+                  target: 'replica-1',
+                  kind: 'resource',
+                },
+                {
+                  id: 'two',
+                  source: 'deployment',
+                  target: 'replica-2',
+                  kind: 'resource',
+                },
+                {
+                  id: 'three',
+                  source: 'replica-1',
+                  target: 'pod-1',
+                  kind: 'resource',
+                },
+                {
+                  id: 'four',
+                  source: 'replica-2',
+                  target: 'pod-2',
+                  kind: 'resource',
+                },
+              ],
+            },
+            meta: meta(),
+          }),
+        )
+      },
+    )
+
+    await page.goto(`/requests/${ids.request}`)
+    await page.getByText('Application 即時部署狀態').click()
+    const canvas = page.getByLabel('Application 即時資源拓撲')
+    await expect(canvas.locator('.react-flow__node-runtime-group')).toHaveCount(
+      2,
+    )
+    await expect(
+      canvas.locator('.react-flow__controls-button').first(),
+    ).toHaveCSS(
+      'background-color',
+      theme === 'light' ? 'rgb(255, 255, 255)' : 'rgb(15, 23, 42)',
+    )
+    await expect(canvas.locator('.react-flow__node-runtime')).toHaveCount(2)
+    const zoom = await canvas
+      .locator('.react-flow__viewport')
+      .evaluate(
+        (element) =>
+          new DOMMatrixReadOnly(getComputedStyle(element).transform).a,
+      )
+    expect(zoom).toBeGreaterThanOrEqual(1)
+    await page.getByText('全部資源', { exact: true }).click()
+    await expect(canvas.locator('.react-flow__node-runtime')).toHaveCount(8)
+    await page.getByText('分層總覽', { exact: true }).click()
+    await expect(canvas.locator('.react-flow__node-runtime-group')).toHaveCount(
+      2,
+    )
+  })
+
 test('單一 Application 拓樸失敗不遮蔽 Request 與其他 Application', async ({
   page,
 }) => {

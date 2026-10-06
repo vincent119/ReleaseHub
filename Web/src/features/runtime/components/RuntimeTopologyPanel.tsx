@@ -27,16 +27,23 @@ import { useThemePreference } from '@/shared/theme/useThemePreference'
 import {
   runtimeFitViewOptions,
   runtimeDisplayTopology,
+  runtimeLayeredTopologyToGraph,
   runtimeTopologyToGraph,
+  type RuntimeLayeredGraph,
   type RuntimeFlowEdge,
   type RuntimeFlowNode,
 } from '../model/runtimeGraph'
 import { ApplicationRootNode } from './ApplicationRootNode'
 import { RuntimeNode } from './RuntimeNode'
+import { RuntimeGroupNode } from './RuntimeGroupNode'
 import { RuntimeResourceDialog } from './RuntimeResourceDialog'
 import styles from './RuntimeTopologyPanel.module.css'
 
-const nodeTypes = { runtime: RuntimeNode, application: ApplicationRootNode }
+const nodeTypes = {
+  runtime: RuntimeNode,
+  application: ApplicationRootNode,
+  'runtime-group': RuntimeGroupNode,
+}
 
 interface Props {
   applicationId: string
@@ -56,15 +63,29 @@ export function RuntimeTopologyPanel({
   const { t } = useTranslation()
   const { resolvedTheme } = useThemePreference()
   const [view, setView] = useState<RuntimeTopologyView>('resources')
+  const [resourceModes, setResourceModes] = useState<
+    Record<string, 'layered' | 'all'>
+  >({})
+  const [expandedGroups, setExpandedGroups] = useState<
+    Record<string, string[]>
+  >({})
+  const resourceMode = resourceModes[applicationId] ?? 'layered'
+  const expandedGroupIds = useMemo(
+    () => expandedGroups[applicationId] ?? [],
+    [applicationId, expandedGroups],
+  )
   const [selected, setSelected] = useState<string>()
   const panelRef = useRef<HTMLDivElement>(null)
   const selectedNodeRef = useRef<string | undefined>(undefined)
+  const groupFocusRef = useRef<
+    { applicationId: string; id: string } | undefined
+  >(undefined)
   const flowRef = useRef<ReactFlowInstance<
     RuntimeFlowNode,
     RuntimeFlowEdge
   > | null>(null)
   const [viewports, setViewports] = useState<Record<string, Viewport>>({})
-  const viewportKey = `${applicationId}:${view}`
+  const viewportKey = `${applicationId}:${view}:${view === 'resources' ? resourceMode : 'network'}`
   const savedViewport = viewports[viewportKey]
   const topology = useGetCatalogApplicationRuntimeTopology(
     applicationId,
@@ -102,13 +123,38 @@ export function RuntimeTopologyPanel({
     () => (value ? runtimeDisplayTopology(value) : undefined),
     [value],
   )
-  const graph = useMemo(
-    () =>
-      displayTopology
-        ? runtimeTopologyToGraph(displayTopology, active, applicationName)
-        : { nodes: [], edges: [] },
-    [active, applicationName, displayTopology],
-  )
+  const graph = useMemo<RuntimeLayeredGraph>(() => {
+    if (!displayTopology)
+      return {
+        nodes: [],
+        edges: [],
+        groups: [],
+        visibleResourceCount: 0,
+        groupedResourceCount: 0,
+        groupingAvailable: false,
+      }
+    if (view === 'resources' && resourceMode === 'layered')
+      return runtimeLayeredTopologyToGraph(
+        displayTopology,
+        new Set(expandedGroupIds),
+        active,
+        applicationName,
+      )
+    return {
+      ...runtimeTopologyToGraph(displayTopology, active, applicationName),
+      groups: [],
+      visibleResourceCount: displayTopology.nodes.length,
+      groupedResourceCount: 0,
+      groupingAvailable: false,
+    }
+  }, [
+    active,
+    applicationName,
+    displayTopology,
+    expandedGroupIds,
+    resourceMode,
+    view,
+  ])
   const displayCount = displayTopology?.nodes.length ?? 0
   const networkHasUnlinkedEntrance = useMemo(() => {
     if (view !== 'network' || !displayTopology) return false
@@ -144,6 +190,51 @@ export function RuntimeTopologyPanel({
     window.addEventListener('releasehub:runtime-node', select)
     return () => window.removeEventListener('releasehub:runtime-node', select)
   }, [])
+  useEffect(() => {
+    const expand = (event: Event) => {
+      const groupId = (event as CustomEvent<string>).detail
+      const group = graph.groups.find((item) => item.groupId === groupId)
+      if (!group || expandedGroupIds.includes(groupId)) return
+      groupFocusRef.current = { applicationId, id: group.memberIds[0] }
+      setExpandedGroups((current) => ({
+        ...current,
+        [applicationId]: [...(current[applicationId] ?? []), groupId],
+      }))
+    }
+    window.addEventListener('releasehub:runtime-group', expand)
+    return () => window.removeEventListener('releasehub:runtime-group', expand)
+  }, [applicationId, expandedGroupIds, graph.groups])
+  useEffect(() => {
+    groupFocusRef.current = undefined
+  }, [applicationId, view])
+  useEffect(() => {
+    const pending = groupFocusRef.current
+    if (
+      !pending ||
+      pending.applicationId !== applicationId ||
+      !graph.nodes.some((node) => node.id === pending.id)
+    )
+      return
+    groupFocusRef.current = undefined
+    window.requestAnimationFrame(() => {
+      const node = Array.from(
+        panelRef.current?.querySelectorAll<HTMLElement>(
+          '[data-runtime-node-id], [data-runtime-group-id]',
+        ) ?? [],
+      ).find(
+        (element) =>
+          element.dataset.runtimeNodeId === pending.id ||
+          element.dataset.runtimeGroupId === pending.id,
+      )
+      node?.focus({ preventScroll: true })
+      void flowRef.current?.fitView({
+        nodes: [{ id: pending.id }],
+        minZoom: 1,
+        maxZoom: 1,
+        duration: 200,
+      })
+    })
+  }, [applicationId, graph.nodes])
 
   return (
     <Space
@@ -168,6 +259,21 @@ export function RuntimeTopologyPanel({
               { value: 'network', label: t('runtimeTopology.views.network') },
             ]}
           />
+          {view === 'resources' && (
+            <Segmented
+              value={resourceMode}
+              onChange={(mode) =>
+                setResourceModes((current) => ({
+                  ...current,
+                  [applicationId]: mode as 'layered' | 'all',
+                }))
+              }
+              options={[
+                { value: 'layered', label: t('runtimeTopology.modes.layered') },
+                { value: 'all', label: t('runtimeTopology.modes.all') },
+              ]}
+            />
+          )}
           {active && (
             <Typography.Text type="secondary">
               {t('runtimeTopology.live')}
@@ -220,6 +326,45 @@ export function RuntimeTopologyPanel({
         </div>
       ) : (
         <>
+          {view === 'resources' &&
+            resourceMode === 'layered' &&
+            graph.groupingAvailable && (
+              <Flex gap="middle" wrap align="center">
+                <Typography.Text type="secondary" aria-live="polite">
+                  {t('runtimeTopology.group.summary', {
+                    visible: graph.visibleResourceCount,
+                    grouped: graph.groupedResourceCount,
+                    groups: graph.groups.filter(
+                      (group) => !expandedGroupIds.includes(group.groupId),
+                    ).length,
+                  })}
+                </Typography.Text>
+                {graph.groups
+                  .filter((group) => expandedGroupIds.includes(group.groupId))
+                  .map((group) => (
+                    <Button
+                      key={group.groupId}
+                      size="small"
+                      onClick={() => {
+                        groupFocusRef.current = {
+                          applicationId,
+                          id: group.groupId,
+                        }
+                        setExpandedGroups((current) => ({
+                          ...current,
+                          [applicationId]: (
+                            current[applicationId] ?? []
+                          ).filter((id) => id !== group.groupId),
+                        }))
+                      }}
+                    >
+                      {t('runtimeTopology.group.collapse', {
+                        kind: group.kind ?? t('runtimeTopology.group.other'),
+                      })}
+                    </Button>
+                  ))}
+              </Flex>
+            )}
           {value?.warnings.map((warning) => (
             <Alert
               key={warning}
@@ -235,7 +380,8 @@ export function RuntimeTopologyPanel({
               title={t('runtimeTopology.unlinkedEntrance')}
             />
           )}
-          {savedViewport && savedViewport.zoom < 0.75 && (
+          {((resourceMode === 'all' && view === 'resources') ||
+            (savedViewport && savedViewport.zoom < 0.75)) && (
             <Typography.Text type="secondary">
               {t('runtimeTopology.overviewHint')}
             </Typography.Text>
@@ -274,7 +420,13 @@ export function RuntimeTopologyPanel({
                   colorMode={resolvedTheme}
                   defaultMarkerColor="var(--rh-color-border-strong)"
                   fitView={!savedViewport}
-                  fitViewOptions={runtimeFitViewOptions}
+                  fitViewOptions={
+                    view === 'resources' &&
+                    resourceMode === 'layered' &&
+                    graph.groupingAvailable
+                      ? { ...runtimeFitViewOptions, padding: 0.04, minZoom: 1 }
+                      : runtimeFitViewOptions
+                  }
                   defaultViewport={savedViewport}
                   onInit={(instance) => {
                     flowRef.current = instance

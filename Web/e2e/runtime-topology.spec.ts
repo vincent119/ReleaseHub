@@ -2,6 +2,197 @@ import { expect, test, type Page } from '@playwright/test'
 
 const applicationID = '019c1230-0000-7000-8000-000000000010'
 
+for (const theme of ['light', 'dark'] as const) {
+  for (const width of [1440, 900])
+    test(`${theme} ${width}px 分層首屏保留可讀字級，群組可展開並切換全部資源`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width, height: 900 })
+      await preparePage(page, theme)
+      await page.route(
+        `**/api/v1/catalog/applications/${applicationID}/runtime/topology?**`,
+        (route) => {
+          const data = layeredTopology()
+          if (
+            new URL(route.request().url()).searchParams.get('view') ===
+            'network'
+          ) {
+            data.view = 'network'
+            data.edges = [
+              {
+                id: 'network-entry',
+                source: 'ingress',
+                target: 'service',
+                kind: 'network',
+              },
+              {
+                id: 'network-pod-1',
+                source: 'service',
+                target: 'pod-0',
+                kind: 'network',
+              },
+              {
+                id: 'network-pod-2',
+                source: 'service',
+                target: 'pod-1',
+                kind: 'network',
+              },
+            ]
+          }
+          return route.fulfill(json({ data, meta: meta() }))
+        },
+      )
+      await page.goto(`/applications/${applicationID}`)
+      await page.getByRole('tab', { name: '資源拓撲' }).click()
+      const canvas = page.getByLabel('Application 即時資源拓撲')
+      await expect(
+        canvas.locator('.react-flow__node-runtime-group'),
+      ).toHaveCount(2)
+      await page.getByText('網路拓撲', { exact: true }).click()
+      await expect(
+        canvas.locator('.react-flow__node-runtime-group'),
+      ).toHaveCount(0)
+      await expect(canvas.locator('.react-flow__node-runtime')).toHaveCount(4)
+      await expect(canvas.locator('.react-flow__edge')).toHaveCount(3)
+      await page.getByText('資源階層', { exact: true }).click()
+      await expect(
+        canvas.locator('.react-flow__node-runtime-group'),
+      ).toHaveCount(2)
+      await expect(canvas.locator('.react-flow__node-runtime')).toHaveCount(3)
+      await expect(
+        page.getByText('目前顯示 3 個資源，另有 12 個收合於 2 個群組。'),
+      ).toBeVisible()
+      await expectGraphWithinCanvas(canvas)
+      await page.screenshot({
+        path: `/tmp/releasehub-layered-${theme}-${width}.png`,
+        fullPage: true,
+      })
+      const readability = await canvas
+        .locator('.react-flow__node-runtime')
+        .first()
+        .evaluate((element) => {
+          const viewport = element.closest('.react-flow__viewport')!
+          const zoom = new DOMMatrixReadOnly(
+            getComputedStyle(viewport).transform,
+          ).a
+          const node = element.querySelector('[class*="nodeName"]')!
+          const kind = element.querySelector('[class*="kindChip"]')!
+          const health = element.querySelector('.ant-typography-secondary')!
+          return {
+            zoom,
+            name: Number.parseFloat(getComputedStyle(node).fontSize) * zoom,
+            kind: Number.parseFloat(getComputedStyle(kind).fontSize) * zoom,
+            health: Number.parseFloat(getComputedStyle(health).fontSize) * zoom,
+          }
+        })
+      expect(readability.name).toBeGreaterThanOrEqual(14)
+      expect(readability.kind).toBeGreaterThanOrEqual(12)
+      expect(readability.health).toBeGreaterThanOrEqual(14)
+      const group = canvas
+        .locator('.react-flow__node-runtime-group')
+        .filter({ hasText: 'ReplicaSet' })
+      const groupContrast = await group.locator('button').evaluate((button) => {
+        const channels = (value: string) =>
+          (value.match(/[\d.]+/g) ?? []).map(Number)
+        const surface = channels(getComputedStyle(button).backgroundColor)
+        const canvas = channels(
+          getComputedStyle(
+            button.closest('[aria-label="Application 即時資源拓撲"]')!,
+          ).backgroundColor,
+        )
+        const alpha = surface[3] ?? 1
+        const blended = surface
+          .slice(0, 3)
+          .map(
+            (channel, index) => channel * alpha + canvas[index] * (1 - alpha),
+          )
+        const luminance = (rgb: number[]) => {
+          const [red, green, blue] = rgb.map((channel) => {
+            const value = channel / 255
+            return value <= 0.04045
+              ? value / 12.92
+              : ((value + 0.055) / 1.055) ** 2.4
+          })
+          return red * 0.2126 + green * 0.7152 + blue * 0.0722
+        }
+        return [
+          ...button.querySelectorAll(
+            '[class*="nodeName"], .ant-typography-secondary',
+          ),
+        ].map((element) => {
+          const foreground = luminance(
+            channels(getComputedStyle(element).color).slice(0, 3),
+          )
+          const background = luminance(blended)
+          return (
+            (Math.max(foreground, background) + 0.05) /
+            (Math.min(foreground, background) + 0.05)
+          )
+        })
+      })
+      expect(Math.min(...groupContrast)).toBeGreaterThanOrEqual(4.5)
+      const groupFont = await group
+        .locator('[class*="nodeName"]')
+        .evaluate((element) => {
+          const zoom = new DOMMatrixReadOnly(
+            getComputedStyle(element.closest('.react-flow__viewport')!)
+              .transform,
+          ).a
+          return Number.parseFloat(getComputedStyle(element).fontSize) * zoom
+        })
+      expect(groupFont).toBeGreaterThanOrEqual(12)
+      await group.locator('button').focus()
+      await page.keyboard.press('Enter')
+      await expect(canvas.locator('.react-flow__node-runtime')).toHaveCount(9)
+      await expect(page.getByRole('dialog')).toHaveCount(0)
+      await expect(
+        canvas.locator('.react-flow__edge:not(.runtime-presentation-edge)'),
+      ).toHaveCount(6)
+      await page.getByRole('button', { name: '重新整理' }).click()
+      await expect(canvas.locator('.react-flow__node-runtime')).toHaveCount(9)
+      await page.getByRole('button', { name: '收合 ReplicaSet' }).click()
+      await expect(canvas.locator('.react-flow__node-runtime')).toHaveCount(3)
+      await expect(group.locator('button')).toBeFocused()
+      await page.getByText('全部資源', { exact: true }).click()
+      await expect(canvas.locator('.react-flow__node-runtime')).toHaveCount(15)
+      await page.getByText('分層總覽', { exact: true }).click()
+      await expect(
+        canvas.locator('.react-flow__node-runtime-group'),
+      ).toHaveCount(2)
+    })
+}
+
+test.describe('觸控分層拓撲', () => {
+  test.use({ hasTouch: true, viewport: { width: 390, height: 700 } })
+
+  test('窄版維持閱讀比例並可點按群組展開／收合', async ({ page }) => {
+    await preparePage(page, 'light')
+    await page.route(
+      `**/api/v1/catalog/applications/${applicationID}/runtime/topology?**`,
+      (route) => route.fulfill(json({ data: layeredTopology(), meta: meta() })),
+    )
+    await page.goto(`/applications/${applicationID}`)
+    await page.getByRole('tab', { name: '資源拓撲' }).click()
+    const canvas = page.getByLabel('Application 即時資源拓撲')
+    await expect(canvas.locator('.react-flow__node-runtime-group')).toHaveCount(
+      2,
+    )
+    const zoom = await canvas
+      .locator('.react-flow__viewport')
+      .evaluate(
+        (element) =>
+          new DOMMatrixReadOnly(getComputedStyle(element).transform).a,
+      )
+    expect(zoom).toBeGreaterThanOrEqual(1)
+    await canvas.getByRole('button', { name: /展開 其他頂層資源/ }).tap()
+    await expect(canvas.locator('.react-flow__node-runtime')).toHaveCount(9)
+    await page.getByRole('button', { name: '收合 其他頂層資源' }).tap()
+    await expect(canvas.locator('.react-flow__node-runtime-group')).toHaveCount(
+      2,
+    )
+  })
+})
+
 for (const warning of [
   { code: 'node_limit', text: '資源超過 500 個節點，畫面僅顯示有界結果。' },
   { code: 'edge_limit', text: '關係超過 1,000 條，畫面僅顯示有界結果。' },
@@ -302,6 +493,9 @@ test('network view shows only evidenced endpoints and keeps the full resource vi
   await page.goto(`/applications/${applicationID}`)
   await page.getByRole('tab', { name: '資源拓撲' }).click()
   const canvas = page.getByLabel('Application 即時資源拓撲')
+  await expect(canvas.locator('.react-flow__node-runtime')).toHaveCount(13)
+  await expect(canvas.locator('.react-flow__node-runtime-group')).toHaveCount(1)
+  await page.getByText('全部資源', { exact: true }).click()
   await expect(canvas.locator('.react-flow__node-runtime')).toHaveCount(15)
   await expectGraphWithinCanvas(canvas)
   await page.getByText('網路拓撲', { exact: true }).click()
@@ -1263,6 +1457,54 @@ function topology() {
     ],
     warnings: [],
     partial: false,
+  }
+}
+
+function layeredTopology() {
+  const base = topology()
+  const template = base.nodes[0]
+  const resource = (id: string, kind: string) => ({
+    ...template,
+    id,
+    name: id,
+    kind,
+  })
+  const top = [
+    resource('ingress', 'Ingress'),
+    resource('service', 'Service'),
+    resource('deployment', 'Deployment'),
+    resource('namespace', 'Namespace'),
+    resource('secret', 'Secret'),
+    resource('service-account', 'ServiceAccount'),
+    resource('network-policy', 'NetworkPolicy'),
+    resource('pod-disruption-budget', 'PodDisruptionBudget'),
+    resource('role-binding', 'RoleBinding'),
+  ]
+  return {
+    ...base,
+    nodes: [
+      ...top,
+      ...Array.from({ length: 4 }, (_, index) =>
+        resource(`replica-${index}`, 'ReplicaSet'),
+      ),
+      ...Array.from({ length: 2 }, (_, index) =>
+        resource(`pod-${index}`, 'Pod'),
+      ),
+    ],
+    edges: [
+      ...Array.from({ length: 4 }, (_, index) => ({
+        id: `e-replica-${index}`,
+        source: 'deployment',
+        target: `replica-${index}`,
+        kind: 'resource',
+      })),
+      ...Array.from({ length: 2 }, (_, index) => ({
+        id: `e-pod-${index}`,
+        source: 'replica-0',
+        target: `pod-${index}`,
+        kind: 'resource',
+      })),
+    ],
   }
 }
 

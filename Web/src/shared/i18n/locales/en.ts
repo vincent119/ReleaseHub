@@ -469,11 +469,22 @@ export const en = {
       evidence: 'Resource relationship reported by Argo CD',
     },
     views: { resources: 'Resource hierarchy', network: 'Network topology' },
+    modes: { layered: 'Layered overview', all: 'All resources' },
+    group: {
+      kind: '{{kind}} × {{count}}',
+      other: 'Other top-level resources',
+      resources: '{{count}} resources',
+      healthy: 'Healthy {{count}}',
+      expand: 'Expand {{title}}, containing {{count}} resources',
+      collapse: 'Collapse {{kind}}',
+      summary:
+        '{{visible}} resources visible, {{grouped}} more in {{groups}} groups.',
+    },
     refresh: 'Refresh',
     fitView: 'Fit all',
     readableZoom: 'Reading zoom',
     overviewHint:
-      'The overview shows the full structure. Use Reading zoom and pan to inspect names.',
+      'Fit all is a structural map for orientation. Use Reading zoom and pan to inspect names.',
     unlinkedEntrance:
       'The entry resource has explicit evidence, but no relationship can be confirmed.',
     live: 'Deployment in progress; refreshes every 5 seconds',
