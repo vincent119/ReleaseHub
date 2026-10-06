@@ -53,7 +53,7 @@ export function RuntimeResourceDialog({
       title={resource?.name}
       centered
       width="var(--runtime-dialog-width)"
-      className={dialogStyles.dialog}
+      className={`${dialogStyles.dialog} ${tab === 'summary' ? dialogStyles.summaryMode : ''}`}
       classNames={{
         container: dialogStyles.container,
         header: dialogStyles.header,

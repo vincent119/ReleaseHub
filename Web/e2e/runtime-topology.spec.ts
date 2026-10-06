@@ -507,6 +507,7 @@ for (const theme of ['light', 'dark'] as const) {
     { width: 1440, height: 900 },
     { width: 900, height: 600 },
     { width: 390, height: 700 },
+    { width: 320, height: 640 },
     { width: 740, height: 360 },
   ]) {
     test(`${theme} resource dialog uses the available space at ${viewport.width}x${viewport.height}`, async ({
@@ -537,18 +538,50 @@ for (const theme of ['light', 'dark'] as const) {
       await page.keyboard.press('Enter')
       const dialog = page.getByRole('dialog', { name: 'pod', exact: true })
       await expect(dialog).toBeVisible()
+      await expect(dialog.getByText('Healthy')).toBeVisible()
+      await expect
+        .poll(() =>
+          dialog
+            .locator('.ant-modal-container')
+            .evaluate(
+              (element) =>
+                element.getBoundingClientRect().height / element.clientHeight,
+            ),
+        )
+        .toBeGreaterThan(0.99)
       const full = viewport.width <= 768
       await expect
         .poll(async () => Math.round((await dialog.boundingBox())?.width ?? 0))
         .toBe(Math.round(viewport.width * (full ? 1 : 0.9)))
+      const availableHeight = Math.round(viewport.height * (full ? 1 : 0.9))
+      const summaryBounds = (await dialog.boundingBox())!
+      const summaryHeight = Math.round(summaryBounds.height)
+      if (viewport.height >= 600) {
+        expect(summaryHeight).toBeLessThan(availableHeight)
+      } else {
+        expect(summaryHeight).toBeLessThanOrEqual(availableHeight)
+      }
+      const summaryPane = dialog.getByRole('tabpanel', { name: '摘要' })
+      await expect(summaryPane).toBeVisible()
+      await expect(dialog.getByRole('button', { name: '關閉' })).toBeVisible()
+      expect(summaryBounds.x).toBeCloseTo(full ? 0 : viewport.width * 0.05, 0)
+      expect(summaryBounds.y).toBeCloseTo(
+        (viewport.height - summaryBounds.height) / 2,
+        0,
+      )
+      if (viewport.width === 1440 || viewport.width === 320) {
+        await dialog.screenshot({
+          path: `/tmp/releasehub-summary-${theme}-${viewport.width}.png`,
+        })
+      }
+      await expect(page.locator('body')).toHaveCSS('overflow-y', 'hidden')
+      await dialog.getByRole('tab', { name: '即時 Manifest' }).click()
       await expect
         .poll(async () => Math.round((await dialog.boundingBox())?.height ?? 0))
-        .toBe(Math.round(viewport.height * (full ? 1 : 0.9)))
+        .toBe(availableHeight)
       const bounds = (await dialog.boundingBox())!
       expect(bounds.x).toBeCloseTo(full ? 0 : viewport.width * 0.05, 0)
       expect(bounds.y).toBeCloseTo(full ? 0 : viewport.height * 0.05, 0)
-      await expect(page.locator('body')).toHaveCSS('overflow-y', 'hidden')
-      await dialog.getByRole('tab', { name: '即時 Manifest' }).click()
       const pane = dialog.getByRole('tabpanel')
       await expect(pane).toContainText('field99:')
       const tabsBefore = await dialog.getByRole('tablist').boundingBox()
@@ -579,6 +612,167 @@ for (const theme of ['light', 'dark'] as const) {
       await expect(page.locator('body')).not.toHaveCSS('overflow-y', 'hidden')
     })
   }
+}
+
+test('320px 長 Summary 只在內容區捲動且關閉控制保持可用', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 480 })
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  await preparePage(page, 'light')
+  await page.route(
+    `**/api/v1/catalog/applications/${applicationID}/runtime/topology?**`,
+    (route) => {
+      const data = topology()
+      return route.fulfill(
+        json({
+          data: {
+            ...data,
+            nodes: data.nodes.map((node) =>
+              node.id === 'pod'
+                ? {
+                    ...node,
+                    images: Array.from(
+                      { length: 3 },
+                      (_, index) =>
+                        `example.invalid/image-${index}-${'v'.repeat(160)}`,
+                    ),
+                  }
+                : node,
+            ),
+          },
+          meta: meta(),
+        }),
+      )
+    },
+  )
+  await page.goto(`/applications/${applicationID}`)
+  await page.getByRole('tab', { name: '資源拓撲' }).click()
+  const node = page.locator('[data-runtime-node-id="pod"]')
+  await node.click()
+  const dialog = page.getByRole('dialog')
+  const pane = dialog.getByRole('tabpanel', { name: '摘要' })
+  await expect(
+    dialog.getByText('example.invalid/image-2-', { exact: false }),
+  ).toBeVisible()
+  await expect
+    .poll(() =>
+      dialog
+        .locator('.ant-modal-container')
+        .evaluate(
+          (element) =>
+            element.getBoundingClientRect().height / element.clientHeight,
+        ),
+    )
+    .toBeGreaterThan(0.99)
+  const headerBefore = await dialog.getByRole('tablist').boundingBox()
+  expect((await dialog.boundingBox())!.height).toBeLessThanOrEqual(480)
+  await expect
+    .poll(() =>
+      pane.evaluate((element) => element.scrollHeight > element.clientHeight),
+    )
+    .toBe(true)
+  await pane.evaluate((element) => {
+    element.scrollTop = element.scrollHeight
+  })
+  expect(await pane.evaluate((element) => element.scrollTop)).toBeGreaterThan(0)
+  expect(await dialog.getByRole('tablist').boundingBox()).toEqual(headerBefore)
+  await expect(dialog.getByRole('button', { name: '關閉' })).toBeVisible()
+  await dialog.screenshot({ path: '/tmp/releasehub-summary-320-long.png' })
+  await page.keyboard.press('Escape')
+  await expect(node).toBeFocused()
+})
+
+for (const eventCount of [0, 60]) {
+  test(`${eventCount} 筆 Events 與長 Logs 切換保留閱讀高度及 Summary 緊湊高度`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 900, height: 600 })
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    await preparePage(page, 'dark')
+    let eventCalls = 0
+    let logCalls = 0
+    await page.route(/\/runtime\/resources\/events(?:\?|$)/, (route) => {
+      eventCalls += 1
+      return route.fulfill(
+        json({
+          data: Array.from({ length: eventCount }, (_, index) => ({
+            type: 'Normal',
+            reason: `Reason-${index}`,
+            message: `event-${index}`,
+            count: 1,
+          })),
+          meta: meta(),
+        }),
+      )
+    })
+    await page.route(/\/runtime\/pods\/logs(?:\?|$)/, (route) => {
+      logCalls += 1
+      return route.fulfill(
+        json({
+          data: Array.from({ length: 60 }, (_, index) => ({
+            timestamp: '2026-01-02T03:04:05Z',
+            content: `line-${index} ${'value'.repeat(40)}`,
+            podName: 'pod',
+          })),
+          meta: meta(),
+        }),
+      )
+    })
+    await page.goto(`/applications/${applicationID}`)
+    await page.getByRole('tab', { name: '資源拓撲' }).click()
+    const canvas = page.getByLabel('Application 即時資源拓撲')
+    const viewportBefore = await canvas
+      .locator('.react-flow__viewport')
+      .getAttribute('style')
+    const node = canvas.locator('[data-runtime-node-id="pod"]')
+    await node.click()
+    const dialog = page.getByRole('dialog')
+    await expect(dialog).toBeVisible()
+    expect((await dialog.boundingBox())!.height).toBeLessThan(540)
+    expect({ eventCalls, logCalls }).toEqual({ eventCalls: 0, logCalls: 0 })
+
+    await dialog.getByRole('tab', { name: '事件' }).click()
+    await expect.poll(() => eventCalls).toBe(1)
+    await expect
+      .poll(async () => Math.round((await dialog.boundingBox())!.height))
+      .toBe(540)
+    const eventsPane = dialog.getByRole('tabpanel', { name: '事件' })
+    if (eventCount) {
+      await expect(eventsPane.getByText('event-59')).toBeAttached()
+      await eventsPane.evaluate((element) => {
+        element.scrollTop = element.scrollHeight
+      })
+      expect(
+        await eventsPane.evaluate((element) => element.scrollTop),
+      ).toBeGreaterThan(0)
+    } else {
+      await expect(eventsPane.locator('tbody .ant-table-row')).toHaveCount(0)
+    }
+
+    await dialog.getByRole('tab', { name: '日誌' }).click()
+    await expect.poll(() => logCalls).toBe(1)
+    await expect
+      .poll(async () => Math.round((await dialog.boundingBox())!.height))
+      .toBe(540)
+    const logsPane = dialog.getByRole('tabpanel', { name: '日誌' })
+    await expect(logsPane.getByText(/line-59/)).toBeAttached()
+    await logsPane.evaluate((element) => {
+      element.scrollTop = element.scrollHeight
+    })
+    expect(
+      await logsPane.evaluate((element) => element.scrollTop),
+    ).toBeGreaterThan(0)
+
+    await dialog.getByRole('tab', { name: '摘要' }).click()
+    expect((await dialog.boundingBox())!.height).toBeLessThan(540)
+    expect({ eventCalls, logCalls }).toEqual({ eventCalls: 1, logCalls: 1 })
+    await expect(canvas.locator('.react-flow__viewport')).toHaveAttribute(
+      'style',
+      viewportBefore ?? '',
+    )
+    await page.keyboard.press('Escape')
+    await expect(node).toBeFocused()
+    await expect(page.locator('body')).not.toHaveCSS('overflow-y', 'hidden')
+  })
 }
 
 test('Manifest formats JSON without changing large integers or exposing hidden metadata by default', async ({
