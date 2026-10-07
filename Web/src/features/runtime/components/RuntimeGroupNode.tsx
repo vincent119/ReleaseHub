@@ -31,9 +31,18 @@ export function RuntimeGroupNode({ data }: NodeProps<GroupNode>) {
     )
     .map(([status, count]) => `${status} ${count}`)
     .join(', ')
+  const visibleTitle = data.compactOverview
+    ? t('runtimeTopology.group.shortCompact')
+    : (data.kind ?? t('runtimeTopology.group.shortOther'))
+  const resourceCount = t('runtimeTopology.group.resources', {
+    count: data.memberIds.length,
+  })
 
   return (
-    <Tooltip title={`${kinds} · ${health}`} trigger={['hover', 'focus']}>
+    <Tooltip
+      title={`${title} · ${resourceCount} · ${kinds} · ${health}`}
+      trigger={['hover', 'focus']}
+    >
       <Button
         className={`${styles.node} ${styles.groupNode}`}
         data-runtime-group-id={data.groupId}
@@ -56,17 +65,14 @@ export function RuntimeGroupNode({ data }: NodeProps<GroupNode>) {
           <AppstoreOutlined />
         </span>
         <span className={styles.nodeBody}>
-          <span className={styles.nodeName}>{title}</span>
+          <span className={styles.groupNameRow}>
+            <span className={styles.nodeName}>{visibleTitle}</span>
+            <span className={styles.groupCount} aria-hidden="true">
+              × {data.memberIds.length}
+            </span>
+          </span>
           <span className={styles.nodeMeta}>
-            <Typography.Text type="secondary">
-              {!data.compactOverview && (
-                <>
-                  {t('runtimeTopology.group.resources', {
-                    count: data.memberIds.length,
-                  })}
-                  {' · '}
-                </>
-              )}
+            <Typography.Text type="secondary" className={styles.groupHealth}>
               {health}
             </Typography.Text>
           </span>

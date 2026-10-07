@@ -1,7 +1,7 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { ConfigProvider } from 'antd'
 import { I18nextProvider } from 'react-i18next'
-import { MemoryRouter } from 'react-router'
+import { MemoryRouter, Route, Routes } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type {
@@ -16,19 +16,22 @@ import {
   scopeFixture,
 } from '@/shared/scope/scopeFixtures'
 
-import { ApplicationsPage } from './ApplicationsPage'
+import { ApplicationDetailPage, ApplicationsPage } from './ApplicationsPage'
 
 const api = vi.hoisted(() => ({
   applications: vi.fn(),
   resources: vi.fn(),
   retry: vi.fn(),
+  application: vi.fn(),
+  status: vi.fn(),
+  dryRun: vi.fn(),
 }))
 
 vi.mock('@/generated/api', () => ({
   confirmApplicationOnboarding: vi.fn(),
-  useDryRunApplicationOnboarding: vi.fn(),
-  useGetCatalogApplication: vi.fn(),
-  useGetCatalogApplicationStatus: vi.fn(),
+  useDryRunApplicationOnboarding: api.dryRun,
+  useGetCatalogApplication: api.application,
+  useGetCatalogApplicationStatus: api.status,
   useListVisibleCatalogApplications: api.applications,
   useGetCatalogResourceTree: api.resources,
 }))
@@ -307,6 +310,54 @@ describe('ApplicationsPage 範圍篩選', () => {
     expectNames('Other project')
     expectMissing('Payment', 'Global app', 'Other organization')
   })
+})
+
+describe('Application detail 返回連結', () => {
+  beforeEach(async () => {
+    await i18n.changeLanguage('zh-TW')
+    vi.resetAllMocks()
+    api.dryRun.mockReturnValue({ isPending: false })
+    api.application.mockReturnValue({
+      isPending: false,
+      isError: false,
+      data: { status: 200, data: { data: visible[0] } },
+    })
+    api.status.mockReturnValue({
+      isPending: false,
+      isError: false,
+      data: {
+        status: 200,
+        data: { data: { onboardingStatus: 'Managed', driftReasons: [] } },
+      },
+    })
+  })
+
+  afterEach(() => cleanup())
+
+  it.each(['正常', '找不到資源'])(
+    '%s 路徑沿用主題連結與清單目的地',
+    (state) => {
+      if (state === '找不到資源')
+        api.application.mockReturnValue({ isError: true })
+      render(
+        <I18nextProvider i18n={i18n}>
+          <ConfigProvider theme={{ token: { motion: false } }}>
+            <MemoryRouter initialEntries={['/applications/Payment']}>
+              <Routes>
+                <Route
+                  path="/applications/:applicationId"
+                  element={<ApplicationDetailPage />}
+                />
+              </Routes>
+            </MemoryRouter>
+          </ConfigProvider>
+        </I18nextProvider>,
+      )
+      const link = screen.getByRole('link', { name: '返回 Applications' })
+      expect(link).toHaveClass(linkStyles.link)
+      expect(link).toHaveAttribute('href', '/applications')
+    },
+  )
 })
 
 function application(

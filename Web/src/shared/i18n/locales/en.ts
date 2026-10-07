@@ -474,6 +474,8 @@ export const en = {
     group: {
       kind: '{{kind}} × {{count}}',
       other: 'Other top-level resources',
+      shortOther: 'Other resources',
+      shortCompact: 'More resources',
       compact: '{{count}} more resources',
       resources: '{{count}} resources',
       healthy: 'Healthy {{count}}',

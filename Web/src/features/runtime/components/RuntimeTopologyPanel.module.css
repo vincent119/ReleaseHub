@@ -90,7 +90,7 @@
 .node {
   --runtime-node-accent: var(--rh-color-text-secondary);
   --runtime-node-surface: var(--rh-color-surface);
-  --runtime-node-icon-surface: var(--rh-color-page);
+  --runtime-node-icon-surface: var(--rh-color-surface-soft);
   animation: runtimeAppear 240ms ease-out both;
   width: 236px;
   height: 78px;
@@ -125,6 +125,27 @@
 .groupNode {
   --runtime-node-accent: var(--rh-color-primary);
   border-style: dashed;
+}
+.groupNameRow {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+.groupNameRow .nodeName {
+  min-width: 0;
+  flex: 1;
+}
+.groupCount {
+  flex: none;
+  font-size: 12px;
+  color: var(--rh-color-text-secondary);
+}
+.groupHealth {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .node .nodeIcon {
   color: var(--runtime-node-accent);

@@ -455,7 +455,7 @@ for (const [theme, width] of [
     const expectedCard =
       theme === 'light' ? 'rgb(255, 255, 255)' : 'rgb(15, 23, 42)'
     const expectedIcon =
-      theme === 'light' ? 'rgb(246, 248, 251)' : 'rgb(9, 11, 18)'
+      theme === 'light' ? 'rgb(234, 242, 255)' : 'rgb(23, 32, 51)'
     for (const kind of ['runtime', 'runtime-group']) {
       const item = canvas.locator(`.react-flow__node-${kind}`).first()
       await expect(item.locator('button')).toHaveCSS(
