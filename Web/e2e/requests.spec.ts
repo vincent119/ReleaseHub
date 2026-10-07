@@ -41,6 +41,15 @@ for (const theme of ['light', 'dark'])
         const revision = '0123456789abcdef'.repeat(4)
         request.applications[0].targetRevision = revision
         await mockApplication(page, { request, retryBody: undefined })
+        const applicationName = 'synthetic-webhook-service-with-a-long-name'
+        await page.route(
+          `**/api/v1/deployment-executions/${ids.execution}`,
+          (route) => {
+            const execution = executionFixture()
+            execution.nodes[0].nodeKey = applicationName
+            return route.fulfill(json({ data: execution, meta: meta() }))
+          },
+        )
         await page.route(
           '**/api/v1/catalog/applications/*/runtime/topology?**',
           (route) =>
@@ -52,14 +61,25 @@ for (const theme of ['light', 'dark'])
         await expect(
           page.locator('[class*="snapshotRevision"]').first(),
         ).toHaveText(revision)
-        await page
-          .getByText(
+        const topologyEntry = page.getByRole('button', {
+          name:
             language === 'en'
-              ? 'Live Application deployment status'
-              : 'Application 即時部署狀態',
-            { exact: true },
+              ? `View resource topology for ${applicationName}`
+              : `查看 ${applicationName} 的資源拓撲`,
+          exact: true,
+        })
+        await expect
+          .poll(() =>
+            page.evaluate(
+              () =>
+                document.documentElement.scrollWidth -
+                document.documentElement.clientWidth,
+            ),
           )
-          .click()
+          .toBeLessThanOrEqual(1)
+        await expect(topologyEntry).toBeVisible()
+        await topologyEntry.press('Enter')
+        await expect(topologyEntry).toBeFocused()
         await expect(page.locator('.react-flow__node').first()).toBeVisible()
         for (const view of [
           language === 'en' ? 'Resource hierarchy' : '資源階層',

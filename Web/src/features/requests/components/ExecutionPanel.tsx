@@ -30,6 +30,8 @@ import type {
 import { RuntimeTopologyPanel } from '@/features/runtime'
 import { useFeedback } from '@/shared/feedback/useFeedback'
 
+import styles from './ExecutionPanel.module.css'
+
 import {
   nodeStatusColor,
   requestStatusColor,
@@ -133,13 +135,17 @@ export function ExecutionPanel({
           items={execution.nodes.map((node) => ({
             key: node.id,
             label: (
-              <Space wrap>
+              <Space wrap className={styles.nodeLabel}>
                 <Typography.Text strong>{node.nodeKey}</Typography.Text>
                 <Tag color={nodeStatusColor(node.status)}>{node.status}</Tag>
               </Space>
             ),
             children: (
-              <Space orientation="vertical" size="small">
+              <Space
+                orientation="vertical"
+                size="small"
+                className={styles.nodeDetails}
+              >
                 <Typography.Text type="secondary">
                   {node.syncStatus} · {node.healthStatus}
                 </Typography.Text>
@@ -181,6 +187,7 @@ export function ExecutionPanel({
                     </Checkbox>
                   )}
                 <Button
+                  className={styles.topologyEntry}
                   size="small"
                   onClick={() => {
                     setTopologyApplication(node.applicationId)
@@ -212,6 +219,7 @@ export function ExecutionPanel({
                 >
                   {execution.nodes.length > 1 && (
                     <Select
+                      className={styles.topologySelector}
                       value={observedApplication}
                       onChange={setTopologyApplication}
                       options={execution.nodes.map((node) => ({

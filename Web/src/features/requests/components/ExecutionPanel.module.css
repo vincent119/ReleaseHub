@@ -1,0 +1,35 @@
+.nodeDetails {
+  width: 100%;
+  min-width: 0;
+}
+
+.nodeLabel {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.nodeLabel :global(.ant-typography) {
+  overflow-wrap: anywhere;
+}
+
+.nodeDetails > :global(.ant-space-item) {
+  min-width: 0;
+}
+
+.topologyEntry {
+  max-width: 100%;
+  height: auto;
+  white-space: normal;
+  text-align: start;
+}
+
+.topologyEntry > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.topologySelector {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
