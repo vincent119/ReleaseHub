@@ -2,6 +2,21 @@ import { expect, test, type Page } from '@playwright/test'
 
 const requestId = '019c1230-0000-7000-8000-000000000301'
 
+for (const language of ['en', 'zh-TW'])
+  test(`初始語言與重新載入保持 ${language}`, async ({ page }) => {
+    await page.addInitScript((language) => {
+      localStorage.setItem('releasehub.language', language)
+    }, language)
+    await mockApplication(page)
+    await page.goto(`/requests/${requestId}`)
+    await expect(page.locator('html')).toHaveAttribute('lang', language)
+    await expect(page.locator('.ant-empty-description').first()).toHaveText(
+      language === 'en' ? 'No data' : '暫無資料',
+    )
+    await page.reload()
+    await expect(page.locator('html')).toHaveAttribute('lang', language)
+  })
+
 test('Ant Design built-in copy follows the ReleaseHub language preference', async ({
   page,
 }) => {
