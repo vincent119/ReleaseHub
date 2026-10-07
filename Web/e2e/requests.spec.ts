@@ -107,6 +107,128 @@ for (const theme of ['light', 'dark'])
           }
         })
 
+for (const theme of ['light', 'dark'])
+  for (const language of ['en', 'zh-TW'])
+    test(`Request 網路閱讀返回總覽 ${theme} ${language}`, async ({ page }) => {
+      await page.addInitScript(
+        ({ theme, language }) => {
+          localStorage.setItem('releasehub.theme', theme)
+          localStorage.setItem('releasehub.language', language)
+        },
+        { theme, language },
+      )
+      await mockApplication(page, {
+        request: deployedRequest(requestFixture()),
+        retryBody: undefined,
+      })
+      await page.route(
+        '**/api/v1/catalog/applications/*/runtime/topology?**',
+        (route) => {
+          const base = topologyFixture(ids.appA)
+          const names = ['ingress', 'service', 'pod-a', 'pod-b']
+          return route.fulfill(
+            json({
+              data: {
+                ...base,
+                view: 'network',
+                nodes: names.map((name, index) => ({
+                  ...base.nodes[0],
+                  id: name,
+                  name,
+                  kind:
+                    index === 0 ? 'Ingress' : index === 1 ? 'Service' : 'Pod',
+                })),
+                edges: [
+                  [0, 1],
+                  [1, 2],
+                  [1, 3],
+                ].map(([source, target]) => ({
+                  id: `${source}-${target}`,
+                  source: names[source],
+                  target: names[target],
+                  kind: 'network',
+                })),
+              },
+              meta: meta(),
+            }),
+          )
+        },
+      )
+      await page.setViewportSize({ width: 390, height: 860 })
+      await page.goto(`/requests/${ids.request}`)
+      await page
+        .getByRole('button', {
+          name:
+            language === 'en'
+              ? 'View resource topology for app-a'
+              : '查看 app-a 的資源拓撲',
+          exact: true,
+        })
+        .press('Enter')
+      await page
+        .getByText(language === 'en' ? 'Network topology' : '網路拓撲', {
+          exact: true,
+        })
+        .click()
+      const canvas = page.getByLabel(
+        language === 'en'
+          ? 'Live Application resource topology'
+          : 'Application 即時資源拓撲',
+      )
+      await expect(canvas.locator('.react-flow__node-runtime')).toHaveCount(4)
+      for (const width of [390, 320, 390]) {
+        await page
+          .getByRole('button', {
+            name: language === 'en' ? 'Reading zoom' : '閱讀比例',
+            exact: true,
+          })
+          .click()
+        const readingHint = page.getByText(
+          language === 'en'
+            ? 'This is a pannable reading view; not every node is currently inside the canvas.'
+            : '目前是可平移的局部閱讀視角，並非全部節點皆在畫布內。',
+          { exact: true },
+        )
+        await expect(readingHint).toBeVisible()
+        await expect
+          .poll(() =>
+            canvas
+              .locator('.react-flow__viewport')
+              .evaluate(
+                (element) =>
+                  new DOMMatrixReadOnly(getComputedStyle(element).transform).a,
+              ),
+          )
+          .toBeCloseTo(1, 2)
+        await page.setViewportSize({ width, height: 860 })
+        await page
+          .getByRole('button', {
+            name: language === 'en' ? 'Fit all' : '全圖總覽',
+            exact: true,
+          })
+          .click()
+        await expect
+          .poll(() =>
+            canvas.evaluate((element) => {
+              const bounds = element.getBoundingClientRect()
+              return [...element.querySelectorAll('.react-flow__node')].every(
+                (node) => {
+                  const rect = node.getBoundingClientRect()
+                  return (
+                    rect.left >= bounds.left + 4 &&
+                    rect.right <= bounds.right - 4 &&
+                    rect.top >= bounds.top + 4 &&
+                    rect.bottom <= bounds.bottom - 4
+                  )
+                },
+              )
+            }),
+          )
+          .toBe(true)
+        await expect(readingHint).toHaveCount(0)
+      }
+    })
+
 test.beforeEach(async ({ context, page }) => {
   await context.addCookies([
     {

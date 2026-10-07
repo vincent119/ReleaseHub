@@ -6,6 +6,103 @@ const applicationID = '019c1230-0000-7000-8000-000000000010'
 
 for (const theme of ['light', 'dark'] as const)
   for (const language of ['en', 'zh-TW'])
+    test(`網路閱讀返回總覽 ${theme} ${language}`, async ({ page }) => {
+      await preparePage(page, theme, language)
+      await page.route(
+        `**/api/v1/catalog/applications/${applicationID}/runtime/topology?**`,
+        (route) => {
+          const base = topology()
+          const names = ['ingress', 'service', 'pod-a', 'pod-b']
+          return route.fulfill(
+            json({
+              data: {
+                ...base,
+                view: 'network',
+                nodes: names.map((name, index) => ({
+                  ...base.nodes[0],
+                  id: name,
+                  name,
+                  kind:
+                    index === 0 ? 'Ingress' : index === 1 ? 'Service' : 'Pod',
+                })),
+                edges: [
+                  [0, 1],
+                  [1, 2],
+                  [1, 3],
+                ].map(([source, target]) => ({
+                  id: `${source}-${target}`,
+                  source: names[source],
+                  target: names[target],
+                  kind: 'network',
+                })),
+              },
+              meta: meta(),
+            }),
+          )
+        },
+      )
+      await page.setViewportSize({ width: 390, height: 860 })
+      await page.goto(`/applications/${applicationID}`)
+      await page
+        .getByRole('tab', {
+          name: language === 'en' ? 'Resource topology' : '資源拓撲',
+        })
+        .click()
+      await page
+        .getByText(language === 'en' ? 'Network topology' : '網路拓撲', {
+          exact: true,
+        })
+        .click()
+      const canvas = page.getByLabel(
+        language === 'en'
+          ? 'Live Application resource topology'
+          : 'Application 即時資源拓撲',
+      )
+      await expect(canvas.locator('.react-flow__node-runtime')).toHaveCount(4)
+      const reading = page.getByRole('button', {
+        name: language === 'en' ? 'Reading zoom' : '閱讀比例',
+        exact: true,
+      })
+      const overview = page.getByRole('button', {
+        name: language === 'en' ? 'Fit all' : '全圖總覽',
+        exact: true,
+      })
+      for (const width of [390, 320, 390]) {
+        await reading.click()
+        await expect(
+          page.getByText(
+            language === 'en'
+              ? 'This is a pannable reading view; not every node is currently inside the canvas.'
+              : '目前是可平移的局部閱讀視角，並非全部節點皆在畫布內。',
+            { exact: true },
+          ),
+        ).toBeVisible()
+        await expect
+          .poll(() =>
+            canvas
+              .locator('.react-flow__viewport')
+              .evaluate(
+                (element) =>
+                  new DOMMatrixReadOnly(getComputedStyle(element).transform).a,
+              ),
+          )
+          .toBeCloseTo(1, 2)
+        await page.setViewportSize({ width, height: 860 })
+        await overview.click()
+        await expectGraphWithinCanvas(canvas)
+        await expect(
+          page.getByText(
+            language === 'en'
+              ? 'This is a pannable reading view; not every node is currently inside the canvas.'
+              : '目前是可平移的局部閱讀視角，並非全部節點皆在畫布內。',
+            { exact: true },
+          ),
+        ).toHaveCount(0)
+      }
+    })
+
+for (const theme of ['light', 'dark'] as const)
+  for (const language of ['en', 'zh-TW'])
     for (const width of [320, 390, 1200])
       for (const scrollbar of ['overlay', 'simulated'])
         test(`工具列容納 ${theme} ${language} ${width}px ${scrollbar}`, async ({
