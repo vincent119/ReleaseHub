@@ -1,41 +1,54 @@
 import { expect, test, type Page } from '@playwright/test'
 
+import { simulateScrollbarAvailableWidth } from './viewport'
+
 const applicationID = '019c1230-0000-7000-8000-000000000010'
 
 for (const theme of ['light', 'dark'] as const)
   for (const language of ['en', 'zh-TW'])
     for (const width of [320, 390, 1200])
-      test(`工具列容納 ${theme} ${language} ${width}px`, async ({ page }) => {
-        await page.setViewportSize({ width, height: 900 })
-        await preparePage(page, theme, language)
-        await page.goto(`/applications/${applicationID}`)
-        await page
-          .getByRole('tab', {
-            name: language === 'en' ? 'Resource topology' : '資源拓撲',
-          })
-          .click()
-        const canvas = page.getByLabel(
-          language === 'en'
-            ? 'Live Application resource topology'
-            : 'Application 即時資源拓撲',
-        )
-        await expect(canvas.locator('.react-flow__node').first()).toBeVisible()
-        for (const view of [
-          language === 'en' ? 'Resource hierarchy' : '資源階層',
-          language === 'en' ? 'Network topology' : '網路拓撲',
-        ]) {
-          await page.getByText(view, { exact: true }).click()
-          await expect
-            .poll(() =>
-              page.evaluate(
-                () =>
-                  document.documentElement.scrollWidth -
-                  document.documentElement.clientWidth,
-              ),
-            )
-            .toBeLessThanOrEqual(1)
-        }
-      })
+      for (const scrollbar of ['overlay', 'simulated'])
+        test(`工具列容納 ${theme} ${language} ${width}px ${scrollbar}`, async ({
+          page,
+        }) => {
+          await page.setViewportSize({ width, height: 900 })
+          await preparePage(page, theme, language)
+          await page.goto(`/applications/${applicationID}`)
+          await expect(page.locator('html')).toHaveAttribute(
+            'data-theme',
+            theme,
+          )
+          if (scrollbar === 'simulated')
+            await simulateScrollbarAvailableWidth(page)
+          await page
+            .getByRole('tab', {
+              name: language === 'en' ? 'Resource topology' : '資源拓撲',
+            })
+            .click()
+          const canvas = page.getByLabel(
+            language === 'en'
+              ? 'Live Application resource topology'
+              : 'Application 即時資源拓撲',
+          )
+          await expect(
+            canvas.locator('.react-flow__node').first(),
+          ).toBeVisible()
+          for (const view of [
+            language === 'en' ? 'Resource hierarchy' : '資源階層',
+            language === 'en' ? 'Network topology' : '網路拓撲',
+          ]) {
+            await page.getByText(view, { exact: true }).click()
+            await expect
+              .poll(() =>
+                page.evaluate(
+                  () =>
+                    document.documentElement.scrollWidth -
+                    document.documentElement.clientWidth,
+                ),
+              )
+              .toBeLessThanOrEqual(1)
+          }
+        })
 
 for (const theme of ['light', 'dark'] as const) {
   for (const size of [
