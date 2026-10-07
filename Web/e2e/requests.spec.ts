@@ -23,6 +23,61 @@ const ids = {
   appB: '019c1230-0000-7000-8000-000000000212',
 }
 
+for (const theme of ['light', 'dark'])
+  for (const language of ['en', 'zh-TW'])
+    for (const width of [320, 390, 1200])
+      test(`Request 工具列容納 ${theme} ${language} ${width}px`, async ({
+        page,
+      }) => {
+        await page.setViewportSize({ width, height: 900 })
+        await page.addInitScript(
+          ({ theme, language }) => {
+            localStorage.setItem('releasehub.theme', theme)
+            localStorage.setItem('releasehub.language', language)
+          },
+          { theme, language },
+        )
+        const request = deployedRequest(requestFixture())
+        const revision = '0123456789abcdef'.repeat(4)
+        request.applications[0].targetRevision = revision
+        await mockApplication(page, { request, retryBody: undefined })
+        await page.route(
+          '**/api/v1/catalog/applications/*/runtime/topology?**',
+          (route) =>
+            route.fulfill(
+              json({ data: topologyFixture(ids.appA), meta: meta() }),
+            ),
+        )
+        await page.goto(`/requests/${ids.request}`)
+        await expect(
+          page.locator('[class*="snapshotRevision"]').first(),
+        ).toHaveText(revision)
+        await page
+          .getByText(
+            language === 'en'
+              ? 'Live Application deployment status'
+              : 'Application 即時部署狀態',
+            { exact: true },
+          )
+          .click()
+        await expect(page.locator('.react-flow__node').first()).toBeVisible()
+        for (const view of [
+          language === 'en' ? 'Resource hierarchy' : '資源階層',
+          language === 'en' ? 'Network topology' : '網路拓撲',
+        ]) {
+          await page.getByText(view, { exact: true }).click()
+          await expect
+            .poll(() =>
+              page.evaluate(
+                () =>
+                  document.documentElement.scrollWidth -
+                  document.documentElement.clientWidth,
+              ),
+            )
+            .toBeLessThanOrEqual(1)
+        }
+      })
+
 test.beforeEach(async ({ context, page }) => {
   await context.addCookies([
     {

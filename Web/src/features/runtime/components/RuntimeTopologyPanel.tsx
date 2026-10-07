@@ -301,7 +301,7 @@ export function RuntimeTopologyPanel({
       className={styles.panel}
     >
       <Flex justify="space-between" align="center" gap="middle" wrap>
-        <Space>
+        <div className={styles.toolbarContent}>
           <Segmented
             value={view}
             onChange={(next) => {
@@ -350,7 +350,7 @@ export function RuntimeTopologyPanel({
               })}
             </Typography.Text>
           )}
-        </Space>
+        </div>
         <Space wrap>
           {graph.nodes.length > 0 && (
             <>

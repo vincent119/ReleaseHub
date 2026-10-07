@@ -1,6 +1,30 @@
 .panel {
   width: 100%;
 }
+.toolbarContent {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  max-width: 100%;
+}
+.toolbarContent > :global(.ant-typography) {
+  flex: 1 1 20rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.toolbarContent > :global(.ant-segmented) {
+  max-width: 100%;
+}
+@media (max-width: 600px) {
+  .toolbarContent {
+    width: 100%;
+  }
+  .toolbarContent :global(.ant-segmented-group) {
+    flex-wrap: wrap;
+  }
+}
 .canvas {
   height: min(64vh, 620px);
   min-height: 420px;
