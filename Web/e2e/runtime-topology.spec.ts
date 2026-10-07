@@ -1656,7 +1656,7 @@ for (const theme of ['light', 'dark'] as const) {
           return getComputedStyle(probe).color
         }
         const expectedSurface = resolve('--rh-color-surface')
-        const expectedIconSurface = resolve('--rh-color-page')
+        const expectedIconSurface = resolve('--rh-color-surface-soft')
         const expectedAccent = resolve(
           tone === 'neutral'
             ? '--rh-color-text-secondary'
@@ -1801,9 +1801,11 @@ test('同頁切換主題時所有健康狀態維持中性卡片與圖示底色',
         theme === 'dark' ? 'rgb(15, 23, 42)' : 'rgb(255, 255, 255)',
       )
       expect(item.iconSurface).toBe(
+        theme === 'dark' ? 'rgb(23, 32, 51)' : 'rgb(234, 242, 255)',
+      )
+      expect(item.chipSurface).toBe(
         theme === 'dark' ? 'rgb(9, 11, 18)' : 'rgb(246, 248, 251)',
       )
-      expect(item.chipSurface).toBe(item.iconSurface)
       expect(item.label).toBe(statuses[index] || '未回報')
     }
     await page.screenshot({
@@ -1831,7 +1833,7 @@ for (const theme of ['light', 'dark'] as const) {
     await expect(resource).toBeVisible()
     const surface = theme === 'dark' ? 'rgb(15, 23, 42)' : 'rgb(255, 255, 255)'
     const iconSurface =
-      theme === 'dark' ? 'rgb(9, 11, 18)' : 'rgb(246, 248, 251)'
+      theme === 'dark' ? 'rgb(23, 32, 51)' : 'rgb(234, 242, 255)'
     for (const node of [group, resource]) {
       await expect(node.locator('button')).toHaveCSS(
         'background-color',
@@ -1853,11 +1855,174 @@ for (const theme of ['light', 'dark'] as const) {
   })
 }
 
-async function preparePage(page: Page, theme: 'light' | 'dark') {
-  await page.addInitScript((resolvedTheme) => {
-    localStorage.setItem('releasehub.language', 'zh-TW')
-    localStorage.setItem('releasehub.theme', resolvedTheme)
-  }, theme)
+for (const theme of ['light', 'dark'] as const) {
+  for (const language of ['en', 'zh-TW'] as const) {
+    test(`${theme} ${language} 混合群組摘要與 Ingress 圖示均容納於卡片`, async ({
+      page,
+    }) => {
+      await preparePage(page, theme, language)
+      await page.route(
+        `**/api/v1/catalog/applications/${applicationID}/runtime/topology?**`,
+        (route) => {
+          const data = layeredTopology()
+          const unknownKinds = [
+            'Namespace',
+            'Secret',
+            'ServiceAccount',
+            'NetworkPolicy',
+            'RoleBinding',
+          ]
+          for (const node of data.nodes) {
+            if (unknownKinds.includes(node.kind)) node.healthStatus = ''
+          }
+          return route.fulfill(json({ data, meta: meta() }))
+        },
+      )
+      await page.goto(`/applications/${applicationID}`)
+      await page
+        .getByRole('tab', {
+          name: language === 'en' ? 'Resource topology' : '資源拓撲',
+        })
+        .click()
+      const group = page
+        .locator('[data-runtime-group-id]')
+        .filter({ hasText: 'Unknown 5' })
+      await expect(group).toContainText('Healthy 1')
+      await expect(group.locator('[class*="groupCount"]')).toHaveText('× 6')
+      const sizes = await group
+        .locator('[class*="groupHealth"]')
+        .evaluate((text) => {
+          const card = text.closest('button')!.getBoundingClientRect()
+          const rect = text.getBoundingClientRect()
+          return {
+            right: rect.right,
+            cardRight: card.right,
+            client: text.clientWidth,
+            scroll: text.scrollWidth,
+          }
+        })
+      expect(sizes.right).toBeLessThan(sizes.cardRight)
+      expect(sizes.scroll).toBeLessThanOrEqual(sizes.client + 1)
+      await expect(group).toHaveAttribute('aria-label', /Unknown 5, Healthy 1/)
+      await group.focus()
+      const tooltip = page.getByRole('tooltip')
+      await expect(tooltip).toContainText('Unknown 5, Healthy 1')
+      await expect(tooltip).toContainText('NetworkPolicy 1')
+      await expect(tooltip).toContainText('RoleBinding 1')
+      await group.blur()
+      const ingress = page.getByRole('button', {
+        name: 'Ingress ingress',
+        exact: true,
+      })
+      await expect(ingress.locator('[class*="nodeIcon"]')).toHaveCSS(
+        'background-color',
+        theme === 'dark' ? 'rgb(23, 32, 51)' : 'rgb(234, 242, 255)',
+      )
+      await page.screenshot({
+        path: `/tmp/releasehub-content-${theme}-${language}.png`,
+        fullPage: true,
+        animations: 'disabled',
+      })
+    })
+  }
+}
+
+for (const state of ['overview', 'topology', 'partial', 'not-found'] as const) {
+  test(`Application 返回連結 ${state} 同頁雙主題對比與鍵盤導覽`, async ({
+    page,
+  }) => {
+    await preparePage(page, 'light')
+    if (state === 'partial')
+      await page.route(
+        `**/api/v1/catalog/applications/${applicationID}/runtime/topology?**`,
+        (route) => route.fulfill({ status: 500, body: '{}' }),
+      )
+    if (state === 'not-found')
+      await page.route(
+        `**/api/v1/catalog/applications/${applicationID}`,
+        (route) => route.fulfill({ status: 404, body: '{}' }),
+      )
+    await page.route('**/api/v1/catalog/applications', (route) =>
+      route.fulfill(json({ data: [], meta: meta() })),
+    )
+    await page.route('**/api/v1/catalog/resources**', (route) =>
+      route.fulfill(json({ data: [], meta: meta() })),
+    )
+    await page.goto(`/applications/${applicationID}`)
+    if (state === 'topology' || state === 'partial')
+      await page.getByRole('tab', { name: '資源拓撲' }).click()
+    const link = page.getByRole('link', {
+      name: '返回 Applications',
+      exact: true,
+    })
+    await expect(link).toHaveAttribute('href', '/applications')
+    for (const theme of ['light', 'dark'] as const) {
+      if (theme === 'dark') {
+        await page
+          .getByRole('button', { name: '開啟 vincent 的帳號選單' })
+          .click()
+        await page.getByRole('menuitem', { name: '主題設定' }).click()
+        await page.getByRole('combobox', { name: '主題', exact: true }).click()
+        await page.getByText('深色', { exact: true }).last().click()
+        await page.keyboard.press('Escape')
+      }
+      await expect(page.locator('html')).toHaveAttribute('data-theme', theme)
+      await page.keyboard.press('Tab')
+      await link.focus()
+      const contrast = await link.evaluate((element) => {
+        const style = getComputedStyle(element)
+        const probe = document.createElement('span')
+        probe.style.color = 'var(--rh-color-page)'
+        element.appendChild(probe)
+        const background = getComputedStyle(probe).color
+        probe.remove()
+        const luminance = (color: string) => {
+          const channels = (color.match(/[\d.]+/g) ?? [])
+            .slice(0, 3)
+            .map(Number)
+            .map((value) => {
+              const c = value / 255
+              return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4
+            })
+          return (
+            channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722
+          )
+        }
+        const ratio = (color: string) => {
+          const a = luminance(color),
+            b = luminance(background)
+          return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05)
+        }
+        return {
+          text: ratio(style.color),
+          focus: ratio(style.outlineColor),
+          outline: style.outlineStyle,
+          width: style.outlineWidth,
+        }
+      })
+      expect(contrast.text).toBeGreaterThanOrEqual(4.5)
+      expect(contrast.focus).toBeGreaterThanOrEqual(3)
+      expect(contrast.outline).toBe('solid')
+      expect(contrast.width).toBe('2px')
+    }
+    if (state === 'overview') await link.click()
+    else await page.keyboard.press('Enter')
+    await expect(page).toHaveURL(/\/applications$/)
+  })
+}
+
+async function preparePage(
+  page: Page,
+  theme: 'light' | 'dark',
+  language = 'zh-TW',
+) {
+  await page.addInitScript(
+    ({ resolvedTheme, resolvedLanguage }) => {
+      localStorage.setItem('releasehub.language', resolvedLanguage)
+      localStorage.setItem('releasehub.theme', resolvedTheme)
+    },
+    { resolvedTheme: theme, resolvedLanguage: language },
+  )
   await page.route('**/api/v1/auth/session', (route) =>
     route.fulfill(
       json({ data: { id: 'user-1', username: 'vincent' }, meta: meta() }),

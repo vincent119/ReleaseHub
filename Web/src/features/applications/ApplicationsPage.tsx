@@ -11,7 +11,7 @@ import {
 } from 'antd'
 import type { TableProps } from 'antd'
 import { useState } from 'react'
-import { Link, useParams } from 'react-router'
+import { useParams } from 'react-router'
 import { useTranslation } from 'react-i18next'
 
 import {
@@ -236,7 +236,11 @@ export function ApplicationDetailPage() {
         status="404"
         title={t('applicationDetail.notFound.title')}
         subTitle={t('applicationDetail.notFound.description')}
-        extra={<Link to="/applications">{t('applicationDetail.back')}</Link>}
+        extra={
+          <ThemedLink to="/applications">
+            {t('applicationDetail.back')}
+          </ThemedLink>
+        }
       />
     )
   }
@@ -263,7 +267,9 @@ export function ApplicationDetailPage() {
   return (
     <Space orientation="vertical" size="large" className={styles.pageSection}>
       <div>
-        <Link to="/applications">{t('applicationDetail.back')}</Link>
+        <ThemedLink to="/applications">
+          {t('applicationDetail.back')}
+        </ThemedLink>
         <Typography.Title level={2}>{value.name}</Typography.Title>
         <Typography.Paragraph type="secondary">
           {value.argocdNamespace}/{value.argocdApplicationName}

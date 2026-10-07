@@ -24,7 +24,9 @@ describe('runtime node component tokens', () => {
   it('keeps the card and icon on neutral semantic surfaces', () => {
     const node = rule('.node')
     expect(node).toContain('--runtime-node-surface: var(--rh-color-surface)')
-    expect(node).toContain('--runtime-node-icon-surface: var(--rh-color-page)')
+    expect(node).toContain(
+      '--runtime-node-icon-surface: var(--rh-color-surface-soft)',
+    )
     expect(rule('.node .nodeIcon')).toContain(
       'background: var(--runtime-node-icon-surface)',
     )

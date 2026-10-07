@@ -447,6 +447,8 @@ export const zhTW = {
     group: {
       kind: '{{kind}} × {{count}}',
       other: '其他頂層資源',
+      shortOther: '其他資源',
+      shortCompact: '其餘資源',
       compact: '其餘 {{count}} 個資源',
       resources: '{{count}} 個資源',
       healthy: 'Healthy {{count}}',
