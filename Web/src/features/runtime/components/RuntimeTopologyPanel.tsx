@@ -17,7 +17,7 @@ import {
   Spin,
   Typography,
 } from 'antd'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type FocusEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { useGetCatalogApplicationRuntimeTopology } from '@/generated/api'
@@ -235,6 +235,32 @@ export function RuntimeTopologyPanel({
       const target =
         node ?? panel?.querySelector<HTMLElement>('[data-runtime-refresh]')
       target?.focus({ preventScroll: true })
+    })
+  }
+  const revealKeyboardFocusedNode = (event: FocusEvent<HTMLDivElement>) => {
+    if (view !== 'network' || !event.target.matches(':focus-visible')) return
+    const canvas = canvasRef.current
+    const node = event.target.closest<HTMLElement>('.react-flow__node')
+    if (!canvas || !node || !canvas.contains(node)) return
+
+    window.requestAnimationFrame(() => {
+      if (!node.contains(document.activeElement)) return
+      const bounds = canvas.getBoundingClientRect()
+      const rect = node.getBoundingClientRect()
+      if (
+        rect.left >= bounds.left + 4 &&
+        rect.right <= bounds.right - 4 &&
+        rect.top >= bounds.top + 4 &&
+        rect.bottom <= bounds.bottom - 4
+      )
+        return
+
+      const instance = flowRef.current
+      const id = node.dataset.id
+      if (!instance || !id) return
+      const zoom = instance.getZoom()
+      // React Flow 僅在節點容器失焦於視野外時自動定位，內層按鈕仍可能被裁切。
+      void instance.fitView({ nodes: [{ id }], minZoom: zoom, maxZoom: zoom })
     })
   }
   useEffect(() => {
@@ -502,6 +528,7 @@ export function RuntimeTopologyPanel({
                 ref={canvasRef}
                 className={styles.canvas}
                 aria-label={t('runtimeTopology.title')}
+                onFocusCapture={revealKeyboardFocusedNode}
                 style={
                   compact && graph.groupedResourceCount > 0
                     ? { height: Math.max(420, graph.nodes.length * 94 + 24) }
