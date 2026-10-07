@@ -1,5 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 
+import { simulateScrollbarAvailableWidth } from './viewport'
+
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.setItem('releasehub.language', 'en')
@@ -13,6 +15,35 @@ test.beforeEach(async ({ page }) => {
     }),
   )
 })
+
+for (const theme of ['light', 'dark'])
+  for (const language of ['en', 'zh-TW'])
+    test(`登入頁容納捲軸可用寬度 ${theme} ${language}`, async ({ page }) => {
+      await page.addInitScript(
+        ({ theme, language }) => {
+          localStorage.setItem('releasehub.theme', theme)
+          localStorage.setItem('releasehub.language', language)
+        },
+        { theme, language },
+      )
+      await mockSystemStatus(page, true)
+      await page.setViewportSize({ width: 320, height: 720 })
+      await page.goto('/')
+      await expect(page.locator('html')).toHaveAttribute('data-theme', theme)
+      await simulateScrollbarAvailableWidth(page)
+      await expect(
+        page.getByLabel(language === 'en' ? 'Username' : '使用者名稱'),
+      ).toBeVisible()
+      await expect
+        .poll(() =>
+          page.evaluate(
+            () =>
+              document.documentElement.scrollWidth -
+              document.documentElement.clientWidth,
+          ),
+        )
+        .toBeLessThanOrEqual(1)
+    })
 
 test('shows the enterprise sign-in only when OIDC is enabled', async ({
   page,

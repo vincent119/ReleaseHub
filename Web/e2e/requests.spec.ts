@@ -2,6 +2,8 @@ import { expect, test, type Page } from '@playwright/test'
 
 import type { DeploymentRequestVersion } from '../src/generated/model'
 
+import { simulateScrollbarAvailableWidth } from './viewport'
+
 declare global {
   interface Window {
     requestListRuntimeErrors: string[]
@@ -26,66 +28,55 @@ const ids = {
 for (const theme of ['light', 'dark'])
   for (const language of ['en', 'zh-TW'])
     for (const width of [320, 390, 1200])
-      test(`Request 工具列容納 ${theme} ${language} ${width}px`, async ({
-        page,
-      }) => {
-        await page.setViewportSize({ width, height: 900 })
-        await page.addInitScript(
-          ({ theme, language }) => {
-            localStorage.setItem('releasehub.theme', theme)
-            localStorage.setItem('releasehub.language', language)
-          },
-          { theme, language },
-        )
-        const request = deployedRequest(requestFixture())
-        const revision = '0123456789abcdef'.repeat(4)
-        request.applications[0].targetRevision = revision
-        await mockApplication(page, { request, retryBody: undefined })
-        const applicationName = 'synthetic-webhook-service-with-a-long-name'
-        await page.route(
-          `**/api/v1/deployment-executions/${ids.execution}`,
-          (route) => {
-            const execution = executionFixture()
-            execution.nodes[0].nodeKey = applicationName
-            return route.fulfill(json({ data: execution, meta: meta() }))
-          },
-        )
-        await page.route(
-          '**/api/v1/catalog/applications/*/runtime/topology?**',
-          (route) =>
-            route.fulfill(
-              json({ data: topologyFixture(ids.appA), meta: meta() }),
-            ),
-        )
-        await page.goto(`/requests/${ids.request}`)
-        await expect(
-          page.locator('[class*="snapshotRevision"]').first(),
-        ).toHaveText(revision)
-        const topologyEntry = page.getByRole('button', {
-          name:
-            language === 'en'
-              ? `View resource topology for ${applicationName}`
-              : `查看 ${applicationName} 的資源拓撲`,
-          exact: true,
-        })
-        await expect
-          .poll(() =>
-            page.evaluate(
-              () =>
-                document.documentElement.scrollWidth -
-                document.documentElement.clientWidth,
-            ),
+      for (const scrollbar of ['overlay', 'simulated'])
+        test(`Request 工具列容納 ${theme} ${language} ${width}px ${scrollbar}`, async ({
+          page,
+        }) => {
+          await page.setViewportSize({ width, height: 900 })
+          await page.addInitScript(
+            ({ theme, language }) => {
+              localStorage.setItem('releasehub.theme', theme)
+              localStorage.setItem('releasehub.language', language)
+            },
+            { theme, language },
           )
-          .toBeLessThanOrEqual(1)
-        await expect(topologyEntry).toBeVisible()
-        await topologyEntry.press('Enter')
-        await expect(topologyEntry).toBeFocused()
-        await expect(page.locator('.react-flow__node').first()).toBeVisible()
-        for (const view of [
-          language === 'en' ? 'Resource hierarchy' : '資源階層',
-          language === 'en' ? 'Network topology' : '網路拓撲',
-        ]) {
-          await page.getByText(view, { exact: true }).click()
+          const request = deployedRequest(requestFixture())
+          const revision = '0123456789abcdef'.repeat(4)
+          request.applications[0].targetRevision = revision
+          await mockApplication(page, { request, retryBody: undefined })
+          const applicationName = 'synthetic-webhook-service-with-a-long-name'
+          await page.route(
+            `**/api/v1/deployment-executions/${ids.execution}`,
+            (route) => {
+              const execution = executionFixture()
+              execution.nodes[0].nodeKey = applicationName
+              return route.fulfill(json({ data: execution, meta: meta() }))
+            },
+          )
+          await page.route(
+            '**/api/v1/catalog/applications/*/runtime/topology?**',
+            (route) =>
+              route.fulfill(
+                json({ data: topologyFixture(ids.appA), meta: meta() }),
+              ),
+          )
+          await page.goto(`/requests/${ids.request}`)
+          await expect(page.locator('html')).toHaveAttribute(
+            'data-theme',
+            theme,
+          )
+          if (scrollbar === 'simulated')
+            await simulateScrollbarAvailableWidth(page)
+          await expect(
+            page.locator('[class*="snapshotRevision"]').first(),
+          ).toHaveText(revision)
+          const topologyEntry = page.getByRole('button', {
+            name:
+              language === 'en'
+                ? `View resource topology for ${applicationName}`
+                : `查看 ${applicationName} 的資源拓撲`,
+            exact: true,
+          })
           await expect
             .poll(() =>
               page.evaluate(
@@ -95,8 +86,26 @@ for (const theme of ['light', 'dark'])
               ),
             )
             .toBeLessThanOrEqual(1)
-        }
-      })
+          await expect(topologyEntry).toBeVisible()
+          await topologyEntry.press('Enter')
+          await expect(topologyEntry).toBeFocused()
+          await expect(page.locator('.react-flow__node').first()).toBeVisible()
+          for (const view of [
+            language === 'en' ? 'Resource hierarchy' : '資源階層',
+            language === 'en' ? 'Network topology' : '網路拓撲',
+          ]) {
+            await page.getByText(view, { exact: true }).click()
+            await expect
+              .poll(() =>
+                page.evaluate(
+                  () =>
+                    document.documentElement.scrollWidth -
+                    document.documentElement.clientWidth,
+                ),
+              )
+              .toBeLessThanOrEqual(1)
+          }
+        })
 
 test.beforeEach(async ({ context, page }) => {
   await context.addCookies([

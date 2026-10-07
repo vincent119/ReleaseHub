@@ -1,8 +1,42 @@
 import { expect, test, type Locator, type Page } from '@playwright/test'
 
+import { simulateScrollbarAvailableWidth } from './viewport'
+
 test.beforeEach(async ({ page }) => {
   await mockShell(page)
 })
+
+for (const theme of ['light', 'dark'] as const)
+  for (const language of ['en', 'zh-TW'] as const)
+    test(`共用版面容納捲軸可用寬度 ${theme} ${language}`, async ({ page }) => {
+      await page.setViewportSize({ width: 320, height: 720 })
+      await preparePreferences(page, language, theme, null)
+      await page.goto('/')
+      await expect(page.locator('html')).toHaveAttribute('data-theme', theme)
+      await simulateScrollbarAvailableWidth(page)
+      await expect(page.locator('header.ant-layout-header')).toBeVisible()
+      await expect(page.locator('.ant-layout-sider')).toHaveCSS(
+        'max-width',
+        '0px',
+      )
+      await expect
+        .poll(() =>
+          page.evaluate(
+            () =>
+              document.documentElement.scrollWidth -
+              document.documentElement.clientWidth,
+          ),
+        )
+        .toBeLessThanOrEqual(1)
+      await expect(
+        page.getByRole('button', {
+          name:
+            language === 'en'
+              ? 'Open account menu for vincent'
+              : '開啟 vincent 的帳號選單',
+        }),
+      ).toBeVisible()
+    })
 
 test('collapses, persists, navigates, and expands on desktop', async ({
   page,

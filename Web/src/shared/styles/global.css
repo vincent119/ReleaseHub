@@ -15,7 +15,8 @@ html[data-theme='light'] {
 }
 
 body {
-  min-width: 20rem;
+  /* 可用寬度會被傳統捲軸扣除，固定最小寬度會撐開窄版頁面。 */
+  min-width: 0;
   min-height: 100vh;
   margin: 0;
   color: var(--rh-color-text-primary);
