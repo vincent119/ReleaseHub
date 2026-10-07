@@ -19,11 +19,19 @@ export function ApplicationSnapshots({
       className={styles.wideCard}
     >
       <Collapse
+        className={styles.snapshotCollapse}
         destroyOnHidden
         items={applications.map((application) => ({
           key: application.id,
           label: `${application.order + 1}. ${application.applicationKey}`,
-          extra: <SemanticTag>{application.targetRevision}</SemanticTag>,
+          extra: (
+            <SemanticTag
+              className={styles.snapshotRevision}
+              title={application.targetRevision}
+            >
+              {application.targetRevision}
+            </SemanticTag>
+          ),
           children: <ApplicationSnapshot value={application} />,
         }))}
       />

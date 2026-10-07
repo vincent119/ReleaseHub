@@ -115,6 +115,22 @@
 .wideCard {
   overflow: hidden;
 }
+.snapshotCollapse :global(.ant-collapse-header) {
+  flex-wrap: wrap;
+}
+.snapshotCollapse :global(.ant-collapse-title) {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.snapshotCollapse :global(.ant-collapse-extra) {
+  min-width: 0;
+  max-width: 100%;
+}
+.snapshotRevision {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
 
 .code {
   display: block;
