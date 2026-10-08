@@ -17,7 +17,14 @@ import {
   Spin,
   Typography,
 } from 'antd'
-import { useEffect, useMemo, useRef, useState, type FocusEvent } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FocusEvent,
+} from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { useGetCatalogApplicationRuntimeTopology } from '@/generated/api'
@@ -167,17 +174,62 @@ export function RuntimeTopologyPanel({
     view,
   ])
   const displayCount = displayTopology?.nodes.length ?? 0
+  const revealFocusedNode = useCallback(() => {
+    if (view !== 'network') return
+    const canvas = canvasRef.current
+    const focused = document.activeElement
+    const node =
+      focused instanceof HTMLElement && focused.matches(':focus-visible')
+        ? focused.closest<HTMLElement>('.react-flow__node')
+        : null
+    if (!canvas || !node || !canvas.contains(node)) return
+
+    window.requestAnimationFrame(() => {
+      if (!node.contains(document.activeElement)) return
+      const bounds = canvas.getBoundingClientRect()
+      const rect = node.getBoundingClientRect()
+      const horizontal =
+        rect.left < bounds.left + 4
+          ? bounds.left + 4 - rect.left
+          : rect.right > bounds.right - 4
+            ? bounds.right - 4 - rect.right
+            : 0
+      const vertical =
+        rect.top < bounds.top + 4
+          ? bounds.top + 4 - rect.top
+          : rect.bottom > bounds.bottom - 4
+            ? bounds.bottom - 4 - rect.bottom
+            : 0
+      if (horizontal === 0 && vertical === 0) return
+
+      const instance = flowRef.current
+      if (!instance || !node.dataset.id) return
+      const viewport = instance.getViewport()
+      // 只補足越界距離，避免重新 fit 改變閱讀比例與使用者手動視角。
+      void instance.setViewport({
+        ...viewport,
+        x: viewport.x + horizontal,
+        y: viewport.y + vertical,
+      })
+    })
+  }, [view])
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
     if (canvas.clientWidth > 0) setCanvasWidth(canvas.clientWidth)
     if (typeof ResizeObserver === 'undefined') return
+    let pendingFrame = 0
     const observer = new ResizeObserver(([entry]) => {
       if (entry.contentRect.width > 0) setCanvasWidth(entry.contentRect.width)
+      window.cancelAnimationFrame(pendingFrame)
+      pendingFrame = window.requestAnimationFrame(revealFocusedNode)
     })
     observer.observe(canvas)
-    return () => observer.disconnect()
-  }, [graph.nodes.length, topology.isPending, view])
+    return () => {
+      window.cancelAnimationFrame(pendingFrame)
+      observer.disconnect()
+    }
+  }, [graph.nodes.length, topology.isPending, view, revealFocusedNode])
   useEffect(() => {
     if (
       canvasWidth === undefined ||
@@ -239,29 +291,7 @@ export function RuntimeTopologyPanel({
   }
   const revealKeyboardFocusedNode = (event: FocusEvent<HTMLDivElement>) => {
     if (view !== 'network' || !event.target.matches(':focus-visible')) return
-    const canvas = canvasRef.current
-    const node = event.target.closest<HTMLElement>('.react-flow__node')
-    if (!canvas || !node || !canvas.contains(node)) return
-
-    window.requestAnimationFrame(() => {
-      if (!node.contains(document.activeElement)) return
-      const bounds = canvas.getBoundingClientRect()
-      const rect = node.getBoundingClientRect()
-      if (
-        rect.left >= bounds.left + 4 &&
-        rect.right <= bounds.right - 4 &&
-        rect.top >= bounds.top + 4 &&
-        rect.bottom <= bounds.bottom - 4
-      )
-        return
-
-      const instance = flowRef.current
-      const id = node.dataset.id
-      if (!instance || !id) return
-      const zoom = instance.getZoom()
-      // React Flow 僅在節點容器失焦於視野外時自動定位，內層按鈕仍可能被裁切。
-      void instance.fitView({ nodes: [{ id }], minZoom: zoom, maxZoom: zoom })
-    })
+    revealFocusedNode()
   }
   useEffect(() => {
     const select = (event: Event) => {
