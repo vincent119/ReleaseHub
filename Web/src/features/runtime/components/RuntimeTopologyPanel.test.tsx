@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { RuntimeTopologyPanel } from './RuntimeTopologyPanel'
@@ -13,6 +13,8 @@ const flow = vi.hoisted(() => ({
   render: vi.fn(),
   fitView: vi.fn(),
   zoomTo: vi.fn(),
+  getViewport: vi.fn(() => ({ x: 0, y: 0, zoom: 1 })),
+  setViewport: vi.fn(),
 }))
 
 vi.mock('@/shared/theme/useThemePreference', () => ({
@@ -37,7 +39,7 @@ vi.mock('@xyflow/react', () => ({
     children: React.ReactNode
     colorMode: string
     minZoom: number
-    nodes: unknown[]
+    nodes: { id: string }[]
     fitView: boolean
     defaultViewport?: { x: number; y: number; zoom: number }
     onMoveEnd?: (
@@ -47,11 +49,27 @@ vi.mock('@xyflow/react', () => ({
     onInit?: (instance: {
       fitView: typeof flow.fitView
       zoomTo: typeof flow.zoomTo
+      getViewport: typeof flow.getViewport
+      setViewport: typeof flow.setViewport
     }) => void
   }) => {
     flow.render(props)
-    props.onInit?.({ fitView: flow.fitView, zoomTo: flow.zoomTo })
-    return <div data-testid="runtime-flow">{props.children}</div>
+    props.onInit?.({
+      fitView: flow.fitView,
+      zoomTo: flow.zoomTo,
+      getViewport: flow.getViewport,
+      setViewport: flow.setViewport,
+    })
+    return (
+      <div data-testid="runtime-flow">
+        {props.nodes.map((node) => (
+          <div key={node.id} className="react-flow__node" data-id={node.id}>
+            <button data-testid={`runtime-node-${node.id}`}>{node.id}</button>
+          </div>
+        ))}
+        {props.children}
+      </div>
+    )
   },
 }))
 
@@ -60,6 +78,8 @@ describe('RuntimeTopologyPanel', () => {
     flow.render.mockClear()
     flow.fitView.mockClear()
     flow.zoomTo.mockClear()
+    flow.getViewport.mockClear()
+    flow.setViewport.mockClear()
     api.topology.mockReturnValue({
       data: {
         status: 200,
@@ -87,6 +107,137 @@ describe('RuntimeTopologyPanel', () => {
   })
 
   afterEach(cleanup)
+
+  it('repositions a keyboard-focused network node after the canvas narrows', async () => {
+    let resize: ResizeObserverCallback | undefined
+    vi.stubGlobal('innerWidth', 390)
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        constructor(callback: ResizeObserverCallback) {
+          resize = callback
+        }
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      },
+    )
+    const result = api.topology()
+    result.data.data.data.nodes = [
+      {
+        id: 'service',
+        group: '',
+        version: 'v1',
+        kind: 'Service',
+        namespace: 'payments',
+        name: 'service',
+        healthStatus: 'Healthy',
+        healthMessage: '',
+        orphaned: false,
+        images: [],
+        info: [],
+        ingress: [],
+        externalUrls: [],
+      },
+    ]
+    try {
+      render(<RuntimeTopologyPanel applicationId="application-1" />)
+      fireEvent.click(screen.getByText('runtimeTopology.views.network'))
+      fireEvent.click(screen.getByText('runtimeTopology.readableZoom'))
+
+      const canvas = screen.getByLabelText('runtimeTopology.title')
+      const node = screen.getByTestId('runtime-node-service').parentElement!
+      const button = screen.getByTestId('runtime-node-service')
+      const matches = button.matches.bind(button)
+      vi.spyOn(button, 'matches').mockImplementation(
+        (selector) => selector === ':focus-visible' || matches(selector),
+      )
+      button.focus()
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 40))
+      })
+      flow.setViewport.mockClear()
+      vi.spyOn(canvas, 'getBoundingClientRect').mockReturnValue({
+        left: 0,
+        right: 252,
+        top: 0,
+        bottom: 550,
+      } as DOMRect)
+      const nodeBounds = vi
+        .spyOn(node, 'getBoundingClientRect')
+        .mockReturnValue({
+          left: 60,
+          right: 296,
+          top: 100,
+          bottom: 178,
+        } as DOMRect)
+
+      await act(async () => {
+        resize?.(
+          [{ contentRect: { width: 252 } } as ResizeObserverEntry],
+          {} as ResizeObserver,
+        )
+        await new Promise((resolve) => setTimeout(resolve, 80))
+      })
+
+      expect(button).toHaveFocus()
+      expect(flow.setViewport).toHaveBeenCalledWith(
+        expect.objectContaining({ x: -48, zoom: 1 }),
+      )
+
+      flow.setViewport.mockClear()
+      nodeBounds.mockReturnValue({
+        left: 8,
+        right: 244,
+        top: -20,
+        bottom: 58,
+      } as DOMRect)
+      await act(async () => {
+        resize?.(
+          [{ contentRect: { width: 251 } } as ResizeObserverEntry],
+          {} as ResizeObserver,
+        )
+        await new Promise((resolve) => setTimeout(resolve, 80))
+      })
+      expect(flow.setViewport).toHaveBeenCalledWith(
+        expect.objectContaining({ x: 0, y: 24, zoom: 1 }),
+      )
+
+      flow.setViewport.mockClear()
+      nodeBounds.mockReturnValue({
+        left: 8,
+        right: 244,
+        top: 100,
+        bottom: 178,
+      } as DOMRect)
+      await act(async () => {
+        resize?.(
+          [{ contentRect: { width: 250 } } as ResizeObserverEntry],
+          {} as ResizeObserver,
+        )
+        await new Promise((resolve) => setTimeout(resolve, 80))
+      })
+      expect(flow.setViewport).not.toHaveBeenCalled()
+
+      button.blur()
+      nodeBounds.mockReturnValue({
+        left: 60,
+        right: 296,
+        top: 100,
+        bottom: 178,
+      } as DOMRect)
+      await act(async () => {
+        resize?.(
+          [{ contentRect: { width: 248 } } as ResizeObserverEntry],
+          {} as ResizeObserver,
+        )
+        await new Promise((resolve) => setTimeout(resolve, 80))
+      })
+      expect(flow.setViewport).not.toHaveBeenCalled()
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
 
   it('polls every five seconds only while deployment observation is active', () => {
     const { rerender } = render(
