@@ -229,6 +229,146 @@ for (const theme of ['light', 'dark'])
       }
     })
 
+for (const theme of ['light', 'dark'] as const)
+  for (const language of ['en', 'zh-TW'])
+    test(`Request 網路閱讀平移後縮至 320px，鍵盤焦點入框 ${theme} ${language}`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width: 390, height: 860 })
+      await page.addInitScript(
+        ({ theme, language }) => {
+          localStorage.setItem('releasehub.language', language)
+          localStorage.setItem('releasehub.theme', theme)
+        },
+        { theme, language },
+      )
+      await mockApplication(page, {
+        request: deployedRequest(requestFixture()),
+        retryBody: undefined,
+      })
+      await page.route(
+        '**/api/v1/catalog/applications/*/runtime/topology?**',
+        (route) => {
+          const base = topologyFixture(ids.appA)
+          const names = ['ingress', 'service', 'pod-a', 'pod-b']
+          return route.fulfill(
+            json({
+              data: {
+                ...base,
+                view: 'network',
+                nodes: names.map((name, index) => ({
+                  ...base.nodes[0],
+                  id: name,
+                  name,
+                  kind:
+                    index === 0 ? 'Ingress' : index === 1 ? 'Service' : 'Pod',
+                })),
+                edges: [
+                  [0, 1],
+                  [1, 2],
+                  [1, 3],
+                ].map(([source, target]) => ({
+                  id: `${source}-${target}`,
+                  source: names[source],
+                  target: names[target],
+                  kind: 'network',
+                })),
+              },
+              meta: meta(),
+            }),
+          )
+        },
+      )
+
+      await page.goto(`/requests/${ids.request}`)
+      await page
+        .getByRole('button', {
+          name:
+            language === 'en'
+              ? 'View resource topology for app-a'
+              : '查看 app-a 的資源拓撲',
+        })
+        .press('Enter')
+      await page
+        .getByText(language === 'en' ? 'Network topology' : '網路拓撲', {
+          exact: true,
+        })
+        .click()
+      const canvas = page.getByLabel(
+        language === 'en'
+          ? 'Live Application resource topology'
+          : 'Application 即時資源拓撲',
+      )
+      await expect(canvas.locator('.react-flow__node-runtime')).toHaveCount(4)
+      await page
+        .getByRole('button', {
+          name: language === 'en' ? 'Reading zoom' : '閱讀比例',
+        })
+        .click()
+      const viewport = canvas.locator('.react-flow__viewport')
+      await expect
+        .poll(() =>
+          viewport.evaluate(
+            (element) =>
+              new DOMMatrixReadOnly(getComputedStyle(element).transform).a,
+          ),
+        )
+        .toBeCloseTo(1, 2)
+
+      const canvasBounds = await canvas.boundingBox()
+      expect(canvasBounds).not.toBeNull()
+      const panX = canvasBounds!.x + canvasBounds!.width / 2
+      const panY = canvasBounds!.y + 35
+      const beforePan = await viewport.evaluate(
+        (element) =>
+          new DOMMatrixReadOnly(getComputedStyle(element).transform).e,
+      )
+      await page.mouse.move(panX, panY)
+      await page.mouse.down()
+      await page.mouse.move(panX + 50, panY, { steps: 5 })
+      await page.mouse.up()
+      await expect
+        .poll(() =>
+          viewport.evaluate(
+            (element) =>
+              new DOMMatrixReadOnly(getComputedStyle(element).transform).e,
+          ),
+        )
+        .toBeGreaterThan(beforePan + 40)
+
+      await page.setViewportSize({ width: 320, height: 860 })
+      const service = canvas.locator('[data-runtime-node-id="service"]')
+      const ingress = canvas.locator('[data-runtime-node-id="ingress"]')
+      await service.focus()
+      await page.keyboard.press('Shift+Tab')
+      await page.keyboard.press('Shift+Tab')
+      await expect(ingress).toBeFocused()
+      await expect
+        .poll(() =>
+          canvas.evaluate((element) => {
+            const bounds = element.getBoundingClientRect()
+            const focusedNode =
+              document.activeElement?.closest('.react-flow__node')
+            if (!focusedNode || !element.contains(focusedNode)) return Infinity
+            const rect = focusedNode.getBoundingClientRect()
+            return Math.max(
+              bounds.left + 4 - rect.left,
+              rect.right - bounds.right + 4,
+            )
+          }),
+        )
+        .toBeLessThanOrEqual(0)
+      await expect(ingress).toBeFocused()
+      await expect
+        .poll(() =>
+          viewport.evaluate(
+            (element) =>
+              new DOMMatrixReadOnly(getComputedStyle(element).transform).a,
+          ),
+        )
+        .toBeCloseTo(1, 2)
+    })
+
 test.beforeEach(async ({ context, page }) => {
   await context.addCookies([
     {

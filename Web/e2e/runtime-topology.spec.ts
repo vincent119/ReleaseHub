@@ -103,6 +103,100 @@ for (const theme of ['light', 'dark'] as const)
 
 for (const theme of ['light', 'dark'] as const)
   for (const language of ['en', 'zh-TW'])
+    test(`Application 網路閱讀縮至 320px，鍵盤焦點入框 ${theme} ${language}`, async ({
+      page,
+    }) => {
+      await preparePage(page, theme, language)
+      await page.route(
+        `**/api/v1/catalog/applications/${applicationID}/runtime/topology?**`,
+        (route) => {
+          const base = topology()
+          const names = ['ingress', 'service', 'pod-a', 'pod-b']
+          return route.fulfill(
+            json({
+              data: {
+                ...base,
+                view: 'network',
+                nodes: names.map((name, index) => ({
+                  ...base.nodes[0],
+                  id: name,
+                  name,
+                  kind:
+                    index === 0 ? 'Ingress' : index === 1 ? 'Service' : 'Pod',
+                })),
+                edges: [
+                  [0, 1],
+                  [1, 2],
+                  [1, 3],
+                ].map(([source, target]) => ({
+                  id: `${source}-${target}`,
+                  source: names[source],
+                  target: names[target],
+                  kind: 'network',
+                })),
+              },
+              meta: meta(),
+            }),
+          )
+        },
+      )
+      await page.setViewportSize({ width: 390, height: 860 })
+      await page.goto(`/applications/${applicationID}`)
+      await page
+        .getByRole('tab', {
+          name: language === 'en' ? 'Resource topology' : '資源拓撲',
+        })
+        .click()
+      await page
+        .getByText(language === 'en' ? 'Network topology' : '網路拓撲', {
+          exact: true,
+        })
+        .click()
+      const canvas = page.getByLabel(
+        language === 'en'
+          ? 'Live Application resource topology'
+          : 'Application 即時資源拓撲',
+      )
+      await expect(canvas.locator('.react-flow__node-runtime')).toHaveCount(4)
+      await page
+        .getByRole('button', {
+          name: language === 'en' ? 'Reading zoom' : '閱讀比例',
+        })
+        .click()
+      await page.setViewportSize({ width: 320, height: 860 })
+      await canvas.locator('[data-runtime-node-id="service"]').focus()
+      await page.keyboard.press('Shift+Tab')
+      await page.keyboard.press('Shift+Tab')
+      const ingress = canvas.locator('[data-runtime-node-id="ingress"]')
+      await expect(ingress).toBeFocused()
+      await expect
+        .poll(() =>
+          canvas.evaluate((element) => {
+            const bounds = element.getBoundingClientRect()
+            const node = document.activeElement?.closest('.react-flow__node')
+            if (!node || !element.contains(node)) return Infinity
+            const rect = node.getBoundingClientRect()
+            return Math.max(
+              bounds.left + 4 - rect.left,
+              rect.right - bounds.right + 4,
+            )
+          }),
+        )
+        .toBeLessThanOrEqual(0)
+      await expect
+        .poll(() =>
+          canvas
+            .locator('.react-flow__viewport')
+            .evaluate(
+              (element) =>
+                new DOMMatrixReadOnly(getComputedStyle(element).transform).a,
+            ),
+        )
+        .toBeCloseTo(1, 2)
+    })
+
+for (const theme of ['light', 'dark'] as const)
+  for (const language of ['en', 'zh-TW'])
     for (const width of [320, 390, 1200])
       for (const scrollbar of ['overlay', 'simulated'])
         test(`工具列容納 ${theme} ${language} ${width}px ${scrollbar}`, async ({
