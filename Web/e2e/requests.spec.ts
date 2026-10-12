@@ -25,6 +25,67 @@ const ids = {
   appB: '019c1230-0000-7000-8000-000000000212',
 }
 
+for (const { theme, language, width } of [
+  { theme: 'light', language: 'en', width: 390 },
+  { theme: 'dark', language: 'en', width: 1200 },
+  { theme: 'dark', language: 'zh-TW', width: 320 },
+  { theme: 'light', language: 'zh-TW', width: 320 },
+] as const)
+  test(`Request 全部資源閱讀視角的 15 個資源可逐一鍵盤入框 ${theme} ${language} ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 860 })
+    await page.addInitScript(
+      ({ theme, language }) => {
+        localStorage.setItem('releasehub.theme', theme)
+        localStorage.setItem('releasehub.language', language)
+      },
+      { theme, language },
+    )
+    await mockApplication(page, {
+      request: deployedRequest(requestFixture()),
+      retryBody: undefined,
+    })
+    await page.route(
+      '**/api/v1/catalog/applications/*/runtime/topology?**',
+      (route) =>
+        route.fulfill(
+          json({ data: keyboardResourceTopology(ids.appA), meta: meta() }),
+        ),
+    )
+    await page.goto(`/requests/${ids.request}`)
+    await page
+      .getByRole('button', {
+        name:
+          language === 'en'
+            ? 'View resource topology for app-a'
+            : '查看 app-a 的資源拓撲',
+      })
+      .press('Enter')
+    await page
+      .getByText(language === 'en' ? 'All resources' : '全部資源', {
+        exact: true,
+      })
+      .click()
+    const canvas = page.getByLabel(
+      language === 'en'
+        ? 'Live Application resource topology'
+        : 'Application 即時資源拓撲',
+    )
+    await expect(canvas.locator('.react-flow__node-runtime')).toHaveCount(15)
+    await page
+      .getByRole('button', {
+        name: language === 'en' ? 'Reading zoom' : '閱讀比例',
+      })
+      .click()
+
+    const focused = await keyboardResourceFocusBounds(page)
+    expect(focused).toHaveLength(15)
+    expect(new Set(focused.map((item) => item.label)).size).toBe(15)
+    expect(focused.filter((item) => item.overflow > 0.5)).toEqual([])
+    expect(focused.every((item) => Math.abs(item.zoom - 1) < 0.01)).toBe(true)
+  })
+
 for (const theme of ['light', 'dark'])
   for (const language of ['en', 'zh-TW'])
     for (const width of [320, 390, 1200])
@@ -1512,6 +1573,86 @@ function resourceTree() {
       ],
     },
   ]
+}
+
+async function keyboardResourceFocusBounds(page: Page) {
+  const focused: { label: string; overflow: number; zoom: number }[] = []
+  for (let index = 0; index < 64 && focused.length < 15; index++) {
+    await page.keyboard.press('Tab')
+    const item = await page.evaluate(async () => {
+      await new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+      )
+      const active = document.activeElement
+      if (!(active instanceof HTMLButtonElement)) return null
+      const node = active.closest<HTMLElement>('.react-flow__node-runtime')
+      const canvas = node?.closest<HTMLElement>('[aria-label]')
+      const viewport = node?.closest<HTMLElement>('.react-flow__viewport')
+      if (!node || !canvas || !viewport) return null
+      const rect = node.getBoundingClientRect()
+      const bounds = canvas.getBoundingClientRect()
+      return {
+        label: active.getAttribute('aria-label') ?? '',
+        overflow: Math.max(
+          0,
+          bounds.left + 4 - rect.left,
+          rect.right - bounds.right + 4,
+          bounds.top + 4 - rect.top,
+          rect.bottom - bounds.bottom + 4,
+        ),
+        zoom: new DOMMatrixReadOnly(getComputedStyle(viewport).transform).a,
+      }
+    })
+    if (item) focused.push(item)
+  }
+  return focused
+}
+
+function keyboardResourceTopology(applicationId: string) {
+  const base = topologyFixture(applicationId)
+  const template = base.nodes[0]
+  const resource = (id: string, kind: string) => ({
+    ...template,
+    id,
+    name: id,
+    kind,
+  })
+  return {
+    ...base,
+    nodes: [
+      ...[
+        'Ingress',
+        'Service',
+        'Deployment',
+        'Namespace',
+        'Secret',
+        'ServiceAccount',
+        'NetworkPolicy',
+        'PodDisruptionBudget',
+        'RoleBinding',
+      ].map((kind, index) => resource(`resource-${index}`, kind)),
+      ...Array.from({ length: 4 }, (_, index) =>
+        resource(`replica-${index}`, 'ReplicaSet'),
+      ),
+      ...Array.from({ length: 2 }, (_, index) =>
+        resource(`pod-${index}`, 'Pod'),
+      ),
+    ],
+    edges: [
+      ...Array.from({ length: 4 }, (_, index) => ({
+        id: `e-replica-${index}`,
+        source: 'resource-2',
+        target: `replica-${index}`,
+        kind: 'resource',
+      })),
+      ...Array.from({ length: 2 }, (_, index) => ({
+        id: `e-pod-${index}`,
+        source: 'replica-0',
+        target: `pod-${index}`,
+        kind: 'resource',
+      })),
+    ],
+  }
 }
 
 function topologyFixture(applicationId: string) {
