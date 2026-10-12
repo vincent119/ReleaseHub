@@ -812,6 +812,51 @@ test('reduced motion keeps the topology legible without node animation', async (
   await expect(edge.locator('path').first()).toHaveCSS('animation-name', 'none')
 })
 
+for (const { theme, language, width } of [
+  { theme: 'dark', language: 'en', width: 1200 },
+  { theme: 'light', language: 'en', width: 320 },
+  { theme: 'dark', language: 'zh-TW', width: 390 },
+  { theme: 'light', language: 'zh-TW', width: 320 },
+] as const)
+  test(`Application 全部資源閱讀視角的 15 個資源可逐一鍵盤入框 ${theme} ${language} ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 860 })
+    await preparePage(page, theme, language)
+    await page.route(
+      `**/api/v1/catalog/applications/${applicationID}/runtime/topology?**`,
+      (route) => route.fulfill(json({ data: layeredTopology(), meta: meta() })),
+    )
+    await page.goto(`/applications/${applicationID}`)
+    await page
+      .getByRole('tab', {
+        name: language === 'en' ? 'Resource topology' : '資源拓撲',
+      })
+      .click()
+    await page
+      .getByText(language === 'en' ? 'All resources' : '全部資源', {
+        exact: true,
+      })
+      .click()
+    const canvas = page.getByLabel(
+      language === 'en'
+        ? 'Live Application resource topology'
+        : 'Application 即時資源拓撲',
+    )
+    await expect(canvas.locator('.react-flow__node-runtime')).toHaveCount(15)
+    await page
+      .getByRole('button', {
+        name: language === 'en' ? 'Reading zoom' : '閱讀比例',
+      })
+      .click()
+
+    const focused = await keyboardResourceFocusBounds(page)
+    expect(focused).toHaveLength(15)
+    expect(new Set(focused.map((item) => item.label)).size).toBe(15)
+    expect(focused.filter((item) => item.overflow > 0.5)).toEqual([])
+    expect(focused.every((item) => Math.abs(item.zoom - 1) < 0.01)).toBe(true)
+  })
+
 test('network view shows only evidenced endpoints and keeps the full resource view', async ({
   page,
 }) => {
@@ -2248,6 +2293,39 @@ for (const state of ['overview', 'topology', 'partial', 'not-found'] as const) {
     else await page.keyboard.press('Enter')
     await expect(page).toHaveURL(/\/applications$/)
   })
+}
+
+async function keyboardResourceFocusBounds(page: Page) {
+  const focused: { label: string; overflow: number; zoom: number }[] = []
+  for (let index = 0; index < 64 && focused.length < 15; index++) {
+    await page.keyboard.press('Tab')
+    const item = await page.evaluate(async () => {
+      await new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+      )
+      const active = document.activeElement
+      if (!(active instanceof HTMLButtonElement)) return null
+      const node = active.closest<HTMLElement>('.react-flow__node-runtime')
+      const canvas = node?.closest<HTMLElement>('[aria-label]')
+      const viewport = node?.closest<HTMLElement>('.react-flow__viewport')
+      if (!node || !canvas || !viewport) return null
+      const rect = node.getBoundingClientRect()
+      const bounds = canvas.getBoundingClientRect()
+      return {
+        label: active.getAttribute('aria-label') ?? '',
+        overflow: Math.max(
+          0,
+          bounds.left + 4 - rect.left,
+          rect.right - bounds.right + 4,
+          bounds.top + 4 - rect.top,
+          rect.bottom - bounds.bottom + 4,
+        ),
+        zoom: new DOMMatrixReadOnly(getComputedStyle(viewport).transform).a,
+      }
+    })
+    if (item) focused.push(item)
+  }
+  return focused
 }
 
 async function preparePage(

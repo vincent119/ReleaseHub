@@ -108,6 +108,98 @@ describe('RuntimeTopologyPanel', () => {
 
   afterEach(cleanup)
 
+  it('reveals a keyboard-focused resource in reading view without changing zoom', async () => {
+    const result = api.topology()
+    result.data.data.data.nodes = [
+      {
+        id: 'resource',
+        group: '',
+        version: 'v1',
+        kind: 'Service',
+        namespace: 'payments',
+        name: 'resource',
+        healthStatus: 'Healthy',
+        healthMessage: '',
+        orphaned: false,
+        images: [],
+        info: [],
+        ingress: [],
+        externalUrls: [],
+      },
+    ]
+    render(<RuntimeTopologyPanel applicationId="application-1" />)
+    fireEvent.click(screen.getByText('runtimeTopology.readableZoom'))
+
+    const canvas = screen.getByLabelText('runtimeTopology.title')
+    const button = screen.getByTestId('runtime-node-resource')
+    const node = button.parentElement!
+    vi.spyOn(canvas, 'getBoundingClientRect').mockReturnValue({
+      left: 0,
+      right: 252,
+      top: 0,
+      bottom: 550,
+    } as DOMRect)
+    const nodeBounds = vi.spyOn(node, 'getBoundingClientRect').mockReturnValue({
+      left: 60,
+      right: 296,
+      top: 100,
+      bottom: 178,
+    } as DOMRect)
+    const matches = button.matches.bind(button)
+    let keyboardFocus = true
+    vi.spyOn(button, 'matches').mockImplementation((selector) =>
+      selector === ':focus-visible' ? keyboardFocus : matches(selector),
+    )
+    flow.setViewport.mockClear()
+    button.focus()
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 40))
+    })
+
+    expect(button).toHaveFocus()
+    expect(flow.setViewport).toHaveBeenCalledWith(
+      expect.objectContaining({ x: -48, zoom: 1 }),
+    )
+
+    flow.setViewport.mockClear()
+    nodeBounds.mockReturnValue({
+      left: 8,
+      right: 244,
+      top: 100,
+      bottom: 178,
+    } as DOMRect)
+    button.blur()
+    button.focus()
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 40))
+    })
+    expect(flow.setViewport).not.toHaveBeenCalled()
+
+    flow.setViewport.mockClear()
+    nodeBounds.mockReturnValue({
+      left: 60,
+      right: 296,
+      top: 100,
+      bottom: 178,
+    } as DOMRect)
+    keyboardFocus = false
+    button.blur()
+    button.focus()
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 40))
+    })
+    expect(flow.setViewport).not.toHaveBeenCalled()
+
+    keyboardFocus = true
+    fireEvent.click(screen.getByText('runtimeTopology.fitView'))
+    button.blur()
+    button.focus()
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 40))
+    })
+    expect(flow.setViewport).not.toHaveBeenCalled()
+  })
+
   it('repositions a keyboard-focused network node after the canvas narrows', async () => {
     let resize: ResizeObserverCallback | undefined
     vi.stubGlobal('innerWidth', 390)

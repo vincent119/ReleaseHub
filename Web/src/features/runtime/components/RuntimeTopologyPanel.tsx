@@ -174,8 +174,11 @@ export function RuntimeTopologyPanel({
     view,
   ])
   const displayCount = displayTopology?.nodes.length ?? 0
+  const canRevealFocusedNode =
+    view === 'network' ||
+    (view === 'resources' && Boolean(readingViewports[viewportKey]))
   const revealFocusedNode = useCallback(() => {
-    if (view !== 'network') return
+    if (!canRevealFocusedNode) return
     const canvas = canvasRef.current
     const focused = document.activeElement
     const node =
@@ -212,7 +215,7 @@ export function RuntimeTopologyPanel({
         y: viewport.y + vertical,
       })
     })
-  }, [view])
+  }, [canRevealFocusedNode])
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
@@ -290,7 +293,7 @@ export function RuntimeTopologyPanel({
     })
   }
   const revealKeyboardFocusedNode = (event: FocusEvent<HTMLDivElement>) => {
-    if (view !== 'network' || !event.target.matches(':focus-visible')) return
+    if (!event.target.matches(':focus-visible')) return
     revealFocusedNode()
   }
   useEffect(() => {
