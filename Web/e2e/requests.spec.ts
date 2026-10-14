@@ -25,6 +25,120 @@ const ids = {
   appB: '019c1230-0000-7000-8000-000000000212',
 }
 
+for (const theme of ['light', 'dark'] as const)
+  for (const language of ['en', 'zh-TW'] as const)
+    for (const height of [420, 700])
+      test(`Request 分層首屏依實際畫布寬度入框 ${theme} ${language} ${height}px`, async ({
+        page,
+      }) => {
+        await page.setViewportSize({ width: 900, height })
+        await simulateScrollbarAvailableWidth(page)
+        await page.addInitScript(
+          ({ theme, language }) => {
+            localStorage.setItem('releasehub.theme', theme)
+            localStorage.setItem('releasehub.language', language)
+          },
+          { theme, language },
+        )
+        await mockApplication(page, {
+          request: deployedRequest(requestFixture()),
+          retryBody: undefined,
+        })
+        await page.route(
+          '**/api/v1/catalog/applications/*/runtime/topology?**',
+          (route) =>
+            route.fulfill(
+              json({ data: keyboardResourceTopology(ids.appA), meta: meta() }),
+            ),
+        )
+        await page.goto(`/requests/${ids.request}`)
+        await page
+          .getByRole('button', {
+            name:
+              language === 'en'
+                ? 'View resource topology for app-a'
+                : '查看 app-a 的資源拓撲',
+          })
+          .click()
+        const canvas = page.getByLabel(
+          language === 'en'
+            ? 'Live Application resource topology'
+            : 'Application 即時資源拓撲',
+        )
+        await expect(
+          canvas.locator('.react-flow__node-runtime-group'),
+        ).not.toHaveCount(0)
+        const assertReadable = async () => {
+          await expect
+            .poll(() =>
+              canvas.evaluate((element) => {
+                const bounds = element.getBoundingClientRect()
+                const nodes = [...element.querySelectorAll('.react-flow__node')]
+                const zoom = new DOMMatrixReadOnly(
+                  getComputedStyle(
+                    element.querySelector('.react-flow__viewport')!,
+                  ).transform,
+                ).a
+                const names = [
+                  ...element.querySelectorAll(
+                    '.react-flow__node-runtime [class*="nodeName"]',
+                  ),
+                ]
+                return {
+                  hasNodes: nodes.length > 0,
+                  zoom,
+                  readable:
+                    names.length > 0 &&
+                    names.every(
+                      (name) =>
+                        Number.parseFloat(getComputedStyle(name).fontSize) *
+                          zoom >=
+                        14,
+                    ),
+                  outside: nodes
+                    .filter((node) => {
+                      const rect = node.getBoundingClientRect()
+                      return (
+                        rect.left < bounds.left + 4 ||
+                        rect.right > bounds.right - 4 ||
+                        rect.top < bounds.top + 4 ||
+                        rect.bottom > bounds.bottom - 4
+                      )
+                    })
+                    .map((node) => node.getAttribute('data-id')),
+                }
+              }),
+            )
+            .toEqual({ hasNodes: true, zoom: 1, readable: true, outside: [] })
+          expect(
+            await page.evaluate(
+              () =>
+                document.documentElement.scrollWidth -
+                document.documentElement.clientWidth,
+            ),
+          ).toBeLessThanOrEqual(1)
+        }
+        await assertReadable()
+        for (const width of [1280, 885, 390, 320, 1280]) {
+          await page.setViewportSize({ width, height })
+          await assertReadable()
+        }
+        await page
+          .getByText(language === 'en' ? 'All resources' : '全部資源', {
+            exact: true,
+          })
+          .click()
+        await expect(canvas.locator('.react-flow__node-runtime')).toHaveCount(
+          15,
+        )
+        await page
+          .getByText(language === 'en' ? 'Layered overview' : '分層總覽', {
+            exact: true,
+          })
+          .click()
+        await assertReadable()
+      })
+
 for (const { theme, language, width } of [
   { theme: 'light', language: 'en', width: 390 },
   { theme: 'dark', language: 'en', width: 1200 },

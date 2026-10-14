@@ -108,6 +108,104 @@ describe('RuntimeTopologyPanel', () => {
 
   afterEach(cleanup)
 
+  it('retries cancelled width fits and tracks widths per viewport', async () => {
+    let resize: ResizeObserverCallback | undefined
+    let frameId = 0
+    const frames = new Map<number, FrameRequestCallback>()
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      frames.set(++frameId, callback)
+      return frameId
+    })
+    vi.stubGlobal('cancelAnimationFrame', (id: number) => frames.delete(id))
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        constructor(callback: ResizeObserverCallback) {
+          resize = callback
+        }
+        observe() {}
+        disconnect() {}
+      },
+    )
+    const result = api.topology()
+    const service = {
+      id: 'service',
+      group: '',
+      version: 'v1',
+      kind: 'Service',
+      namespace: 'payments',
+      name: 'service',
+      healthStatus: 'Healthy',
+      healthMessage: '',
+      orphaned: false,
+      images: [],
+      info: [],
+      ingress: [],
+      externalUrls: [],
+    }
+    result.data.data.data.nodes = [service]
+    try {
+      const view = render(
+        <RuntimeTopologyPanel applicationId="application-1" />,
+      )
+      act(() =>
+        resize?.(
+          [{ contentRect: { width: 1000 } } as ResizeObserverEntry],
+          {} as ResizeObserver,
+        ),
+      )
+      api.topology.mockReturnValue({
+        ...result,
+        data: {
+          ...result.data,
+          data: {
+            ...result.data.data,
+            data: {
+              ...result.data.data.data,
+              nodes: [service, { ...service, id: 'pod', kind: 'Pod' }],
+            },
+          },
+        },
+      })
+      view.rerender(<RuntimeTopologyPanel applicationId="application-1" />)
+      for (let step = 0; step < 3; step++) {
+        act(() => {
+          const pending = [...frames.values()]
+          frames.clear()
+          pending.forEach((callback) => callback(step))
+        })
+      }
+      expect(flow.fitView).toHaveBeenCalledTimes(1)
+      fireEvent.click(screen.getByText('runtimeTopology.modes.all'))
+      act(() =>
+        resize?.(
+          [{ contentRect: { width: 800 } } as ResizeObserverEntry],
+          {} as ResizeObserver,
+        ),
+      )
+      for (let step = 0; step < 3; step++) {
+        act(() => {
+          const pending = [...frames.values()]
+          frames.clear()
+          pending.forEach((callback) => callback(step))
+        })
+      }
+      const beforeReturn = flow.fitView.mock.calls.length
+      fireEvent.click(screen.getByText('runtimeTopology.modes.layered'))
+      for (let step = 0; step < 3; step++) {
+        act(() => {
+          const pending = [...frames.values()]
+          frames.clear()
+          pending.forEach((callback) => callback(step))
+        })
+      }
+      expect(flow.fitView).toHaveBeenCalledTimes(beforeReturn + 1)
+    } finally {
+      cleanup()
+      vi.unstubAllGlobals()
+    }
+  })
+
   it('reveals a keyboard-focused resource in reading view without changing zoom', async () => {
     const result = api.topology()
     result.data.data.data.nodes = [

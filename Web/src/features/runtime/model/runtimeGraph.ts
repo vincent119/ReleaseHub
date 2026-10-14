@@ -50,6 +50,16 @@ export const runtimeFitViewOptions = {
   maxZoom: 1,
 } as const
 
+export function runtimeGraphMinimumWidth(nodes: readonly RuntimeFlowNode[]) {
+  if (nodes.length === 0) return 0
+  const left = Math.min(...nodes.map((node) => node.position.x))
+  const right = Math.max(
+    ...nodes.map((node) => node.position.x + (node.width ?? nodeWidth)),
+  )
+  // 可讀首屏維持 zoom=1，須先容納圖形與左右各 4px 的安全邊距。
+  return right - left + 8
+}
+
 export function runtimeDisplayTopology(
   topology: RuntimeTopology,
 ): RuntimeTopology {
