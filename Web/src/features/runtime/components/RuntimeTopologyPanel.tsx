@@ -33,6 +33,7 @@ import { useThemePreference } from '@/shared/theme/useThemePreference'
 
 import {
   runtimeFitViewOptions,
+  runtimeGraphMinimumWidth,
   runtimeDisplayTopology,
   runtimeLayeredTopologyToGraph,
   runtimeTopologyToGraph,
@@ -87,8 +88,7 @@ export function RuntimeTopologyPanel({
   const [canvasWidth, setCanvasWidth] = useState<number | undefined>(() =>
     window.innerWidth < 600 ? window.innerWidth : undefined,
   )
-  const lastFittedWidthRef = useRef<number | undefined>(undefined)
-  const compact = canvasWidth !== undefined && canvasWidth < 600
+  const lastFittedWidthsRef = useRef<Record<string, number>>({})
   const selectedNodeRef = useRef<string | undefined>(undefined)
   const groupFocusRef = useRef<
     { applicationId: string; id: string } | undefined
@@ -101,8 +101,6 @@ export function RuntimeTopologyPanel({
   const [readingViewports, setReadingViewports] = useState<
     Record<string, boolean>
   >({})
-  const viewportKey = `${applicationId}:${view}:${view === 'resources' ? resourceMode : 'network'}:${compact ? 'compact' : 'standard'}`
-  const savedViewport = viewports[viewportKey]
   const topology = useGetCatalogApplicationRuntimeTopology(
     applicationId,
     { view },
@@ -139,6 +137,26 @@ export function RuntimeTopologyPanel({
     () => (value ? runtimeDisplayTopology(value) : undefined),
     [value],
   )
+  const standardLayeredGraph = useMemo(
+    () =>
+      displayTopology && view === 'resources' && resourceMode === 'layered'
+        ? runtimeLayeredTopologyToGraph(
+            displayTopology,
+            new Set(),
+            active,
+            applicationName,
+          )
+        : undefined,
+    [active, applicationName, displayTopology, resourceMode, view],
+  )
+  const compact =
+    canvasWidth !== undefined &&
+    (canvasWidth < 600 ||
+      (standardLayeredGraph !== undefined &&
+        standardLayeredGraph.groupingAvailable &&
+        canvasWidth < runtimeGraphMinimumWidth(standardLayeredGraph.nodes)))
+  const viewportKey = `${applicationId}:${view}:${view === 'resources' ? resourceMode : 'network'}:${compact ? 'compact' : 'standard'}`
+  const savedViewport = viewports[viewportKey]
   const graph = useMemo<RuntimeLayeredGraph>(() => {
     if (!displayTopology)
       return {
@@ -149,7 +167,9 @@ export function RuntimeTopologyPanel({
         groupedResourceCount: 0,
         groupingAvailable: false,
       }
-    if (view === 'resources' && resourceMode === 'layered')
+    if (view === 'resources' && resourceMode === 'layered') {
+      if (!compact && expandedGroupIds.length === 0 && standardLayeredGraph)
+        return standardLayeredGraph
       return runtimeLayeredTopologyToGraph(
         displayTopology,
         new Set(expandedGroupIds),
@@ -157,6 +177,7 @@ export function RuntimeTopologyPanel({
         applicationName,
         compact,
       )
+    }
     return {
       ...runtimeTopologyToGraph(displayTopology, active, applicationName),
       groups: [],
@@ -171,6 +192,7 @@ export function RuntimeTopologyPanel({
     displayTopology,
     expandedGroupIds,
     resourceMode,
+    standardLayeredGraph,
     view,
   ])
   const displayCount = displayTopology?.nodes.length ?? 0
@@ -236,16 +258,21 @@ export function RuntimeTopologyPanel({
   useEffect(() => {
     if (
       canvasWidth === undefined ||
-      canvasWidth === lastFittedWidthRef.current ||
+      canvasWidth === lastFittedWidthsRef.current[viewportKey] ||
       graph.nodes.length === 0
     )
       return
-    lastFittedWidthRef.current = canvasWidth
-    if (readingViewports[viewportKey]) return
+    if (readingViewports[viewportKey]) {
+      lastFittedWidthsRef.current[viewportKey] = canvasWidth
+      return
+    }
     let pendingFrame = 0
     const firstFrame = window.requestAnimationFrame(() => {
       pendingFrame = window.requestAnimationFrame(() => {
-        void flowRef.current?.fitView(
+        if (!flowRef.current) return
+        // 版面更新可能取消待執行的 frame，只有真正呼叫 fit 才能記為已處理。
+        lastFittedWidthsRef.current[viewportKey] = canvasWidth
+        void flowRef.current.fitView(
           view === 'resources' &&
             resourceMode === 'layered' &&
             graph.groupingAvailable

@@ -6,6 +6,75 @@ const applicationID = '019c1230-0000-7000-8000-000000000010'
 
 for (const theme of ['light', 'dark'] as const)
   for (const language of ['en', 'zh-TW'])
+    test(`Application 分層投影跨畫布幾何邊界仍可讀 ${theme} ${language}`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width: 813, height: 420 })
+      await preparePage(page, theme, language)
+      await page.route(
+        `**/api/v1/catalog/applications/${applicationID}/runtime/topology?**`,
+        (route) =>
+          route.fulfill(json({ data: layeredTopology(), meta: meta() })),
+      )
+      await page.goto(`/applications/${applicationID}`)
+      await page
+        .getByRole('tab', {
+          name: language === 'en' ? 'Resource topology' : '資源拓撲',
+        })
+        .click()
+      const canvas = page.getByLabel(
+        language === 'en'
+          ? 'Live Application resource topology'
+          : 'Application 即時資源拓撲',
+      )
+      await expect(canvas.locator('.react-flow__node')).toHaveCount(4)
+      await expectGraphWithinCanvas(canvas)
+      for (const width of [820, 814, 813, 780, 1200, 390, 320, 900]) {
+        await page.setViewportSize({ width, height: 420 })
+        const available = await canvas.evaluate(
+          (element) => element.clientWidth,
+        )
+        // 此合成三欄圖寬 756px，另需左右各 4px；檢查臨界值而非視窗斷點。
+        await expect(canvas.locator('.react-flow__node')).toHaveCount(
+          available < 764 ? 4 : 6,
+        )
+        await expectGraphWithinCanvas(canvas)
+        const reading = await canvas.evaluate((element) => {
+          const zoom = new DOMMatrixReadOnly(
+            getComputedStyle(element.querySelector('.react-flow__viewport')!)
+              .transform,
+          ).a
+          return {
+            zoom,
+            font:
+              Number.parseFloat(
+                getComputedStyle(
+                  element.querySelector(
+                    '.react-flow__node-runtime [class*="nodeName"]',
+                  )!,
+                ).fontSize,
+              ) * zoom,
+          }
+        })
+        expect(reading.zoom).toBe(1)
+        expect(reading.font).toBeGreaterThanOrEqual(14)
+      }
+      await page
+        .getByText(language === 'en' ? 'All resources' : '全部資源', {
+          exact: true,
+        })
+        .click()
+      await expect(canvas.locator('.react-flow__node-runtime')).toHaveCount(15)
+      await page
+        .getByText(language === 'en' ? 'Layered overview' : '分層總覽', {
+          exact: true,
+        })
+        .click()
+      await expectGraphWithinCanvas(canvas)
+    })
+
+for (const theme of ['light', 'dark'] as const)
+  for (const language of ['en', 'zh-TW'])
     test(`網路閱讀返回總覽 ${theme} ${language}`, async ({ page }) => {
       await preparePage(page, theme, language)
       await page.route(
