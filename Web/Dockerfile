@@ -7,7 +7,7 @@ RUN --mount=type=cache,target=/root/.local/share/pnpm/store pnpm install --froze
 COPY . .
 RUN pnpm build
 
-FROM ghcr.io/nginx/nginx-unprivileged:1.31.3-alpine3.24
+FROM ghcr.io/nginx/nginx-unprivileged:1.31.7-alpine3.24
 
 USER root
 RUN apk upgrade --no-cache
