@@ -1,4 +1,4 @@
-FROM node:22.22-alpine AS build
+FROM --platform=$BUILDPLATFORM node:22.22-alpine AS build
 
 WORKDIR /src
 RUN corepack enable
@@ -12,9 +12,9 @@ FROM ghcr.io/nginx/nginx-unprivileged:1.31.7-alpine3.24
 USER root
 RUN apk upgrade --no-cache \
     && apk add --no-cache \
-    "zlib" >= "1.14-r0" \
-    "expat" >= "2.10.0-r0" \
-    "libxslt" >= "1.1.43-r4" \
+    "zlib>=1.4-r0" \
+    "expat>=2.10.0-r0" \
+    "libxslt>=1.1.43-r4"
 
 COPY nginx/nginx.conf /etc/nginx/nginx.conf
 COPY --from=build --chown=101:101 /src/dist /usr/share/nginx/html
